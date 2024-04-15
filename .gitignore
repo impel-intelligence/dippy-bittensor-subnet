@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*playground.ipynb
 
 # C extensions
 *.so
