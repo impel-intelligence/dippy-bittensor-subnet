@@ -39,14 +39,19 @@ dataset.set_chat_template_params('prompt_templates/vicuna_prompt_template.jinja'
 
 # Prepare sample data
 sample_size = 10  # Adjust as needed
-sampled_data = dataset.sample_dataset(sample_size)
+# sampled_data = dataset.sample_dataset(sample_size)
+
+sampled_data = [
+    ("What is the capital of France?", "\n\nParis is the capital of France.")
+]
 
 # Evaluate the model
 eval_score = get_eval_score(
     model, 
     sampled_data, 
     input_tokenizer=input_tokenizer,
-    output_tokenizer=output_tokenizer
+    output_tokenizer=output_tokenizer,
+    debug=True
 )
 
 # Output the evaluation score

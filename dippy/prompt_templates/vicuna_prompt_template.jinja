@@ -16,7 +16,7 @@
   {%- if message['role'] == 'user' %}
 {{ '{{user}}: ' + message['content'].strip() }}
   {%- elif message['role'] == 'assistant' %}
-{{ '{{char}}: ' + message['content'].strip() + eos_token }}
+{{ '{{char}}: ' + message['content'].strip()}}
   {%- endif %}
 {%- endfor %}
 {%- if add_generation_prompt %}

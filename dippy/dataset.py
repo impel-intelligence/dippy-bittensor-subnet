@@ -95,8 +95,8 @@ The themes of the conversation are: {data_point['categories']}."""
             raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
         
         chat_input = self._chat_template.render(
-            bos_token=self._tokenizer.special_tokens_map['bos_token'],
-            eos_token=self._tokenizer.special_tokens_map['eos_token'],
+            bos_token='',
+            eos_token='',
             messages=self.dataset[idx]['messages'],
             include_beginning_of_conversation=True,
             add_generation_prompt=True
