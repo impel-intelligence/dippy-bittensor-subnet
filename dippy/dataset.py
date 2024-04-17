@@ -21,7 +21,7 @@ class PippaDataset(Dataset):
         self._chat_template = jinja2.Template(open(template_path).read())
         self._tokenizer = tokenizer
 
-    def process_data(data):
+    def process_data(self, data):
         """
         Convert pippa dataset to a format that can be used downstream.
         """
@@ -34,7 +34,7 @@ class PippaDataset(Dataset):
             if not data_point['categories']:
                 data_point['categories'] = 'None'
 
-            system_prompt = f"""A chat between a user and a curious artificial intelligence that is expert at roleplay. 
+            system_prompt = f"""A chat between a user and a curious artificial intelligence that is an expert at roleplay. 
 The AI is roleplaying as a character named {data_point['bot_name']}. 
 The character's description: {data_point['bot_description']}. {data_point['bot_definitions']}.
 The themes of the conversation are: {data_point['categories']}."""
@@ -91,8 +91,8 @@ The themes of the conversation are: {data_point['categories']}."""
         if self._chat_template is None:
             raise ValueError("Chat template is not set. Please set the chat template before generating chat.")
         
-        if self.generation_params is None:
-            raise ValueError("Generation parameters are not set. Please set the generation parameters before generating chat.")
+        if self._tokenizer is None:
+            raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
         
         chat_input = self._chat_template.render(
             bos_token=self._tokenizer.special_tokens_map['bos_token'],
@@ -100,11 +100,12 @@ The themes of the conversation are: {data_point['categories']}."""
             messages=self.dataset[idx]['messages'],
             include_beginning_of_conversation=True,
             add_generation_prompt=True
-        )  
+        )
 
-        return chat_input, self.dataset[idx]['character_response']
+
+        return chat_input, f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}"
     
-    def sample_dataset(self, n: int, session: str):
+    def sample_dataset(self, n: int):
         # get indices of the dataset
         indices = list(range(len(self.dataset)))
         random.shuffle(indices)
