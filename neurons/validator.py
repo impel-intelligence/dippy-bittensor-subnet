@@ -67,3 +67,7 @@ if __name__ == "__main__":
         while True:
             bt.logging.info("Validator running...", time.time())
             time.sleep(5)
+
+
+# TODO: Should do housekeeping like checking if the same model has already been submitted
+# TODO: Call evaluation API.
