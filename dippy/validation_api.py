@@ -1,9 +1,9 @@
 from tqdm import tqdm
 from typing import Any
-
+import os
 import torch
 from transformers import AutoModelForCausalLM, AutoConfig, AutoTokenizer, BitsAndBytesConfig
-
+import huggingface_hub
 from fastapi import FastAPI, HTTPException
 
 from dippy.dataset import PippaDataset
@@ -24,6 +24,12 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 app = FastAPI()
 
+# create dir data if not exists
+if not os.path.exists("data"):
+    os.makedirs("data")
+# download the file pippa_deduped.jsonl from huggingface
+if not os.path.exists("data/pippa_deduped.jsonl"):
+    huggingface_hub.hf_hub_download(repo_id="PygmalionAI/PIPPA", filename="pippa_deduped.jsonl", repo_type="dataset", local_dir = "data")
 dataset = PippaDataset("data/pippa_deduped.jsonl")
 
 chat_template_mappings = {
