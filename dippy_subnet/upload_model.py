@@ -76,6 +76,7 @@ async def main(config: bt.config):
 
     wallet = bt.wallet(config=config)
     subtensor = bt.subtensor(config=config)
+    print("Subtensor network: ", subtensor.network)
     metagraph: bt.metagraph = subtensor.metagraph(config.netuid)
 
     # Make sure we're registered and have a HuggingFace token.
@@ -102,6 +103,8 @@ async def main(config: bt.config):
         model=model,
         competition_parameters=parameters,
     )
+
+
 
     print(
         f"Model uploaded to Hugging Face with commit {model_id_with_commit.commit} and hash {model_id_with_commit.hash}"
