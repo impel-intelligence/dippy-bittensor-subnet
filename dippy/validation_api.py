@@ -5,6 +5,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoConfig, AutoTokenizer, BitsAndBytesConfig
 import huggingface_hub
 from fastapi import FastAPI, HTTPException
+import shutil
 
 from dippy.dataset import PippaDataset
 
@@ -221,11 +222,12 @@ def evaluate_model(request: EvaluateModelRequest):
         raise HTTPException(status_code=400, detail="Model is not valid: " + reason)
     
     print('The model is valid and now we can download the weights')
-    
+
     # Part 1: Check model size and calculate model size score
     # get model size in MB, assuming model is loaded with 4 bit quantization
     model_size = model.num_parameters() * 4 / 8 / 1024 / 1024
-    
+    print('Model size: ', model_size, ' MB')
+    print("Model number of parameters: ", model.num_parameters())
     # check if model size is within the limit. If not, return an error
     if model_size > MAX_MODEL_SIZE:
         raise HTTPException(status_code=400, detail="Model is too large when loaded in 4 bit quant: " + str(model_size) + " MB. Should be less than " + str(MAX_MODEL_SIZE/1024) + " MB")
@@ -246,13 +248,17 @@ def evaluate_model(request: EvaluateModelRequest):
         bnb_4bit_use_double_quant=True, # This does not hurt performance much according to 
     )
 
+    model_downloaded = False
     model = AutoModelForCausalLM.from_pretrained(
         request.model_name,
         device_map='auto' if device == "cuda" else 'cpu', # auto will leave space in the first GPU if multiple GPUs are available for other operations
         quantization_config=quant_config,
-        torch_dtype=torch.bfloat16
+        torch_dtype=torch.bfloat16,
+        cache_dir = "data",
+        force_download=True
     )
     print('Model weights downloaded successfully')
+    model_downloaded = True
 
     # get the tokenizers
     print('Downloading tokenizer')
@@ -292,6 +298,8 @@ def evaluate_model(request: EvaluateModelRequest):
     # delete the model from memory
     del model
     torch.cuda.empty_cache()
+    if model_downloaded:
+        shutil.rmtree("data/models--" + request.model_name.split("/")[0] + "--"+request.model_name.split("/")[1])
 
     return {
         "model_size_score": model_size_score,
@@ -300,6 +308,7 @@ def evaluate_model(request: EvaluateModelRequest):
 
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="localhost", port=8000)
-
+    # import uvicorn
+    # uvicorn.run(app, host="localhost", port=8000)
+    # evaluate_model(EvaluateModelRequest(model_name="mistralai/Mistral-7B-Instruct-v0.1", chat_template_type="vicuna"))
+    evaluate_model(EvaluateModelRequest(model_name="openai-community/gpt2", chat_template_type="vicuna"))
