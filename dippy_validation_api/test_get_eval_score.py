@@ -1,6 +1,6 @@
 import torch
-from dippy.validation_api import get_eval_score, load_model_no_download
-from dippy.dataset import PippaDataset
+from validation_api import get_eval_score
+from dataset import PippaDataset
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -9,7 +9,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 dataset_path = "data/pippa_deduped.jsonl"
 dataset = PippaDataset(dataset_path)
 
-model_name = 'mistralai/Mistral-7B-v0.1' # Replace with your actual model name
+model_name = 'openai-community/gpt2' # Replace with your actual model name
 
 # model_name = 'openai-community/gpt2'
 quant_config = BitsAndBytesConfig(
