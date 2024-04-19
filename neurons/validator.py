@@ -853,7 +853,7 @@ class Validator:
                 )
 
 #TODO Implement get_model_score
-def get_model_score(namespace, name, competition_id):
+def get_model_score(namespace, name):
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
     # return (score, status)
