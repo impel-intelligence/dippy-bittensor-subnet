@@ -2,3 +2,6 @@ bittensor
 torch
 accelerate
 bitsandbytes
+pandas
+sentencepiece
+protobuf

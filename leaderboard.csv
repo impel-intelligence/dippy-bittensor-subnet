@@ -1,0 +1,6 @@
+model_name,chat_template_type,model_size_score,qualitative_score,timestamp,status,notes
+fhai50032/RolePlayLake-7B,vicuna,0.764511956108941,0.3807312897489248,2024-04-19 22:28:45.114033+00:00,COMPLETE,
+cognitivecomputations/dolphin-2.8-mistral-7b-v02,vicuna,0.764510260687934,0.4106580855948793,2024-04-19 22:38:27.344528+00:00,COMPLETE,
+xiaol/RWKV-v5.2-7B-Role-play-16k,vicuna,-1.0,-1.0,2024-04-19 22:42:18.289835+00:00,FAILED,xiaol/RWKV-v5.2-7B-Role-play-16k does not appear to have a file named config.json. Checkout 'https://huggingface.co/xiaol/RWKV-v5.2-7B-Role-play-16k/main' for available files.
+KoboldAI/OPT-13B-Erebus,vicuna,0.6464851167466905,0.334947966589073,2024-04-19 22:45:25.272127+00:00,COMPLETE,
+4bit/gpt4-x-alpaca-13b-roleplay-lora-4bit-v2,vicuna,-1.0,-1.0,2024-04-19 22:47:48.233969+00:00,FAILED,4bit/gpt4-x-alpaca-13b-roleplay-lora-4bit-v2 does not appear to have a file named pytorch_model-00001-of-00082.bin. Checkout 'https://huggingface.co/4bit/gpt4-x-alpaca-13b-roleplay-lora-4bit-v2/main' for available files.
