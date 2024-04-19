@@ -7,7 +7,7 @@ import huggingface_hub
 from fastapi import FastAPI, HTTPException
 import shutil
 
-from dippy.dataset import PippaDataset
+from dataset import PippaDataset
 
 # TODO: Add model validation queue to prevent multiple models being validated at the same time
 # TODO: evict models from huggingface model cache otherwise hard disk will get full very quickly.

@@ -1,7 +1,7 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import torch
 
-from dippy.dataset import PippaDataset
+from dataset import PippaDataset
 
 
 
