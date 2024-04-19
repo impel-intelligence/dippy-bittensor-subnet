@@ -84,7 +84,7 @@ def iswin(loss_i, loss_j, block_i, block_j):
 
 def compute_wins(
     uids: typing.List[int],
-    losses_per_uid: typing.Dict[int, typing.List[float]],
+    scores_per_uid: typing.Dict[int, float],
     uid_to_block: typing.Dict[int, int],
 ):
     """
@@ -108,13 +108,10 @@ def compute_wins(
             if i == j:
                 continue
             block_j = uid_to_block[uid_j]
-            batches_i = len(losses_per_uid[uid_i])
-            batches_j = len(losses_per_uid[uid_j])
-            for batch_idx in range(0, min(batches_i, batches_j)):
-                loss_i = losses_per_uid[uid_i][batch_idx]
-                loss_j = losses_per_uid[uid_j][batch_idx]
-                wins[uid_i] += 1 if iswin(loss_i, loss_j, block_i, block_j) else 0
-                total_matches += 1
+            score_i = scores_per_uid[uid_i]
+            score_j = scores_per_uid[uid_j]
+            wins[uid_i] += 1 if iswin(score_i, score_j, block_i, block_j) else 0
+            total_matches += 1
         # Calculate win rate for uid i
         win_rate[uid_i] = wins[uid_i] / total_matches if total_matches > 0 else 0
 
@@ -586,7 +583,7 @@ class Validator:
         bt.logging.debug(
             f"Computing metrics on {uids} for competition {competition_parameters.competition_id}"
         )
-        losses_per_uid = {muid: None for muid in uids}
+        scores_per_uid = {muid: None for muid in uids}
         sample_per_uid = {muid: None for muid in uids}
 
         load_model_perf = PerfMonitor("Eval: Load model")
@@ -640,7 +637,7 @@ class Validator:
             model_i_metadata,
         ) in uid_to_hotkey_and_model_metadata.items():
             losses: typing.List[float] = []
-
+            score = None
             if model_i_metadata is not None:
                 if (
                     model_i_metadata.id.competition_id
@@ -652,58 +649,49 @@ class Validator:
                         # Update the block this uid last updated their model.
                         uid_to_block[uid_i] = model_i_metadata.block
 
-                        # Get the model locally and evaluate its loss.
-                        model_i = None
-                        with load_model_perf.sample():
-                            model_i = self.local_store.retrieve_model(
-                                hotkey, model_i_metadata.id, competition_parameters
-                            )
-
-                        with compute_loss_perf.sample():
-                            bt.logging.info(
-                                f"Computing loss for uid: {uid_i}, ckpt: {model_i.ckpt}"
-                            )
-                            with threadpool_limits(limits=1, user_api="blas"):
-                                losses = rate(
-                                    model_i.ckpt,
-                                    competition_parameters.competition_id,
-                                    seed,
-                                    samples=self.config.num_samples_per_eval,
-                                    batch_size=16,
-                                    group_size=16,
+                        while True:
+                            try:
+                                _score, status = get_model_score(
+                                    model_i_metadata.id.namespace,
+                                    model_i_metadata.id.name,
                                 )
-
-                        del model_i
-                        torch.cuda.empty_cache()
+                                if status == 'COMPLETED':
+                                    score = _score
+                                    break
+                                elif status == 'FAILED':
+                                    score = 0
+                                    break
+                                else:
+                                    time.sleep(10)
+                            except:
+                                bt.logging.error(f"Failed to get score for {model_i_metadata.id}")
                     except Exception as e:
                         bt.logging.error(
-                            f"Error in eval loop: {e}. Setting losses for uid: {uid_i} to infinity."
+                            f"Error in eval loop: {e}. Setting losses for uid: {uid_i} to 0."
                         )
                     finally:
                         # After we are done with the model, release it.
                         self.model_tracker.release_model_metadata_for_miner_hotkey(hotkey, model_i_metadata)
                 else:
                     bt.logging.debug(
-                        f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to inifinity."
+                        f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to 0."
                     )
             else:
                 bt.logging.debug(
-                    f"Unable to load the model for {uid_i} (perhaps a duplicate?). Setting loss to inifinity."
+                    f"Unable to load the model for {uid_i} (perhaps a duplicate?). Setting loss to 0."
                 )
-            if len(losses) == 0:
-                # 3 metrics, 64 samples, 16 per group
-                losses = [math.inf] * (3 * self.config.num_samples_per_eval // 16)
+            if not score:
+                score = 0
 
-            losses_per_uid[uid_i] = losses
-            average_model_loss = sum(losses) / len(losses)
+            scores_per_uid[uid_i] = score
 
             bt.logging.trace(
-                f"Computed model losses for uid: {uid_i} with average loss: {average_model_loss}"
+                f"Computed model score for uid: {uid_i}: {score}"
             )
-            bt.logging.debug(f"Computed model losses for uid: {uid_i}: {losses}")
+            bt.logging.debug(f"Computed model losses for uid: {uid_i}: {score}")
 
         # Compute wins and win rates per uid.
-        wins, win_rate = compute_wins(uids, losses_per_uid, uid_to_block)
+        wins, win_rate = compute_wins(uids, scores_per_uid, uid_to_block)
 
         # Compute softmaxed weights based on win rate.
         model_weights = torch.tensor(
@@ -864,6 +852,13 @@ class Validator:
                     f"Error in validator loop \n {e} \n {traceback.format_exc()}"
                 )
 
+#TODO Implement get_model_score
+def get_model_score(namespace, name, competition_id):
+    # Status:
+    # QUEUED, RUNNING, FAILED, COMPLETED
+    # return (score, status)
+    
+    return random.random(), random.choice(["QUEUED", "RUNNING", "FAILED", "COMPLETED"])
 
 if __name__ == "__main__":
     asyncio.run(Validator().run())
