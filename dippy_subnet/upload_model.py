@@ -22,6 +22,7 @@ from model.data import Model, ModelId
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
 from huggingface_hub import update_repo_visibility
 import time
+import hashlib
 
 from dotenv import load_dotenv
 
@@ -69,6 +70,9 @@ def get_config():
 
     return config
 
+def regenerate_hash(namespace, name, chat_template, competition_id):
+    s = " ".join([namespace, name, chat_template, competition_id])
+    return int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 10**8 
 
 async def main(config: bt.config):
     # Create bittensor objects.
@@ -90,11 +94,11 @@ async def main(config: bt.config):
         )
 
     repo_namespace, repo_name = utils.validate_hf_repo_id(config.hf_repo_id)
-    model_id = ModelId(
-        namespace=repo_namespace,
-        name=repo_name,
-        competition_id=config.competition_id,
-    )
+    # model_id = ModelId(
+    #     namespace=repo_namespace,
+    #     name=repo_name,
+    #     competition_id=config.competition_id,
+    # )
 
     # model = Model(id=model_id, ckpt=config.load_model_dir)
     # remote_model_store = HuggingFaceModelStore()
@@ -119,9 +123,10 @@ async def main(config: bt.config):
     model_id_with_commit = ModelId(
         namespace=config.hf_repo_id.split("/")[0],
         name=config.hf_repo_id.split("/")[1],
-        hash="",
+        chat_template="vicuna",
+        hash=regenerate_hash(config.hf_repo_id.split("/")[0], config.hf_repo_id.split("/")[1], "vicuna", config.competition_id),
         commit="",
-        competition_id=model_id.competition_id,
+        competition_id=config.competition_id,
     )
 
     model_metadata_store = ChainModelMetadataStore(
