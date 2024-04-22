@@ -856,7 +856,8 @@ class Validator:
 def get_model_score(namespace, name):
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
-    # return (score, status)
+    # return {'score:' score, 'status': status}
+
     
     return random.random(), random.choice(["QUEUED", "RUNNING", "FAILED", "COMPLETED"])
 
