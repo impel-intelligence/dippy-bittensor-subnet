@@ -19,9 +19,7 @@
 from collections import defaultdict
 import datetime as dt
 import os
-import json
 import math
-import sys
 import time
 import torch
 import random
@@ -30,6 +28,8 @@ import asyncio
 import argparse
 import typing
 from threadpoolctl import threadpool_limits
+import requests
+
 
 import constants
 from model.data import ModelMetadata
@@ -857,8 +857,30 @@ def get_model_score(namespace, name):
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
     # return (score, status)
+    validation_endpoint = "http://34.67.213.40:8000/evaluate_model"
+
+    # Construct the payload with the model name and chat template type
+    payload = {
+        "model_name": f"{namespace}/{name}",
+        "chat_template_type": "vicuna"
+    }
+
+    # Make the POST request to the validation endpoint
+    try:
+        response = requests.post(validation_endpoint, json=payload)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        # Parse the response JSON
+        result = response.json()
+        score = result['score']
+        status = result['status']
+    except requests.exceptions.RequestException as e:
+        # Handle any errors that occur during the request
+        bt.logging.error(f"Request to validation endpoint failed: {e}")
+        score = 0
+        status = 'FAILED'
     
-    return random.random(), random.choice(["QUEUED", "RUNNING", "FAILED", "COMPLETED"])
+    
+    return (score, status)
 
 if __name__ == "__main__":
     asyncio.run(Validator().run())

@@ -1,3 +1,4 @@
+import gc
 from typing import Any
 import subprocess
 import os
@@ -17,16 +18,15 @@ from fastapi import FastAPI, HTTPException
 
 from dataset import PippaDataset
 
-# TODO: Add model validation queue to prevent multiple models being validated at the same time
-# TODO: evict models from huggingface model cache otherwise hard disk will get full very quickly.
 # TODO: Add a timeout to the evaluation API to prevent it from running for too long
 
 MAX_MODEL_SIZE = 18 * 1024 * 1024 * 1024 # 18 GB in bytes
-MAX_REPO_SIZE = 32 * 1024 * 1024 * 1024 # 32 GB in bytes
+MAX_REPO_SIZE = 34 * 1024 * 1024 * 1024 # 32 GB in bytes
 SAMPLE_SIZE = 100 # number of samples to evaluate the model from the dataset
 BATCH_SIZE = 2 # batch size for evaluation
-PROB_TOP_K = 50 # the correct token should be in the top 50 tokens, else a score of 0 is given to that token
-# TODO: this will truncate the sequence to 8096 tokens. This is a temporary fix to make the evaluation faster.
+VOCAB_TRUNCATION = 1000 # truncate the vocab to top 50 tokens
+PROB_TOP_K = 10 # the correct token should be in the top 50 tokens, else a score of 0 is given to that token
+# TODO: this will truncate the sequence to MAX_SEQ_LEN tokens. This is a temporary fix to make the evaluation faster.
 MAX_SEQ_LEN = 4096 # maximum sequence length that should be allowed because eval gets really slow with longer sequences than this
 
 leaderboard_file = '/home/manav/dippy-subnet/leaderboard.csv'
@@ -57,6 +57,8 @@ dataset = PippaDataset("data/pippa_deduped.jsonl")
 
 chat_template_mappings = {
     "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
+    "chatml": "prompt_templates/chatml_prompt_template.jinja",
+    "mistral": "prompt_templates/mistral_prompt_template.jinja",
     # TODO: Add chatml, Mistral, and other chat templates
 }
 
@@ -102,8 +104,6 @@ def load_model_no_download(model_name: Any):
     """
     Validate the model by loading it, without downloading it from the Hugging Face Hub
     """
-    # Blackbox function to validate the model's metadata
-    # Replace with your actual criteria
     try:
         config = AutoConfig.from_pretrained(model_name)
     except Exception as e:
@@ -253,7 +253,11 @@ def get_eval_score(
 
             # Get model predictions (logits)
             try:
-                outputs = model(input_ids, attention_mask=attention_mask)
+                outputs = model(
+                    input_ids, 
+                    attention_mask=attention_mask,
+                    use_cache=False,
+                )
             except Exception as e:
                 print("Error getting model predictions for sequence length: ", input_ids.shape[1], " batch size: ", input_ids.shape[0])
                 raise ValueError("Error getting model predictions: " + str(e))
@@ -273,7 +277,7 @@ def get_eval_score(
             # This will make the model only consider the top 100 tokens and make sure the models with higher vocab sizes are not penalized
 
             # get the top k logits and mask out the rest
-            top_k_logits, top_k_indices = outputs.logits.topk(PROB_TOP_K, dim=-1)
+            top_k_logits, top_k_indices = outputs.logits.topk(VOCAB_TRUNCATION, dim=-1)
             outputs.logits = torch.full_like(outputs.logits, float('-inf')).scatter(-1, top_k_indices, top_k_logits)
 
             if debug:
@@ -293,6 +297,11 @@ def get_eval_score(
 
             if torch.isnan(probabilities).any():
                 raise ValueError("NaN values detected in the probabilities tensor")
+            
+            # Get the top PROB_TOP_K indices and zero out all other probabilities
+            top_prob_indices = torch.topk(probabilities, PROB_TOP_K, dim=-1).indices
+            mask = torch.zeros_like(probabilities, dtype=torch.bool).scatter_(-1, top_prob_indices, True)
+            probabilities[~mask] = 0
 
             # Get the probabilities assigned by the model to the target tokens
             token_probabilities = probabilities.gather(-1, input_ids.unsqueeze(-1)).squeeze(-1)
@@ -304,6 +313,8 @@ def get_eval_score(
             total_prob += token_probabilities.sum().cpu().item()
             token_count += targets_ids_mask.sum().cpu().item()
 
+            del input_ids, attention_mask, targets_ids_mask, outputs, probabilities, top_k_logits, top_k_indices, mask, token_probabilities
+            gc.collect()
             torch.cuda.empty_cache()
     
     # Calculate the average probability
@@ -311,6 +322,38 @@ def get_eval_score(
 
     return average_prob
 
+
+def cleanup(model, model_downloaded, request):
+    """
+    Clean up the model data from memory and disk
+    """
+    # delete the model from memory
+    del model
+    torch.cuda.empty_cache()
+    total, used, free = shutil.disk_usage("/")
+    if used / total > 0.9:
+        print("Warning: SSD is more than 90% full.") 
+    if model_downloaded:
+        # Check if the SSD is more than 90% full before deleting the model data
+        try:
+            shutil.rmtree("data/models--" + request.model_name.split("/")[0] + "--"+request.model_name.split("/")[1])
+        except Exception as e:
+            print(f"Warning: Error deleting model data: {e}")
+
+
+def warmup_model(model):
+    """
+    Warm up the model by running it on a dummy input
+    """
+    # run the max sequence length input through the model with batch size BATCH_SIZE
+    model.eval()
+    with torch.no_grad():
+        input_ids = torch.randint(0, model.config.vocab_size, (BATCH_SIZE, MAX_SEQ_LEN)).to(device)
+        attention_mask = torch.ones_like(input_ids).to(device)
+        outputs = model(input_ids, attention_mask=attention_mask)
+        if torch.isnan(outputs.logits).any():
+            raise ValueError("NaN values detected in the logits tensor")
+        
 
 def evaluate_model_logic(request: EvaluateModelRequest):
     """
@@ -329,6 +372,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     quant_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True, # This does not hurt performance much according to 
+        bnb_4bit_compute_dtype=torch.bfloat16,
     )
 
     model_downloaded = False
@@ -336,9 +380,9 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     try:
         model = AutoModelForCausalLM.from_pretrained(
             request.model_name,
-            device_map='auto' if device == "cuda" else 'cpu', # auto will leave space in the first GPU if multiple GPUs are available for other operations
+            device_map='auto',
             quantization_config=quant_config,
-            torch_dtype=torch.bfloat16,
+            attn_implementation="flash_attention_2", # otherwise memory balloons up        
             cache_dir = "data",
             force_download=True
         )
@@ -355,7 +399,8 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     except Exception as e:
         failure_reason = str(e)
         update_leaderboard_status(request.model_name, "FAILED", failure_reason)
-        raise RuntimeError(detail="Error loading model: " + failure_reason)
+        cleanup(None, model_downloaded, request)
+        raise RuntimeError("Error loading model: " + failure_reason)
 
     # get the tokenizers
     print('Downloading tokenizer')
@@ -378,16 +423,28 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         print('Tokenizer downloaded successfully')
     except Exception as e:
         failure_reason = str(e)
-        update_leaderboard_status(request.model_name, "failed", failure_reason)
-        raise RuntimeError(detail="Error downloading tokenizer: " + failure_reason)
+        cleanup(model, model_downloaded, request)
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        raise RuntimeError("Error downloading tokenizer: " + failure_reason)
+
+    # warm up the model
+    print('Warming up model')
+    try:
+        warmup_model(model)
+    except Exception as e:
+        failure_reason = str(e)
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        cleanup(model, model_downloaded, request)
+        raise RuntimeError("Error warming up model: " + failure_reason)
 
     print('Sampling dataset')
     try:
         sampled_data = dataset.sample_dataset(SAMPLE_SIZE)
     except Exception as e:
         failure_reason = str(e)
-        update_leaderboard_status(request.model_name, "failed", failure_reason)
-        raise RuntimeError(detail="Error sampling dataset: " + failure_reason)
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        cleanup(model, model_downloaded, request)
+        raise RuntimeError("Error sampling dataset: " + failure_reason)
     
     # Part 2: Evaluate the model
     print('Evaluating model')
@@ -401,8 +458,9 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         print('Model evaluation score: ', eval_score)
     except Exception as e:
         failure_reason = str(e)
-        update_leaderboard_status(request.model_name, "failed", failure_reason)
-        raise RuntimeError(detail="Error evaluating model: " + failure_reason)
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        cleanup(model, model_downloaded, request)
+        raise RuntimeError("Error evaluating model: " + failure_reason)
 
     # update the model on the leaderboard
     try:
@@ -414,21 +472,12 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         save_leaderboard(leaderboard)
     except Exception as e:
         failure_reason = str(e)
-        update_leaderboard_status(request.model_name, "failed", failure_reason)
-        raise RuntimeError(detail="Error updating leaderboard: " + failure_reason)
-
-    # delete the model from memory
-    del model
-    torch.cuda.empty_cache()
-    total, used, free = shutil.disk_usage("/")
-    if used / total > 0.9:
-        print("Warning: SSD is more than 90% full. Attempting to delete model data.")
-    if model_downloaded:
-        # Check if the SSD is more than 90% full before deleting the model data
-        try:
-            shutil.rmtree("data/models--" + request.model_name.split("/")[0] + "--"+request.model_name.split("/")[1])
-        except Exception as e:
-            print(f"Warning: Error deleting model data: {e}")
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        cleanup(model, model_downloaded, request)
+        raise RuntimeError("Error updating leaderboard: " + failure_reason)
+    
+    # cleanup the model
+    cleanup(model, model_downloaded, request)
 
     return {
         "model_size_score": model_size_score,
