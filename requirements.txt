@@ -1,7 +1,9 @@
 bittensor
+transformers==4.40.0
 torch
 accelerate
 bitsandbytes
 pandas
 sentencepiece
 protobuf
+dotenv
