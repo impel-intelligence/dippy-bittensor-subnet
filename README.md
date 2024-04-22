@@ -10,7 +10,7 @@
 
 - [Introduction](#introduction)
 - [Roadmap](#roadmap)
-- [Miner and Validator Functionality](#miner-and-validator-functionality)
+- [Overview of Miner and Validator Functionality](#overview-of-miner-and-validator-functionality)
   - [Miner](#miner)
   - [Validator](#validator)
 - [Running Miners and Validators](#running-miners-and-validators)
@@ -28,6 +28,38 @@ The Dippy Roleplay subnet on Bittensor aims to create the world's best open-sour
 Current SOTA LLMs are designed for the assistant use case and lack the empathetic qualities necessary for companionship. While some companies (c.ai, chai, inflection etc) have developed closed-source roleplay LLMs, the open-source alternatives lag significantly behind in performance. 
 
 Our team at Impel Intelligence Inc. knows this issue intimately through building Dippy, a proactive AI companion app for iOS.  In this subnet, we will bring together the entire open-source eco-system to build the world’s best roleplay LLM.
+
+## Roadmap
+
+Given the complexity of creating a SOTA Roleplay LLM, we plan to divide the process into 3 distinct phases.
+
+**Phase 1:** 
+We’ll launch our subnet with a robust pipeline for roleplay LLM evaluation on both public and proprietary dataset. 
+We rank models on a public dashboard on based on our evaluation protocol
+
+**Phase 2:** 
+We will create Bittensor themed characters within the Dippy app and randomly serve the top miner submitted models to measure model quality based on real user engagement and retention. 
+The app will be a playground to evaluate and rank miner model submissions
+
+**Phase 3:** 
+The best models will be integrated into an open-sourced MOE LLM, with a unique recommendation mechanism that selects the best “expert” suited for the character based on personality, characteristics etc.
+
+## Overview of Miner and Validator Functionality
+
+
+
+## Running Miners and Validators
+### Running a Miner
+python dippy_subnet/check_model.py --hotkey HOTKEY --subtensor.network test 
+#### Requirements
+
+#### Setup
+
+### Running a Validator
+python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME
+#### Requirements
+
+#### Setup
 
 
 ## License
