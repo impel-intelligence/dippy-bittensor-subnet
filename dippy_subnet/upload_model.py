@@ -23,6 +23,7 @@ from model.data import Model, ModelId
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
 from huggingface_hub import update_repo_visibility
 import time
+import hashlib
 
 from dotenv import load_dotenv
 
@@ -70,6 +71,9 @@ def get_config():
     config = bt.config(parser)
     return config
 
+def regenerate_hash(namespace, name, chat_template, competition_id):
+    s = " ".join([namespace, name, chat_template, competition_id])
+    return int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 10**8 
 
 def check_model_dir(model_dir):
     """Check if model dir has all the required files."""
@@ -165,19 +169,12 @@ async def main(config: bt.config):
     )
 
     model_id_with_commit = ModelId(
-        namespace=model_id.namespace,
-        name=model_id.name,
-        hash="",
-        commit="",
-        competition_id=model_id.competition_id,
-    )
-
-    model_id_with_commit = ModelId(
-        namespace=config.hf_repo_id.split("/")[0],
-        name=config.hf_repo_id.split("/")[1],
-        hash="",
-        commit="",
-        competition_id=model_id.competition_id,
+        namespace=repo_namespace,
+        name=repo_name,
+        chat_template="vicuna", # TODO: change this to a variable
+        hash=regenerate_hash(repo_namespace, repo_name, "vicuna", config.competition_id), # TODO: change chat template to a variable
+        commit=model_id_with_commit.commit,
+        competition_id=config.competition_id,
     )
 
     model_metadata_store = ChainModelMetadataStore(
@@ -195,6 +192,7 @@ async def main(config: bt.config):
             await model_metadata_store.store_model_metadata(
                 wallet.hotkey.ss58_address, model_id_with_commit
             )
+            bt.logging.error(model_id_with_commit)
             bt.logging.success("Committed model to the chain.")
             break
         except Exception as e:

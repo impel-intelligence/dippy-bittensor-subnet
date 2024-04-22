@@ -31,18 +31,22 @@ Our team at Impel Intelligence Inc. knows this issue intimately through building
 
 ## Roadmap
 
-Given the complexity of creating a SOTA Roleplay LLM, we plan to divide the process into 3 distinct phases.
+Given the complexity of creating a state of the art roleplay LLM, we plan to divide the process into 3 distinct phases.
 
 **Phase 1:** 
-We’ll launch our subnet with a robust pipeline for roleplay LLM evaluation on both public and proprietary dataset. 
-We rank models on a public dashboard on based on our evaluation protocol
+- [X] Subnet launch with robust pipeline for roleplay LLM evaluation on public datasets and response length 
+- [ ] New, evolving evaluation datasets curated by community as well as contributed by Dippy's mobile app users
+- [ ] Public model leaderboard based on evaluation criteria
 
 **Phase 2:** 
-We will create Bittensor themed characters within the Dippy app and randomly serve the top miner submitted models to measure model quality based on real user engagement and retention. 
-The app will be a playground to evaluate and rank miner model submissions
+- [ ] Multiple TAO themed characters introduced in the app with different personalities (funny, romantic, therapeutic etc)
+- [ ] Top models rotated among characters and evaluated in the app based on user metrics (engagement time, conversation length, retention etc)
+- [ ] Models with the highest score in each personality type are chosen as "expert" models and made publicly available
 
 **Phase 3:** 
-The best models will be integrated into an open-sourced MOE LLM, with a unique recommendation mechanism that selects the best “expert” suited for the character based on personality, characteristics etc.
+- [ ] New Mixture of Experts model made as a baseline based on the "expert" models chosen from Phase 2
+- [ ] Robust pipeline to evaluate new MOE model submissions against all the characters in the app
+- [ ] Expand the state of the art in roleplay LLMs through continuous iteration and data collection
 
 ## Overview of Miner and Validator Functionality
 

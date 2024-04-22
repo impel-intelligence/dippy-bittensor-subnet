@@ -69,7 +69,6 @@ class ChainModelMetadataStore(ModelMetadataStore):
             return None
 
         model_metadata = ModelMetadata(id=model_id, block=metadata["block"])
-
         return model_metadata
 
 
