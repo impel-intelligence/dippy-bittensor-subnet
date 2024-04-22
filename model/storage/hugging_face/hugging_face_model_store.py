@@ -47,27 +47,16 @@ class HuggingFaceModelStore(RemoteModelStore):
             exist_ok=True,
             private=True,
         )
-        # convert to safetensors if needed
-        if not model.ckpt.endswith(".safetensors"):
-            # save the model as a safetensors file
-            loaded = torch.load(model.ckpt, map_location="cpu")
-            if "model" in loaded:
-                loaded = loaded["model"]
-            shared = shared_pointers(loaded)
-            for shared_weights in shared:
-                for name in shared_weights[1:]:
-                    loaded.pop(name)
-
-            # For tensors to be contiguous
-            loaded = {k: v.contiguous() for k, v in loaded.items()}
-            save_file(loaded, model.ckpt + ".safetensors", metadata={"format": "pt"})
-            model.ckpt = model.ckpt + ".safetensors"
-
-        commit_info = api.upload_file(
-            path_or_fileobj=model.ckpt,
-            path_in_repo="checkpoint.safetensors",
+        
+        # upload model.local_repo_dir to Hugging Face
+        commit_info = api.upload_folder(
             repo_id=model.id.namespace + "/" + model.id.name,
+            folder_path=model.local_repo_dir,
+            commit_message="Upload model",
+            repo_type="model",
         )
+        
+        
         model_id_with_commit = ModelId(
             namespace=model.id.namespace,
             name=model.id.name,

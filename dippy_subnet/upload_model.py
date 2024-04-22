@@ -10,6 +10,7 @@ Prerequisites:
 """
 
 import asyncio
+import json
 import os
 import argparse
 import torch
@@ -37,12 +38,13 @@ def get_config():
         type=str,
         help="The hugging face repo id, which should include the org or user and repo name. E.g. jdoe/finetuned",
     )
-    # parser.add_argument(
-    #     "--load_model_dir",
-    #     type=str,
-    #     default=None,
-    #     help="If provided, loads a previously trained HF model from the specified directory",
-    # )
+
+    parser.add_argument(
+        "--model_dir",
+        type=str,
+        help="The director of the model to load.",
+    )
+
     parser.add_argument(
         "--netuid",
         type=str,
@@ -66,8 +68,58 @@ def get_config():
 
     # Parse the arguments and create a configuration namespace
     config = bt.config(parser)
-
     return config
+
+
+def check_model_dir(model_dir):
+    """Check if model dir has all the required files."""
+    if not os.path.exists(model_dir):
+        raise FileNotFoundError(f"Model directory {model_dir} not found.")
+
+    ls_dir = os.listdir(model_dir)
+    # check if at least 1 *.safetensors file exists
+    if not any(file.endswith(".safetensors") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No *.safetensors file found in model directory {model_dir}."
+        )
+    
+    # check if tokenizer.json exists
+    if not any(file.endswith("tokenizer.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No tokenizer.json file found in model directory {model_dir}."
+        )
+    
+    # check if config.json exists
+    if not any(file.endswith("config.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No config.json file found in model directory {model_dir}."
+        )
+    
+    # check if generation_config.json exists
+    if not any(file.endswith("generation_config.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No generation_config.json file found in model directory {model_dir}."
+        )
+    
+    # check if special_tokens_map.json exists
+    if not any(file.endswith("special_tokens_map.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No special_tokens_map.json file found in model directory {model_dir}."
+        )
+    
+    # check if model.safetensors.index.json exists
+    if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No model.safetensors.index.json file found in model directory {model_dir}."
+        )
+    
+    # check if this file contains metadata.total_size
+    with open(os.path.join(model_dir, "model.safetensors.index.json"), "r") as f:
+        index = json.load(f)
+        if "metadata" not in index or "total_size" not in index["metadata"]:
+            raise FileNotFoundError(
+                f"model.safetensors.index.json file in model directory {model_dir} does not contain metadata.total_size."
+            )
 
 
 async def main(config: bt.config):
@@ -90,32 +142,36 @@ async def main(config: bt.config):
         )
 
     repo_namespace, repo_name = utils.validate_hf_repo_id(config.hf_repo_id)
+    
     model_id = ModelId(
         namespace=repo_namespace,
         name=repo_name,
         competition_id=config.competition_id,
     )
 
-    # model = Model(id=model_id, ckpt=config.load_model_dir)
-    # remote_model_store = HuggingFaceModelStore()
+    model = Model(id=model_id, local_repo_dir=config.model_dir)
 
-    # model_id_with_commit = await remote_model_store.upload_model(
-    #     model=model,
-    #     competition_parameters=parameters,
-    # )
+    check_model_dir(config.model_dir)
 
+    remote_model_store = HuggingFaceModelStore()
 
+    model_id_with_commit = await remote_model_store.upload_model(
+        model=model,
+        competition_parameters=parameters,
+    )
 
-    # print(
-    #     f"Model uploaded to Hugging Face with commit {model_id_with_commit.commit} and hash {model_id_with_commit.hash}"
-    # )
-    # model_id_with_commit = ModelId(
-    #     namespace=model_id.namespace,
-    #     name=model_id.name,
-    #     hash="",
-    #     commit="",
-    #     competition_id=model_id.competition_id,
-    # )
+    print(
+        f"Model uploaded to Hugging Face with commit {model_id_with_commit.commit} and hash {model_id_with_commit.hash}"
+    )
+
+    model_id_with_commit = ModelId(
+        namespace=model_id.namespace,
+        name=model_id.name,
+        hash="",
+        commit="",
+        competition_id=model_id.competition_id,
+    )
+
     model_id_with_commit = ModelId(
         namespace=config.hf_repo_id.split("/")[0],
         name=config.hf_repo_id.split("/")[1],
@@ -131,15 +187,14 @@ async def main(config: bt.config):
     # We can only commit to the chain every 20 minutes, so run this in a loop, until successful.
     while True:
         try:
-            # update_repo_visibility(
-            #     model_id.namespace + "/" + model_id.name,
-            #     private=False,
-            #     token=os.getenv("HF_ACCESS_TOKEN"),
-            # )
+            update_repo_visibility(
+                model_id.namespace + "/" + model_id.name,
+                private=False,
+                token=os.getenv("HF_ACCESS_TOKEN"),
+            )
             await model_metadata_store.store_model_metadata(
                 wallet.hotkey.ss58_address, model_id_with_commit
             )
-
             bt.logging.success("Committed model to the chain.")
             break
         except Exception as e:

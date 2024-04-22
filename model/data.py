@@ -64,7 +64,7 @@ class Model(BaseModel):
         arbitrary_types_allowed = True
 
     id: ModelId = Field(description="Identifier for this model.")
-    ckpt: str = Field(description="Path to the checkpoint file.")
+    local_repo_dir: str = Field(description="Local repository with the required files.")
 
 
 class ModelMetadata(BaseModel):

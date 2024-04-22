@@ -1,5 +1,6 @@
 import gc
-from typing import Any
+from typing import Any, Optional
+import requests
 import subprocess
 import os
 from queue import Queue
@@ -19,6 +20,12 @@ from dataset import PippaDataset
 
 # TODO: Add a timeout to the evaluation API to prevent it from running for too long
 
+# Constants
+QUALITATIVE_SCORE_WEIGHT = 0.8
+MODEL_SIZE_SCORE_WEIGHT = 0.1
+LATENCY_SCORE_WEIGHT = 0.1
+MAX_AVG_LATENCY = 10000 # in milliseconds
+
 MAX_MODEL_SIZE = 18 * 1024 * 1024 * 1024 # in bytes
 MAX_REPO_SIZE = 80 * 1024 * 1024 * 1024 #  in bytes
 SAMPLE_SIZE = 100 # number of samples to evaluate the model from the dataset
@@ -31,7 +38,7 @@ MAX_SEQ_LEN = 4096 # maximum sequence length that should be allowed because eval
 leaderboard_file = '/home/manav/dippy-subnet/leaderboard.csv'
 
 # if the leaderboard file does not exist, create it with proper columns
-columns = ['model_name', 'chat_template_type', 'model_size_score', 'qualitative_score', 'timestamp', 'status', 'notes']
+columns = ['model_name', 'chat_template_type', 'model_size_score', 'qualitative_score', 'latency_score', 'timestamp', 'status', 'notes']
 if not os.path.exists(leaderboard_file):
     pd.DataFrame(columns=columns).to_csv(leaderboard_file, index=False)
 
@@ -40,6 +47,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 class EvaluateModelRequest(BaseModel):
     model_name: str
     chat_template_type: str
+    revision: Optional[str] = "main"
 
 evaluation_queue = Queue()
 
@@ -165,11 +173,14 @@ def check_model_repo_size(model_name: str) -> int:
     repo_dir = model_name.split('/')[-1]
     original_dir = os.getcwd()
     try:
-        subprocess.run(["git", "clone", "--no-checkout", f"https://huggingface.co/{model_name}", repo_dir], check=True)
+        subprocess.run(["git", "clone", "--no-checkout", f"https://huggingface.co/{model_name}", repo_dir], check=True, timeout=10)
         os.chdir(repo_dir)
-        lfs_files_output = subprocess.check_output(["git", "lfs", "ls-files", "-s"], text=True)
+        lfs_files_output = subprocess.check_output(["git", "lfs", "ls-files", "-s"], text=True, timeout=10)
         total_size = sum(parse_size(line) for line in lfs_files_output.strip().split('\n') if line)
         return total_size
+    except subprocess.TimeoutExpired as e:
+        print(f"Operation timed out: {e}")
+        return None
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
@@ -301,8 +312,7 @@ def get_eval_score(
             # Get the top PROB_TOP_K indices and zero out all other probabilities
             top_prob_indices = torch.topk(probabilities, PROB_TOP_K, dim=-1).indices
             mask = torch.zeros_like(probabilities, dtype=torch.bool).scatter_(-1, top_prob_indices, True)
-            probabilities[~mask] = 0
-
+            probabilities[~mask] = 1e-9
             # Get the probabilities assigned by the model to the target tokens
             token_probabilities = probabilities.gather(-1, input_ids.unsqueeze(-1)).squeeze(-1)
 
@@ -347,12 +357,35 @@ def warmup_model(model):
     """
     # run the max sequence length input through the model with batch size BATCH_SIZE
     model.eval()
+    latencies = []
+    max_model_len = min(model.config.max_position_embeddings, MAX_SEQ_LEN)
     with torch.no_grad():
-        input_ids = torch.randint(0, model.config.vocab_size, (BATCH_SIZE, MAX_SEQ_LEN)).to(device)
-        attention_mask = torch.ones_like(input_ids).to(device)
-        outputs = model(input_ids, attention_mask=attention_mask)
-        if torch.isnan(outputs.logits).any():
-            raise ValueError("NaN values detected in the logits tensor")
+        for _ in range(10):
+            input_ids = torch.randint(0, model.config.vocab_size, (BATCH_SIZE, max_model_len)).to(device)
+            attention_mask = torch.ones_like(input_ids).to(device)
+            
+            start_time = torch.cuda.Event(enable_timing=True)
+            end_time = torch.cuda.Event(enable_timing=True)
+
+            start_time.record()
+            outputs = model(input_ids, attention_mask=attention_mask)
+            end_time.record()
+            # Waits for everything to finish running
+            torch.cuda.synchronize()
+
+            latency = start_time.elapsed_time(end_time)  # Measure latency in milliseconds
+            if torch.isnan(outputs.logits).any():
+                raise ValueError("NaN values detected in the logits tensor")
+
+            latencies.append(latency)
+            del input_ids, attention_mask, outputs
+            gc.collect()
+            torch.cuda.empty_cache()
+
+        average_latency = sum(latencies) / len(latencies)
+        print(f"Average model inference latency over 10 runs: {average_latency} ms")
+        
+    return average_latency
         
 
 def evaluate_model_logic(request: EvaluateModelRequest):
@@ -380,6 +413,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         try:
             model = AutoModelForCausalLM.from_pretrained(
                 request.model_name,
+                revision=request.revision,
                 device_map='auto',
                 quantization_config=quant_config,
                 attn_implementation="flash_attention_2",       
@@ -387,9 +421,10 @@ def evaluate_model_logic(request: EvaluateModelRequest):
                 force_download=True
             )
         except Exception as e:
-            print(f"Error loading model in 4 bit quant: {e}")
+            print(f"Error loading model in 4 bit quant with flash attention.: {e}. Trying vanilla load.")
             model = AutoModelForCausalLM.from_pretrained(
                 request.model_name,
+                revision=request.revision,
                 device_map='auto',
                 attn_implementation="sdpa",       
                 cache_dir = "data",
@@ -439,12 +474,18 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     # warm up the model
     print('Warming up model')
     try:
-        warmup_model(model)
+        avg_latency = warmup_model(model)
+        if not avg_latency: # either 0 or None
+            raise ValueError("Error warming up model")
+            
     except Exception as e:
         failure_reason = str(e)
         update_leaderboard_status(request.model_name, "FAILED", failure_reason)
         cleanup(model, model_downloaded, request)
         raise RuntimeError("Error warming up model: " + failure_reason)
+    
+    # get latency score
+    latency_score = 1 - (avg_latency / MAX_AVG_LATENCY)
 
     print('Sampling dataset')
     try:
@@ -476,7 +517,8 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         leaderboard = get_leaderboard()
         leaderboard.loc[leaderboard['model_name'] == request.model_name, 'model_size_score'] = float(model_size_score)
         leaderboard.loc[leaderboard['model_name'] == request.model_name, 'qualitative_score'] = float(eval_score)
-        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'status'] = "COMPLETE"
+        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'latency_score'] = float(latency_score)
+        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'status'] = "COMPLETED"
         leaderboard.loc[leaderboard['model_name'] == request.model_name, 'notes'] = ""
         save_leaderboard(leaderboard)
     except Exception as e:
@@ -490,7 +532,8 @@ def evaluate_model_logic(request: EvaluateModelRequest):
 
     return {
         "model_size_score": model_size_score,
-        "qualitative_score": eval_score
+        "qualitative_score": eval_score,
+        "latency_score": latency_score
     }
 
 def update_leaderboard_status(model_name, status, notes=""):
@@ -512,16 +555,44 @@ def get_json_result(model_name):
     leaderboard = get_leaderboard()
     if (leaderboard['model_name'] == model_name).any():
         # if it exists, return score and status
+        total_score = 0
         model_entry = leaderboard[leaderboard['model_name'] == model_name].iloc[0]
+        total_score += model_entry['model_size_score'] * MODEL_SIZE_SCORE_WEIGHT 
+        total_score += model_entry['qualitative_score'] * QUALITATIVE_SCORE_WEIGHT
+        total_score += model_entry['latency_score'] * LATENCY_SCORE_WEIGHT
+        
         return {
             "score": {
                 "model_size_score": model_entry['model_size_score'],
                 "qualitative_score": model_entry['qualitative_score'],
+                "latency_score": model_entry['latency_score'],
+                "total_score": total_score
             },
             "status": model_entry['status']
         }
     else:
         None
+
+def get_model_size(model_name):
+    safetensor_index = f"https://huggingface.co/{model_name}/resolve/main/model.safetensors.index.json"
+    response = requests.get(safetensor_index)
+    if response.status_code != 200:
+        print(f"Error getting safetensors index: {response.text}")
+        return None
+    
+    response_json = response.json()
+    if 'metadata' not in response_json:
+        print("Error: metadata not found in safetensors index")
+        return None
+    
+    if 'total_size' not in response_json['metadata']:
+        print("Error: total_size not found in safetensors index metadata")
+        return None
+    
+    total_size = response_json['metadata']['total_size']
+    
+    return total_size
+
 
 @app.post("/evaluate_model")
 def evaluate_model(request: EvaluateModelRequest):
@@ -547,6 +618,15 @@ def evaluate_model(request: EvaluateModelRequest):
     if model_repo_size > MAX_REPO_SIZE:
         raise HTTPException(status_code=400, detail="Model repo size is too large: " + str(model_repo_size) + " bytes. Should be less than " + str(MAX_REPO_SIZE) + " bytes")
     
+    # check model size by checking safetensors index
+    model_size = get_model_size(request.model_name)
+    if model_size is None:
+        model_size = 0
+        # raise HTTPException(status_code=400, detail="Error getting model size. Make sure the model.index.safetensors.json file exists in the model repository. And it has the metadata->total_size field.")
+
+    if model_size > MAX_MODEL_SIZE:
+        raise HTTPException(status_code=400, detail="Model size is too large: " + str(model_size) + " bytes. Should be less than " + str(MAX_MODEL_SIZE) + " bytes")
+
     leaderboard = get_leaderboard()
     # add the model to leaderboard with status pending
     new_entry = pd.DataFrame([{
@@ -554,6 +634,7 @@ def evaluate_model(request: EvaluateModelRequest):
         "chat_template_type": request.chat_template_type,
         "model_size_score": -1.0,
         "qualitative_score": -1.0,
+        "latency_score": -1.0,
         "timestamp": pd.Timestamp.utcnow(),
         "status": "QUEUED",
         "notes": ""
