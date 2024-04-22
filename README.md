@@ -46,6 +46,13 @@ The best models will be integrated into an open-sourced MOE LLM, with a unique r
 
 ## Overview of Miner and Validator Functionality
 
+![overview](/drawio.png)
+
+**Miners** would use existing frameworks, fine tuning techniques, or MergeKit, to train, fine tune, or merge models to create a unique roleplay LLM. These models would be submitted to a shared Hugging Face pool. 
+
+**Validators** would evaluate the and assess model performance via our protocol and rank the submissions based on various metrics (empathy, conciseness etc). We will provide a suite of 
+testing and benchmarking protocols with state-of-the-art datasets.
+
 
 
 ## Running Miners and Validators
