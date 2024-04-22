@@ -5,7 +5,7 @@ Requirements:
 - model.config.max_position_embeddings should not be None
 - naturally, models with higher max sequence length will be better as the long sequences will be truncated otherwise
 - ideally the miners should provide the quantization config for accurate results.
-
+- The hf repo cannot be gated. The model should be able to load from the repo ID without credentials.
 
 HOW TO USE:
 

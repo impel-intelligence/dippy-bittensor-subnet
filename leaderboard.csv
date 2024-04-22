@@ -1,0 +1,5 @@
+model_name,chat_template_type,model_size_score,qualitative_score,timestamp,status,notes
+openai-community/gpt2,vicuna,0.9930636870364348,0.1866812041813738,2024-04-21 00:00:40.342244+00:00,COMPLETE,
+NousResearch/Meta-Llama-3-8B-Instruct,vicuna,0.703748067220052,0.3570716982350982,2024-04-21 22:30:23.670413+00:00,COMPLETE,
+dreamgen/opus-v1.2-llama-3-8b,vicuna,0.703748067220052,0.3454725031462191,2024-04-21 22:37:18.315227+00:00,COMPLETE,
+HuggingFaceH4/zephyr-7b-beta,vicuna,0.764511956108941,0.4046733165812715,2024-04-21 23:59:27.243701+00:00,COMPLETE,

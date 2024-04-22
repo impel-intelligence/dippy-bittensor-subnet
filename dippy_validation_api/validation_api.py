@@ -1,27 +1,48 @@
-from tqdm import tqdm
+import gc
 from typing import Any
+import subprocess
 import os
+from queue import Queue
+from threading import Thread
+from tqdm import tqdm
+import shutil
+from pydantic import BaseModel
+
+import numpy as np
+import pandas as pd
+import uvicorn
 import torch
 from transformers import AutoModelForCausalLM, AutoConfig, AutoTokenizer, BitsAndBytesConfig
 import huggingface_hub
 from fastapi import FastAPI, HTTPException
-import shutil
 
 from dataset import PippaDataset
 
-# TODO: Add model validation queue to prevent multiple models being validated at the same time
-# TODO: evict models from huggingface model cache otherwise hard disk will get full very quickly.
 # TODO: Add a timeout to the evaluation API to prevent it from running for too long
 
-
-MAX_MODEL_SIZE = 18*1024 # 18 GB to leave space for other operations
+MAX_MODEL_SIZE = 18 * 1024 * 1024 * 1024 # 18 GB in bytes
+MAX_REPO_SIZE = 34 * 1024 * 1024 * 1024 # 32 GB in bytes
 SAMPLE_SIZE = 100 # number of samples to evaluate the model from the dataset
 BATCH_SIZE = 2 # batch size for evaluation
-PROB_TOP_K = 50 # the correct token should be in the top 50 tokens, else a score of 0 is given to that token
-# TODO: this will truncate the sequence to 8096 tokens. This is a temporary fix to make the evaluation faster.
+VOCAB_TRUNCATION = 1000 # truncate the vocab to top 50 tokens
+PROB_TOP_K = 10 # the correct token should be in the top 50 tokens, else a score of 0 is given to that token
+# TODO: this will truncate the sequence to MAX_SEQ_LEN tokens. This is a temporary fix to make the evaluation faster.
 MAX_SEQ_LEN = 4096 # maximum sequence length that should be allowed because eval gets really slow with longer sequences than this
 
+leaderboard_file = '/home/manav/dippy-subnet/leaderboard.csv'
+
+# if the leaderboard file does not exist, create it with proper columns
+columns = ['model_name', 'chat_template_type', 'model_size_score', 'qualitative_score', 'timestamp', 'status', 'notes']
+if not os.path.exists(leaderboard_file):
+    pd.DataFrame(columns=columns).to_csv(leaderboard_file, index=False)
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
+class EvaluateModelRequest(BaseModel):
+    model_name: str
+    chat_template_type: str
+
+evaluation_queue = Queue()
 
 app = FastAPI()
 
@@ -31,19 +52,58 @@ if not os.path.exists("data"):
 # download the file pippa_deduped.jsonl from huggingface
 if not os.path.exists("data/pippa_deduped.jsonl"):
     huggingface_hub.hf_hub_download(repo_id="PygmalionAI/PIPPA", filename="pippa_deduped.jsonl", repo_type="dataset", local_dir = "data")
+
 dataset = PippaDataset("data/pippa_deduped.jsonl")
 
 chat_template_mappings = {
     "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
+    "chatml": "prompt_templates/chatml_prompt_template.jinja",
+    "mistral": "prompt_templates/mistral_prompt_template.jinja",
     # TODO: Add chatml, Mistral, and other chat templates
 }
+
+
+def get_leaderboard() -> pd.DataFrame:
+    dtype_dict = {
+        'model_name': str,
+        'chat_template_type': str,
+        'model_size_score': 'float64',  # Use 'float64' to allow NaNs
+        'qualitative_score': 'float64',  # Use 'float64' to allow NaNs
+        'timestamp': str,
+        'status': str,
+        'notes': str
+    }
+    leaderboard = pd.read_csv(leaderboard_file, dtype=dtype_dict, parse_dates=['timestamp'])
+    # Replace NaN with None for JSON serialization
+    leaderboard = leaderboard.where(pd.notnull(leaderboard), None)
+    return leaderboard
+
+def save_leaderboard(leaderboard: pd.DataFrame):
+    leaderboard.to_csv(leaderboard_file, index=False)
+
+def model_evaluation_worker():
+    while True:
+        # Get the next evaluation task from the queue
+        request = evaluation_queue.get()
+        if request is None:
+            # Stop the thread if the sentinel is received
+            break
+        try:
+            # Process the evaluation task
+            result = evaluate_model_logic(request)
+            print(f"Model evaluation completed: {result}")
+        except Exception as e:
+            print(f"Error during model evaluation: {e}")
+        finally:
+            # Mark the task as done
+            evaluation_queue.task_done()
+
+evaluation_thread = Thread(target=model_evaluation_worker)
 
 def load_model_no_download(model_name: Any):
     """
     Validate the model by loading it, without downloading it from the Hugging Face Hub
     """
-    # Blackbox function to validate the model's metadata
-    # Replace with your actual criteria
     try:
         config = AutoConfig.from_pretrained(model_name)
     except Exception as e:
@@ -63,6 +123,59 @@ def load_model_no_download(model_name: Any):
             return None, str(e)
     else:
         return None, "Could not retrieve model configuration from Hub"
+
+def parse_size(line):
+    """
+    Parse the size string with unit and convert it to bytes.
+    
+    Args:
+    - size_with_unit (str): The size string with unit (e.g., '125 MB')
+    
+    Returns:
+    - int: The size in bytes
+    """
+    try:
+        # get number enclosed in brackets
+        size, unit = line[line.find("(")+1:line.rfind(")")].strip().split(' ')
+        size = float(size.replace(',', ''))  # Remove commas for thousands
+        unit = unit.lower()
+        if unit == 'kb':
+            return int(size * 1024)
+        elif unit == 'mb':
+            return int(size * 1024 * 1024)
+        elif unit == 'gb':
+            return int(size * 1024 * 1024 * 1024)
+        else:
+            raise ValueError(f"Unknown unit: {unit}")
+    except ValueError as e:
+        print(f"Error parsing size string '{size}{unit}': {e}")
+        return 0
+
+def check_model_repo_size(model_name: str) -> int:
+    """
+    Check the size of a model hosted on Hugging Face using Git LFS without checking out the files,
+    and clean up the cloned repository afterwards, even if an error occurs.
+    
+    Args:
+    - model_name (str): The name of the model in the format 'username/modelname'
+    
+    Returns:
+    - int: The total size of the model files in bytes
+    """
+    repo_dir = model_name.split('/')[-1]
+    original_dir = os.getcwd()
+    try:
+        subprocess.run(["git", "clone", "--no-checkout", f"https://huggingface.co/{model_name}", repo_dir], check=True)
+        os.chdir(repo_dir)
+        lfs_files_output = subprocess.check_output(["git", "lfs", "ls-files", "-s"], text=True)
+        total_size = sum(parse_size(line) for line in lfs_files_output.strip().split('\n') if line)
+        return total_size
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+    finally:
+        os.chdir(original_dir)
+        shutil.rmtree(os.path.join(original_dir, repo_dir), ignore_errors=True)
     
 def get_eval_score(
         model: Any, 
@@ -140,8 +253,11 @@ def get_eval_score(
 
             # Get model predictions (logits)
             try:
-                 
-                outputs = model(input_ids, attention_mask=attention_mask)
+                outputs = model(
+                    input_ids, 
+                    attention_mask=attention_mask,
+                    use_cache=False,
+                )
             except Exception as e:
                 print("Error getting model predictions for sequence length: ", input_ids.shape[1], " batch size: ", input_ids.shape[0])
                 raise ValueError("Error getting model predictions: " + str(e))
@@ -161,7 +277,7 @@ def get_eval_score(
             # This will make the model only consider the top 100 tokens and make sure the models with higher vocab sizes are not penalized
 
             # get the top k logits and mask out the rest
-            top_k_logits, top_k_indices = outputs.logits.topk(PROB_TOP_K, dim=-1)
+            top_k_logits, top_k_indices = outputs.logits.topk(VOCAB_TRUNCATION, dim=-1)
             outputs.logits = torch.full_like(outputs.logits, float('-inf')).scatter(-1, top_k_indices, top_k_logits)
 
             if debug:
@@ -181,6 +297,11 @@ def get_eval_score(
 
             if torch.isnan(probabilities).any():
                 raise ValueError("NaN values detected in the probabilities tensor")
+            
+            # Get the top PROB_TOP_K indices and zero out all other probabilities
+            top_prob_indices = torch.topk(probabilities, PROB_TOP_K, dim=-1).indices
+            mask = torch.zeros_like(probabilities, dtype=torch.bool).scatter_(-1, top_prob_indices, True)
+            probabilities[~mask] = 0
 
             # Get the probabilities assigned by the model to the target tokens
             token_probabilities = probabilities.gather(-1, input_ids.unsqueeze(-1)).squeeze(-1)
@@ -192,6 +313,8 @@ def get_eval_score(
             total_prob += token_probabilities.sum().cpu().item()
             token_count += targets_ids_mask.sum().cpu().item()
 
+            del input_ids, attention_mask, targets_ids_mask, outputs, probabilities, top_k_logits, top_k_indices, mask, token_probabilities
+            gc.collect()
             torch.cuda.empty_cache()
     
     # Calculate the average probability
@@ -199,87 +322,129 @@ def get_eval_score(
 
     return average_prob
 
-from pydantic import BaseModel
 
-class EvaluateModelRequest(BaseModel):
-    model_name: str
-    chat_template_type: str
+def cleanup(model, model_downloaded, request):
+    """
+    Clean up the model data from memory and disk
+    """
+    # delete the model from memory
+    del model
+    torch.cuda.empty_cache()
+    total, used, free = shutil.disk_usage("/")
+    if used / total > 0.9:
+        print("Warning: SSD is more than 90% full.") 
+    if model_downloaded:
+        # Check if the SSD is more than 90% full before deleting the model data
+        try:
+            shutil.rmtree("data/models--" + request.model_name.split("/")[0] + "--"+request.model_name.split("/")[1])
+        except Exception as e:
+            print(f"Warning: Error deleting model data: {e}")
 
-@app.post("/evaluate_model")
-def evaluate_model(request: EvaluateModelRequest):
+
+def warmup_model(model):
+    """
+    Warm up the model by running it on a dummy input
+    """
+    # run the max sequence length input through the model with batch size BATCH_SIZE
+    model.eval()
+    with torch.no_grad():
+        input_ids = torch.randint(0, model.config.vocab_size, (BATCH_SIZE, MAX_SEQ_LEN)).to(device)
+        attention_mask = torch.ones_like(input_ids).to(device)
+        outputs = model(input_ids, attention_mask=attention_mask)
+        if torch.isnan(outputs.logits).any():
+            raise ValueError("NaN values detected in the logits tensor")
+        
+
+def evaluate_model_logic(request: EvaluateModelRequest):
     """
     Evaluate a model based on the model size and the quality of the model.
     """
-
-    ##### TODO: This part should be made faster somehow ###### 
-    # Calculating model size relies on too many assumptions, but is a good heuristic.
-    if request.chat_template_type not in chat_template_mappings:
-        raise HTTPException(status_code=400, detail="Chat template type not supported")
-
-    model, reason = load_model_no_download(request.model_name)
+    # ensure that the model is on the leaderboard with status pending
+    leaderboard = get_leaderboard()
+    if not (leaderboard['model_name'] == request.model_name).any():
+        raise ValueError(f"Model {request.model_name} not found in the leaderboard")
     
-    if not model:
-        raise HTTPException(status_code=400, detail="Model is not valid: " + reason)
-    
-    print('The model is valid and now we can download the weights')
+    # changed status to in progress
+    update_leaderboard_status(request.model_name, "RUNNING", "Model evaluation in progress")
 
-    # Part 1: Check model size and calculate model size score
-    # get model size in MB, assuming model is loaded with 4 bit quantization
-    model_size = model.num_parameters() * 4 / 8 / 1024 / 1024
-    print('Model size: ', model_size, ' MB')
-    print("Model number of parameters: ", model.num_parameters())
-    # check if model size is within the limit. If not, return an error
-    if model_size > MAX_MODEL_SIZE:
-        raise HTTPException(status_code=400, detail="Model is too large when loaded in 4 bit quant: " + str(model_size) + " MB. Should be less than " + str(MAX_MODEL_SIZE/1024) + " MB")
-
-    model_size_score = 1 - (model_size / MAX_MODEL_SIZE)
-    print('Model size score: ', model_size_score)
-
-    ###########################################################
-
-    del model
-    torch.cuda.empty_cache()
-    
     # Now download the weights
     print('Downloading model weights')
-
     quant_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True, # This does not hurt performance much according to 
+        bnb_4bit_compute_dtype=torch.bfloat16,
     )
 
     model_downloaded = False
-    model = AutoModelForCausalLM.from_pretrained(
-        request.model_name,
-        device_map='auto' if device == "cuda" else 'cpu', # auto will leave space in the first GPU if multiple GPUs are available for other operations
-        quantization_config=quant_config,
-        torch_dtype=torch.bfloat16,
-        cache_dir = "data",
-        force_download=True
-    )
-    print('Model weights downloaded successfully')
-    model_downloaded = True
+    failure_reason = ""
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            request.model_name,
+            device_map='auto',
+            quantization_config=quant_config,
+            attn_implementation="flash_attention_2", # otherwise memory balloons up        
+            cache_dir = "data",
+            force_download=True
+        )
+        print('Model weights downloaded successfully')
+        model_size = model.get_memory_footprint()
+        print('Model size: ', model_size, ' Bytes')
+        print("Model number of parameters: ", model.num_parameters())
+        # check if model size is within the limit. If not, return an error
+        if model_size > MAX_MODEL_SIZE:
+            raise ValueError(f"Model is too large when loaded in 4 bit quant: {model_size} Bytes. Should be less than {MAX_MODEL_SIZE} Bytes")
+        model_size_score = 1 - (model_size / MAX_MODEL_SIZE)
+        print('Model size score: ', model_size_score)
+        model_downloaded = True
+    except Exception as e:
+        failure_reason = str(e)
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        cleanup(None, model_downloaded, request)
+        raise RuntimeError("Error loading model: " + failure_reason)
 
     # get the tokenizers
     print('Downloading tokenizer')
-    input_tokenizer = AutoTokenizer.from_pretrained(
-        request.model_name,
-        padding_side='left',
-    )
-    output_tokenizer = AutoTokenizer.from_pretrained(
-        request.model_name,
-        padding_side='right',
-    )
-    if input_tokenizer.pad_token is None:
-        input_tokenizer.pad_token = input_tokenizer.eos_token # add a pad token if not present
-        input_tokenizer.pad_token_id = input_tokenizer.eos_token_id
-        output_tokenizer.pad_token = output_tokenizer.eos_token # add a pad token if not present
-        output_tokenizer.pad_token_id = output_tokenizer.eos_token_id
-    
-    dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
-    print('Tokenizer downloaded successfully')
+    try:
+        input_tokenizer = AutoTokenizer.from_pretrained(
+            request.model_name,
+            padding_side='left',
+        )
+        output_tokenizer = AutoTokenizer.from_pretrained(
+            request.model_name,
+            padding_side='right',
+        )
+        if input_tokenizer.pad_token is None:
+            input_tokenizer.pad_token = input_tokenizer.eos_token # add a pad token if not present
+            input_tokenizer.pad_token_id = input_tokenizer.eos_token_id
+            output_tokenizer.pad_token = output_tokenizer.eos_token # add a pad token if not present
+            output_tokenizer.pad_token_id = output_tokenizer.eos_token_id
+        
+        dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
+        print('Tokenizer downloaded successfully')
+    except Exception as e:
+        failure_reason = str(e)
+        cleanup(model, model_downloaded, request)
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        raise RuntimeError("Error downloading tokenizer: " + failure_reason)
+
+    # warm up the model
+    print('Warming up model')
+    try:
+        warmup_model(model)
+    except Exception as e:
+        failure_reason = str(e)
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        cleanup(model, model_downloaded, request)
+        raise RuntimeError("Error warming up model: " + failure_reason)
+
     print('Sampling dataset')
-    sampled_data = dataset.sample_dataset(SAMPLE_SIZE)
+    try:
+        sampled_data = dataset.sample_dataset(SAMPLE_SIZE)
+    except Exception as e:
+        failure_reason = str(e)
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        cleanup(model, model_downloaded, request)
+        raise RuntimeError("Error sampling dataset: " + failure_reason)
     
     # Part 2: Evaluate the model
     print('Evaluating model')
@@ -290,25 +455,136 @@ def evaluate_model(request: EvaluateModelRequest):
             input_tokenizer=input_tokenizer,
             output_tokenizer=output_tokenizer
         )
+        print('Model evaluation score: ', eval_score)
     except Exception as e:
-        raise HTTPException(status_code=400, detail="Error evaluating model: " + str(e))
+        failure_reason = str(e)
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        cleanup(model, model_downloaded, request)
+        raise RuntimeError("Error evaluating model: " + failure_reason)
 
-    print('Model evaluation score: ', eval_score)
-
-    # delete the model from memory
-    del model
-    torch.cuda.empty_cache()
-    if model_downloaded:
-        shutil.rmtree("data/models--" + request.model_name.split("/")[0] + "--"+request.model_name.split("/")[1])
+    # update the model on the leaderboard
+    try:
+        leaderboard = get_leaderboard()
+        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'model_size_score'] = float(model_size_score)
+        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'qualitative_score'] = float(eval_score)
+        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'status'] = "COMPLETE"
+        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'notes'] = ""
+        save_leaderboard(leaderboard)
+    except Exception as e:
+        failure_reason = str(e)
+        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        cleanup(model, model_downloaded, request)
+        raise RuntimeError("Error updating leaderboard: " + failure_reason)
+    
+    # cleanup the model
+    cleanup(model, model_downloaded, request)
 
     return {
         "model_size_score": model_size_score,
         "qualitative_score": eval_score
     }
 
+def update_leaderboard_status(model_name, status, notes=""):
+    try:
+        leaderboard = get_leaderboard()
+        leaderboard.loc[leaderboard['model_name'] == model_name, 'status'] = status
+        if notes:
+            leaderboard.loc[leaderboard['model_name'] == model_name, 'notes'] = notes
+        save_leaderboard(leaderboard)
+    except Exception as e:
+        print(f"Error updating leaderboard status for {model_name}: {e}")
+
+@app.get("/leaderboard")
+def display_leaderboard():
+    return get_leaderboard().to_dict(orient='records')
+
+
+def get_json_result(model_name):
+    leaderboard = get_leaderboard()
+    if (leaderboard['model_name'] == model_name).any():
+        # if it exists, return score and status
+        model_entry = leaderboard[leaderboard['model_name'] == model_name].iloc[0]
+        return {
+            "score": {
+                "model_size_score": model_entry['model_size_score'],
+                "qualitative_score": model_entry['qualitative_score'],
+            },
+            "status": model_entry['status']
+        }
+    else:
+        None
+
+@app.post("/evaluate_model")
+def evaluate_model(request: EvaluateModelRequest):
+    # read the leaderboard file
+    # check if the model already exists in the leaderboard
+    current_status = get_json_result(request.model_name)
+    if current_status is not None:
+        return current_status
+
+    # validate the request
+    if request.chat_template_type not in chat_template_mappings:
+        raise HTTPException(status_code=400, detail="Chat template type not supported")
+    
+    # check repo size of the model to see if it is within the limit
+    try:
+        model_repo_size = check_model_repo_size(request.model_name)
+        if model_repo_size is None:
+            raise HTTPException(status_code=400, detail="Error occured while checking model repo size on Hugging Face Hub.")
+    except Exception as e:
+        print(f"Error checking model repo size: {e}")
+        raise HTTPException(status_code=400, detail=f'"{request.model_name}" is probably a gated model, or it does not exist on the Hugging Face Hub.')
+    
+    if model_repo_size > MAX_REPO_SIZE:
+        raise HTTPException(status_code=400, detail="Model repo size is too large: " + str(model_repo_size) + " bytes. Should be less than " + str(MAX_REPO_SIZE) + " bytes")
+    
+    leaderboard = get_leaderboard()
+    # add the model to leaderboard with status pending
+    new_entry = pd.DataFrame([{
+        "model_name": request.model_name,
+        "chat_template_type": request.chat_template_type,
+        "model_size_score": -1.0,
+        "qualitative_score": -1.0,
+        "timestamp": pd.Timestamp.utcnow(),
+        "status": "QUEUED",
+        "notes": ""
+    }])
+    leaderboard = pd.concat([leaderboard, new_entry], ignore_index=True)
+    save_leaderboard(leaderboard)
+    
+    # Add the evaluation task to the queue
+    evaluation_queue.put(request)
+
+    print('returning result')
+    return get_json_result(request.model_name)
 
 if __name__ == "__main__":
-    # import uvicorn
-    # uvicorn.run(app, host="localhost", port=8000)
-    # evaluate_model(EvaluateModelRequest(model_name="mistralai/Mistral-7B-Instruct-v0.1", chat_template_type="vicuna"))
-    evaluate_model(EvaluateModelRequest(model_name="openai-community/gpt2", chat_template_type="vicuna"))
+    try:
+        print("Starting evaluation thread")
+        evaluation_thread.start()
+        print("Starting API server")
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    except KeyboardInterrupt:
+        print("Keyboard interrupt received, stopping...")
+    except Exception as e:
+        print(f"An exception occurred: {e}")
+    finally:
+        print("Stopping evaluation thread")
+        # empty the queue
+        while not evaluation_queue.empty():
+            evaluation_queue.get()
+            evaluation_queue.task_done()
+        
+        # remove any rows with status QUEUED
+        leaderboard = get_leaderboard()
+        leaderboard = leaderboard[leaderboard['status'] != 'QUEUED']
+        save_leaderboard(leaderboard)
+        # add a sentinel to the queue to stop the thread
+        evaluation_queue.put(None)
+        evaluation_thread.join()
+
+        # remove any RUNNING status
+        leaderboard = get_leaderboard()
+        leaderboard = leaderboard[leaderboard['status'] != 'RUNNING']
+        save_leaderboard(leaderboard)
+        print("API server and evaluation thread have been stopped")
