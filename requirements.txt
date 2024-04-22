@@ -6,4 +6,4 @@ bitsandbytes
 pandas
 sentencepiece
 protobuf
-dotenv
+python-dotenv

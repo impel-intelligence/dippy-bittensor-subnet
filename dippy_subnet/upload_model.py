@@ -144,7 +144,7 @@ async def main(config: bt.config):
             await model_metadata_store.store_model_metadata(
                 wallet.hotkey.ss58_address, model_id_with_commit
             )
-
+            bt.logging.error(model_id_with_commit)
             bt.logging.success("Committed model to the chain.")
             break
         except Exception as e:

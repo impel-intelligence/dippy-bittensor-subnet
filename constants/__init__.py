@@ -30,10 +30,10 @@ MAX_HUGGING_FACE_BYTES: int = 18 * 1024 * 1024 * 1024
 COMPETITION_SCHEDULE: List[CompetitionParameters] = [
     CompetitionParameters(
         reward_percentage=1.0,
-        competition_id="p225",
+        competition_id="d1",
     ),
 ]
-ORIGINAL_COMPETITION_ID = "p225"
+ORIGINAL_COMPETITION_ID = "d1"
 
 
 assert math.isclose(sum(x.reward_percentage for x in COMPETITION_SCHEDULE), 1.0)
