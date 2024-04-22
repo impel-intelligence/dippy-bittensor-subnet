@@ -21,22 +21,25 @@ class DiskModelStore(LocalModelStore):
         """Returns the path to where this store would locate this hotkey."""
         return utils.get_local_miner_dir(self.base_dir, hotkey)
 
-    def store_model(self, hotkey: str, model: Model) -> ModelId:
+    def store_model(self, hotkey: str, model: Model, hf_model: AutoModelForCausalLM, hf_tokenizer: AutoTokenizer ) -> ModelId:
         """Stores a trained model locally."""
-        # Unimplemented for now.
+        # get the path to where the model should be stored
+        model_dir = os.path.join(self.get_path(hotkey), model.id.name)
+        hf_model.save_pretrained(model_dir)
+        hf_tokenizer.save_pretrained(model_dir)
+        model.local_repo_dir = model_dir
+        
         return model.id
+
 
     def retrieve_model(
         self, hotkey: str, model_id: ModelId, model_parameters: CompetitionParameters
     ) -> Model:
         """Retrieves a trained model locally."""
 
-        ckpt = os.path.join(
-            utils.get_local_model_snapshot_dir(self.base_dir, hotkey, model_id),
-            "checkpoint.safetensors",
-        )
-
-        return Model(id=model_id, ckpt=ckpt)
+        # get the path to where the model should be stored
+        model_dir = os.path.join(self.get_path(hotkey), model_id.name)
+        return Model(id=model_id, local_repo_dir=model_dir)
 
     def delete_unreferenced_models(
         self,
@@ -45,6 +48,8 @@ class DiskModelStore(LocalModelStore):
         grace_period_seconds: int,
     ):
         """Check across all of local storage and delete unreferenced models out of grace period."""
+        # TODO: THIS METHOD IS NOT UP TO DATE YET
+        raise NotImplementedError("This method is not implemented yet.")
         # Expected directory structure is as follows.
         # self.base_dir/models/hotkey/models--namespace--name/snapshots/commit/config.json + other files.
 
