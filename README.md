@@ -31,7 +31,7 @@ Our team at Impel Intelligence Inc. knows this issue intimately through building
 
 ## Roadmap
 
-Given the complexity of creating a State of the art roleplay LLM, we plan to divide the process into 3 distinct phases.
+Given the complexity of creating a state of the art roleplay LLM, we plan to divide the process into 3 distinct phases.
 
 **Phase 1:** 
 - [X] Subnet launch with robust pipeline for roleplay LLM evaluation on public datasets and response length 
