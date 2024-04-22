@@ -8,7 +8,6 @@ from tqdm import tqdm
 import shutil
 from pydantic import BaseModel
 
-import numpy as np
 import pandas as pd
 import uvicorn
 import torch
@@ -20,8 +19,8 @@ from dataset import PippaDataset
 
 # TODO: Add a timeout to the evaluation API to prevent it from running for too long
 
-MAX_MODEL_SIZE = 18 * 1024 * 1024 * 1024 # 18 GB in bytes
-MAX_REPO_SIZE = 34 * 1024 * 1024 * 1024 # 32 GB in bytes
+MAX_MODEL_SIZE = 18 * 1024 * 1024 * 1024 # in bytes
+MAX_REPO_SIZE = 80 * 1024 * 1024 * 1024 #  in bytes
 SAMPLE_SIZE = 100 # number of samples to evaluate the model from the dataset
 BATCH_SIZE = 2 # batch size for evaluation
 VOCAB_TRUNCATION = 1000 # truncate the vocab to top 50 tokens
@@ -59,7 +58,8 @@ chat_template_mappings = {
     "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
     "chatml": "prompt_templates/chatml_prompt_template.jinja",
     "mistral": "prompt_templates/mistral_prompt_template.jinja",
-    # TODO: Add chatml, Mistral, and other chat templates
+    "zephyr": "prompt_templates/zephyr_prompt_template.jinja",
+    "alpaca": "prompt_templates/alpaca_prompt_template.jinja",
 }
 
 
@@ -225,7 +225,7 @@ def get_eval_score(
             inputs = input_tokenizer(
                 contexts[i:i+batch_size], 
                 return_tensors='pt', 
-                padding=True, 
+                padding=True,
                 truncation=True, 
                 max_length=max_input_len,
                 add_special_tokens=True,
@@ -369,23 +369,32 @@ def evaluate_model_logic(request: EvaluateModelRequest):
 
     # Now download the weights
     print('Downloading model weights')
-    quant_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True, # This does not hurt performance much according to 
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
-
     model_downloaded = False
     failure_reason = ""
     try:
-        model = AutoModelForCausalLM.from_pretrained(
-            request.model_name,
-            device_map='auto',
-            quantization_config=quant_config,
-            attn_implementation="flash_attention_2", # otherwise memory balloons up        
-            cache_dir = "data",
-            force_download=True
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=True, # This does not hurt performance much according to 
+            bnb_4bit_compute_dtype=torch.bfloat16,
         )
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                request.model_name,
+                device_map='auto',
+                quantization_config=quant_config,
+                attn_implementation="flash_attention_2",       
+                cache_dir = "data",
+                force_download=True
+            )
+        except Exception as e:
+            print(f"Error loading model in 4 bit quant: {e}")
+            model = AutoModelForCausalLM.from_pretrained(
+                request.model_name,
+                device_map='auto',
+                attn_implementation="sdpa",       
+                cache_dir = "data",
+                force_download=True
+            )
         print('Model weights downloaded successfully')
         model_size = model.get_memory_footprint()
         print('Model size: ', model_size, ' Bytes')

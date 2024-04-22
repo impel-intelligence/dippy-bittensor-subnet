@@ -3,6 +3,7 @@ data/
 __pycache__/
 *.py[cod]
 *$py.class
+leaderboard.csv
 # *playground.ipynb
 dippy/data
 
