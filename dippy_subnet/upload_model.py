@@ -37,12 +37,12 @@ def get_config():
         type=str,
         help="The hugging face repo id, which should include the org or user and repo name. E.g. jdoe/finetuned",
     )
-    parser.add_argument(
-        "--load_model_dir",
-        type=str,
-        default=None,
-        help="If provided, loads a previously trained HF model from the specified directory",
-    )
+    # parser.add_argument(
+    #     "--load_model_dir",
+    #     type=str,
+    #     default=None,
+    #     help="If provided, loads a previously trained HF model from the specified directory",
+    # )
     parser.add_argument(
         "--netuid",
         type=str,
@@ -96,18 +96,32 @@ async def main(config: bt.config):
         competition_id=config.competition_id,
     )
 
-    model = Model(id=model_id, ckpt=config.load_model_dir)
-    remote_model_store = HuggingFaceModelStore()
+    # model = Model(id=model_id, ckpt=config.load_model_dir)
+    # remote_model_store = HuggingFaceModelStore()
 
-    model_id_with_commit = await remote_model_store.upload_model(
-        model=model,
-        competition_parameters=parameters,
-    )
+    # model_id_with_commit = await remote_model_store.upload_model(
+    #     model=model,
+    #     competition_parameters=parameters,
+    # )
 
 
 
-    print(
-        f"Model uploaded to Hugging Face with commit {model_id_with_commit.commit} and hash {model_id_with_commit.hash}"
+    # print(
+    #     f"Model uploaded to Hugging Face with commit {model_id_with_commit.commit} and hash {model_id_with_commit.hash}"
+    # )
+    # model_id_with_commit = ModelId(
+    #     namespace=model_id.namespace,
+    #     name=model_id.name,
+    #     hash="",
+    #     commit="",
+    #     competition_id=model_id.competition_id,
+    # )
+    model_id_with_commit = ModelId(
+        namespace=config.hf_repo_id.split("/")[0],
+        name=config.hf_repo_id.split("/")[1],
+        hash="",
+        commit="",
+        competition_id=model_id.competition_id,
     )
 
     model_metadata_store = ChainModelMetadataStore(
@@ -117,11 +131,11 @@ async def main(config: bt.config):
     # We can only commit to the chain every 20 minutes, so run this in a loop, until successful.
     while True:
         try:
-            update_repo_visibility(
-                model_id.namespace + "/" + model_id.name,
-                private=False,
-                token=os.getenv("HF_ACCESS_TOKEN"),
-            )
+            # update_repo_visibility(
+            #     model_id.namespace + "/" + model_id.name,
+            #     private=False,
+            #     token=os.getenv("HF_ACCESS_TOKEN"),
+            # )
             await model_metadata_store.store_model_metadata(
                 wallet.hotkey.ss58_address, model_id_with_commit
             )

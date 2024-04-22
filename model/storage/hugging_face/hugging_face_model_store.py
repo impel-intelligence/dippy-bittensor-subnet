@@ -35,6 +35,7 @@ class HuggingFaceModelStore(RemoteModelStore):
             raise ValueError("No Hugging Face access token found to write to the hub.")
         return os.getenv("HF_ACCESS_TOKEN")
 
+
     async def upload_model(
         self, model: Model, competition_parameters: CompetitionParameters
     ) -> ModelId:
