@@ -91,40 +91,40 @@ def check_model_dir(model_dir):
 
     ls_dir = os.listdir(model_dir)
     # check if at least 1 *.safetensors file exists
-    # if not any(file.endswith(".safetensors") for file in ls_dir):
-    #     raise FileNotFoundError(
-    #         f"No *.safetensors file found in model directory {model_dir}."
-    #     )
+    if not any(file.endswith(".safetensors") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No *.safetensors file found in model directory {model_dir}."
+        )
     
-    # # check if tokenizer.json exists
-    # if not any(file.endswith("tokenizer.json") for file in ls_dir):
-    #     raise FileNotFoundError(
-    #         f"No tokenizer.json file found in model directory {model_dir}."
-    #     )
+    # check if tokenizer.json exists
+    if not any(file.endswith("tokenizer.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No tokenizer.json file found in model directory {model_dir}."
+        )
     
-    # # check if config.json exists
-    # if not any(file.endswith("config.json") for file in ls_dir):
-    #     raise FileNotFoundError(
-    #         f"No config.json file found in model directory {model_dir}."
-    #     )
+    # check if config.json exists
+    if not any(file.endswith("config.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No config.json file found in model directory {model_dir}."
+        )
     
     # check if generation_config.json exists
-    # if not any(file.endswith("generation_config.json") for file in ls_dir):
-    #     raise FileNotFoundError(
-    #         f"No generation_config.json file found in model directory {model_dir}."
-    #     )
+    if not any(file.endswith("generation_config.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No generation_config.json file found in model directory {model_dir}."
+        )
     
     # check if special_tokens_map.json exists
-    # if not any(file.endswith("special_tokens_map.json") for file in ls_dir):
-    #     raise FileNotFoundError(
-    #         f"No special_tokens_map.json file found in model directory {model_dir}."
-    #     )
+    if not any(file.endswith("special_tokens_map.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No special_tokens_map.json file found in model directory {model_dir}."
+        )
     
-    # # check if model.safetensors.index.json exists
-    # if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
-    #     raise FileNotFoundError(
-    #         f"No model.safetensors.index.json file found in model directory {model_dir}."
-    #     )
+    # check if model.safetensors.index.json exists
+    if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No model.safetensors.index.json file found in model directory {model_dir}."
+        )
     
     # check if this file contains metadata.total_size
     # with open(os.path.join(model_dir, "model.safetensors.index.json"), "r") as f:
