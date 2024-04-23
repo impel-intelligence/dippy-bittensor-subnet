@@ -104,6 +104,9 @@ To run the evaluation, simply use the following command:
 ```
 python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME
 ```
+## Acknowledgement
+
+Our codebase is built upon [Nous Research's](https://github.com/NousResearch/finetuning-subnet) and [MyShell's](https://github.com/myshell-ai/MyShell-TTS-Subnet?tab=readme-ov-file) Subnets.
 
 ## License
 
