@@ -284,10 +284,8 @@ class Validator:
 
         # Sync to consensus
         if not self.config.genesis:
-            bt.logging.warning("Pulling competition ids for all hotkeys")
             competition_ids: typing.Dict[int, typing.Optional[str]] = {}
             for uid, hotkey in enumerate(list(self.metagraph.hotkeys)):
-                bt.logging.warning(f"Pulling competition id for hotkey {hotkey}")
                 try:
                     metadata: typing.Optional[ModelMetadata] = asyncio.run(
                         self.metadata_store.retrieve_model_metadata(hotkey)
@@ -402,13 +400,13 @@ class Validator:
                     time_to_sleep = (
                         dt.timedelta(minutes=update_delay_minutes) - time_diff
                     ).total_seconds()
-                    bt.logging.warning(
+                    bt.logging.info(
                         f"Update loop has already processed all UIDs in the last {update_delay_minutes} minutes. Sleeping {time_to_sleep} seconds."
                     )
                     time.sleep(time_to_sleep)
 
                 uid_last_checked[next_uid] = dt.datetime.now()
-                bt.logging.warning(f"Updating model for UID={next_uid}")
+                bt.logging.info(f"Updating model for UID={next_uid}")
 
                 # Get their hotkey from the metagraph.
                 hotkey = self.metagraph.hotkeys[next_uid]
@@ -543,7 +541,6 @@ class Validator:
 
         # Update self.metagraph
         await self.try_sync_metagraph(ttl=60)
-        bt.logging.warning(f"In run_step, complete try_sync_metagraph")
         competition_parameters = constants.COMPETITION_SCHEDULE[
             self.global_step % len(constants.COMPETITION_SCHEDULE)
         ]
@@ -556,11 +553,7 @@ class Validator:
             self.pending_uids_to_eval[competition_parameters.competition_id].clear()
 
         # Pull relevant uids for step. If they aren't found in the model tracker on eval they will be skipped.
-        bt.logging.error(f"Pending UIDs to eval: {self.pending_uids_to_eval}")
-        bt.logging.error(f"UIDs to eval: {self.uids_to_eval}")
         uids = list(self.uids_to_eval[competition_parameters.competition_id])
-
-        bt.logging.error(f"UIDs to eval: {uids}")
 
         if not uids:
             if self.config.genesis:
@@ -598,7 +591,7 @@ class Validator:
             model_i_metadata = self.model_tracker.take_model_metadata_for_miner_hotkey(
                 hotkey
             )
-            bt.logging.error(f"Model metadata for {uid_i} is {model_i_metadata}")
+            bt.logging.info(f"Model metadata for {uid_i} is {model_i_metadata}")
             if model_i_metadata is not None:
                 for other_uid, (
                     other_hotkey,
@@ -628,20 +621,15 @@ class Validator:
                         break
 
             uid_to_hotkey_and_model_metadata[uid_i] = (hotkey, model_i_metadata)
-
-        seed = random.randint(0, 2**16)
-        bt.logging.error("Looking at model metadata", uid_to_hotkey_and_model_metadata)
-        bt.logging.error(uid_to_hotkey_and_model_metadata)
+            
+        bt.logging.info("Looking at model metadata", uid_to_hotkey_and_model_metadata)
 
         for uid_i, (
             hotkey,
             model_i_metadata,
         ) in uid_to_hotkey_and_model_metadata.items():
-            losses: typing.List[float] = []
             score = None
             if model_i_metadata is not None:
-                bt.logging.error("model_i_metadata is: ")
-                bt.logging.error(model_i_metadata)
                 if (
                     model_i_metadata.id.competition_id
                     == competition_parameters.competition_id
@@ -658,8 +646,8 @@ class Validator:
                                     model_i_metadata.id.namespace,
                                     model_i_metadata.id.name,
                                 )
-                                bt.logging.error(f"Score for {model_i_metadata} is {_score}")
-                                bt.logging.error(f"Status for {model_i_metadata} is {status}")
+                                bt.logging.info(f"Score for {model_i_metadata} is {_score}")
+                                bt.logging.info(f"Status for {model_i_metadata} is {status}")
                                 if status == 'COMPLETED':
                                     score = _score
                                     break
@@ -700,13 +688,11 @@ class Validator:
 
         # Compute wins and win rates per uid.
         wins, win_rate = compute_wins(uids, scores_per_uid, uid_to_block)
-        bt.logging.error(f"Computed wins: {wins} {win_rate}")
         # Compute softmaxed weights based on win rate.
         model_weights = torch.tensor(
             [win_rate[uid] for uid in uids], dtype=torch.float32
         )
         step_weights = torch.softmax(model_weights / constants.temperature, dim=0)
-
         # Update weights based on moving average.
         new_weights = torch.zeros_like(self.metagraph.S)
         for i, uid_i in enumerate(uids):
@@ -874,8 +860,6 @@ def get_model_score(namespace, name):
         response.raise_for_status()  # Raise an exception for HTTP errors
         # Parse the response JSON
         result = response.json()
-        bt.logging.error(f"JSON for {namespace}/{name}")
-        bt.logging.error(result)
         status = result['status']
         if status == 'COMPLETED':
             score = result['score']['total_score']
@@ -886,10 +870,8 @@ def get_model_score(namespace, name):
         status = 'FAILED'
         bt.logging.error(e)
         bt.logging.error(f"Failed to get score and status for {namespace}/{name}")
-        
-    
-    bt.logging.warning(f"Model {namespace}/{name} has score {score} and status {status}")
 
+    bt.logging.info(f"Model {namespace}/{name} has score {score} and status {status}")
     return score, status
 
 
