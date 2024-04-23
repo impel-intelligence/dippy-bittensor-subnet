@@ -61,7 +61,7 @@ import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-def iswin(loss_i, loss_j, block_i, block_j):
+def iswin(score_i, score_j, block_i, block_j):
     """
     Determines the winner between two models based on the epsilon adjusted loss.
 
@@ -74,9 +74,9 @@ def iswin(loss_i, loss_j, block_i, block_j):
         bool: True if loss i is better, False otherwise.
     """
     # Adjust loss based on timestamp and pretrain epsilon
-    loss_i = (1 - constants.timestamp_epsilon) * loss_i if block_i < block_j else loss_i
-    loss_j = (1 - constants.timestamp_epsilon) * loss_j if block_j < block_i else loss_j
-    return loss_i < loss_j
+    score_i = (1 - constants.timestamp_epsilon) * score_i if block_i < block_j else score_i
+    score_j = (1 - constants.timestamp_epsilon) * score_j if block_j < block_i else score_j
+    return score_i > score_j
 
 def compute_wins(
     uids: typing.List[int],
@@ -549,11 +549,11 @@ class Validator:
         ]
 
         # Add uids with newly updated models to the upcoming batch of evaluations.
-        # with self.pending_uids_to_eval_lock:
-        #     self.uids_to_eval[competition_parameters.competition_id].update(
-        #         self.pending_uids_to_eval[competition_parameters.competition_id]
-        #     )
-        #     self.pending_uids_to_eval[competition_parameters.competition_id].clear()
+        with self.pending_uids_to_eval_lock:
+            self.uids_to_eval[competition_parameters.competition_id].update(
+                self.pending_uids_to_eval[competition_parameters.competition_id]
+            )
+            self.pending_uids_to_eval[competition_parameters.competition_id].clear()
 
         # Pull relevant uids for step. If they aren't found in the model tracker on eval they will be skipped.
         bt.logging.error(f"Pending UIDs to eval: {self.pending_uids_to_eval}")
@@ -748,8 +748,6 @@ class Validator:
             win_rate,
             scores_per_uid,
             sample_per_uid,
-            load_model_perf.summary_str(),
-            compute_loss_perf.summary_str(),
         )
 
         # Increment the number of completed run steps by 1
@@ -764,8 +762,6 @@ class Validator:
         win_rate,
         scores_per_uid,
         sample_per_uid,
-        load_model_perf_str,
-        compute_loss_perf_str,
     ):
         # Build step log
         step_log = {
@@ -799,7 +795,7 @@ class Validator:
             }
         table = Table(title="Step")
         table.add_column("uid", justify="right", style="cyan", no_wrap=True)
-        table.add_column("average_loss", style="magenta")
+        table.add_column("score", style="magenta")
         table.add_column("win_rate", style="magenta")
         table.add_column("win_total", style="magenta")
         table.add_column("weights", style="magenta")
@@ -808,7 +804,7 @@ class Validator:
             try:
                 table.add_row(
                     str(uid),
-                    str(round(step_log["uid_data"][str(uid)]["average_loss"], 4)),
+                    str(round(step_log["uid_data"][str(uid)]["score"], 4)),
                     str(round(step_log["uid_data"][str(uid)]["win_rate"], 4)),
                     str(step_log["uid_data"][str(uid)]["win_total"]),
                     str(round(self.weights[uid].item(), 4)),
@@ -833,13 +829,6 @@ class Validator:
         bt.logging.warning(f"Step results: {step_log}")
 
     async def run(self):
-        # while True:
-        # await self.try_run_step(ttl=60 * 20)
-        # bt.logging.debug(
-        #     f"{self.metagraph.block.item() - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
-        # )
-        # if not self.config.dont_set_weights and not self.config.offline:
-        #     await self.try_set_weights(ttl=120)
         try:
             while (
                 self.metagraph.block.item() - self.last_epoch
@@ -889,7 +878,7 @@ def get_model_score(namespace, name):
         bt.logging.error(result)
         status = result['status']
         if status == 'COMPLETED':
-            score = 0.25 * result['score']['model_size_score'] + 0.75 * result['score']['qualitative_score']
+            score = result['score']['total_score']
         elif status in ["QUEUED", "RUNNING", "FAILED"]:
             score = 0
     except Exception as e:
