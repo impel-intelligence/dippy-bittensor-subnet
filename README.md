@@ -34,7 +34,7 @@ Our team at Impel Intelligence Inc. knows this issue intimately through building
 Given the complexity of creating a state of the art roleplay LLM, we plan to divide the process into 3 distinct phases.
 
 **Phase 1:** 
-- [X] Subnet launch with robust pipeline for roleplay LLM evaluation on public datasets and response length 
+- [ ] Subnet launch with robust pipeline for roleplay LLM evaluation on public datasets and response length 
 - [ ] New, evolving evaluation datasets curated by community as well as contributed by Dippy's mobile app users
 - [ ] Public model leaderboard based on evaluation criteria
 
@@ -104,6 +104,21 @@ To run the evaluation, simply use the following command:
 ```
 python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME
 ```
+
+## Model Evaluation Criteria
+### Model Size
+Smaller models will score higher than big models. Model size is the disk space occupied by the model repo from HF. The max model size is limited to 18GB.
+
+<!-- $S_{size} = 1 - ModelSize/ MaxModelSize$ -->
+### Latency
+Faster models will score higher than slow models.
+
+### Output Similarity
+Evaluted against datasets, models that generate similiar resposne to groundtruth will score higher.
+
+### Vibe Matching
+Models that can generate outputs with similiar length to its inputs will score higher.
+
 ## Acknowledgement
 
 Our codebase is built upon [Nous Research's](https://github.com/NousResearch/finetuning-subnet) and [MyShell's](https://github.com/myshell-ai/MyShell-TTS-Subnet?tab=readme-ov-file) Subnets.
