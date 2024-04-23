@@ -1,7 +1,7 @@
 <div align="center">
 
 # Dippy Subnet: Creating The World's Best Open-Source Roleplay LLM <!-- omit in toc -->
-[![DIPPY](/Dippy.png)](https://dippy.ai)
+[![DIPPY](/assests/Dippy.png)](https://dippy.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
 ---
@@ -50,7 +50,7 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 
 ## Overview of Miner and Validator Functionality
 
-![overview](/drawio.png)
+![overview](/assests/model_architecture.png)
 
 **Miners** would use existing frameworks, fine tuning techniques, or MergeKit, to train, fine tune, or merge models to create a unique roleplay LLM. These models would be submitted to a shared Hugging Face pool. 
 
