@@ -107,17 +107,17 @@ python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME -
 
 ## Model Evaluation Criteria
 ### Model Size
-Smaller models will score higher than big models. Model size is the disk space occupied by the model repo from HF. The max model size is limited to 18GB.
+A smaller model will score higher than a big model. Model size is the disk space occupied by the model repo from HF. The max model size is limited to 18GB.
 
 <!-- $S_{size} = 1 - ModelSize/ MaxModelSize$ -->
 ### Latency
-Faster models will score higher than slow models.
+A faster model will score higher than a slow model.
 
 ### Output Similarity
-Evaluted against datasets, models that generate similiar resposne to groundtruth will score higher.
+Evaluted against datasets, a model that generates similiar resposne to groundtruth will score higher.
 
 ### Vibe Matching
-Models that can generate outputs with similiar length to its inputs will score higher.
+A model that can generate outputs with similiar length to its inputs will score higher.
 
 ## Acknowledgement
 
