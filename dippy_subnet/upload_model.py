@@ -121,10 +121,10 @@ def check_model_dir(model_dir):
         )
     
     # check if model.safetensors.index.json exists
-    if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
-        raise FileNotFoundError(
-            f"No model.safetensors.index.json file found in model directory {model_dir}."
-        )
+    # if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
+    #     raise FileNotFoundError(
+    #         f"No model.safetensors.index.json file found in model directory {model_dir}."
+    #     )
     
     # check if this file contains metadata.total_size
     # with open(os.path.join(model_dir, "model.safetensors.index.json"), "r") as f:
@@ -202,7 +202,6 @@ async def main(config: bt.config):
             await model_metadata_store.store_model_metadata(
                 wallet.hotkey.ss58_address, model_id_with_hash
             )
-            bt.logging.error(model_id_with_hash)
             bt.logging.success("Committed model to the chain.")
             break
         except Exception as e:
