@@ -645,6 +645,7 @@ class Validator:
                                 _score, status = get_model_score(
                                     model_i_metadata.id.namespace,
                                     model_i_metadata.id.name,
+                                    model_i_metadata.id.hash,
                                 )
                                 bt.logging.info(f"Score for {model_i_metadata} is {_score}")
                                 bt.logging.info(f"Status for {model_i_metadata} is {status}")
@@ -842,7 +843,7 @@ class Validator:
                 f"Error in validator loop \n {e} \n {traceback.format_exc()}"
             )
 
-def get_model_score(namespace, name):
+def get_model_score(namespace, name, hash):
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
     # return (score, status)
@@ -850,7 +851,9 @@ def get_model_score(namespace, name):
 
     # Construct the payload with the model name and chat template type
     payload = {
-        "model_name": f"{namespace}/{name}",
+        "repo_namespace": namespace,
+        "repo_name": name,
+        "hash": hash,
         "chat_template_type": "vicuna"
     }
 
@@ -864,6 +867,7 @@ def get_model_score(namespace, name):
         if status == 'COMPLETED':
             score = result['score']['total_score']
         elif status in ["QUEUED", "RUNNING", "FAILED"]:
+            bt.logging.warning(f"Model {namespace}/{name} is in status {status}")
             score = 0
     except Exception as e:
         score = 0
