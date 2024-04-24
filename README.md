@@ -72,6 +72,7 @@ To start, clone the repository and `cd` to it:
 ```
 git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
 cd dippy-bittensor-subnet
+pip install -e .
 ```
 #### Submitting a model
 As a miner, you're responsible for leveraging all methods available at your disposal, including but not limited to training new models, merging existing models (we recommend [MergeKit](https://github.com/arcee-ai/mergekit)), finetuning existing models, and so on to push roleplay LLMs forward.
@@ -98,6 +99,7 @@ To start, clone the repository and `cd` to it:
 ```
 git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
 cd dippy-bittensor-subnet
+pip install -e .
 ```
 To run the evaluation, simply use the following command:
 
