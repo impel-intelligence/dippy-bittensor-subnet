@@ -85,7 +85,7 @@ We outline the following criteria for Phase 1:
 Once you're happy with the performance of the model for the usecase of Roleplay, you can simply submit it to Hugging Face 🤗 and then use the following command:
 
 ```
-python dippy_subnet/upload_model.py --hf_repo_id HF_REPO --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME --subtensor.network test
+python3 dippy_subnet/upload_model.py --hf_repo_id HF_REPO --wallet.name WALLET  --wallet.hotkey HOTKEY --subtensor.network test --chat_template MODEL_CHAT_TEMPLATE --model_dir PATH_TO_MODEL   
 ```
 
 
