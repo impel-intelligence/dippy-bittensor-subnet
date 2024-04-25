@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException
 from dataset import PippaDataset
 from supabase import create_client
 import hashlib
+import argparse
 
 from dotenv import load_dotenv
 
@@ -40,6 +41,7 @@ VOCAB_TRUNCATION = 1000 # truncate the vocab to top 50 tokens
 PROB_TOP_K = 10 # the correct token should be in the top 50 tokens, else a score of 0 is given to that token
 # TODO: this will truncate the sequence to MAX_SEQ_LEN tokens. This is a temporary fix to make the evaluation faster.
 MAX_SEQ_LEN = 4096 # maximum sequence length that should be allowed because eval gets really slow with longer sequences than this
+SAVE_REMOTE = True # Save the leaderboard to Supabase 
 
 leaderboard_file = 'leaderboard.csv'
 
@@ -49,10 +51,6 @@ if not os.path.exists(leaderboard_file):
     pd.DataFrame(columns=columns).to_csv(leaderboard_file, index=False)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_KEY")
-supabase_client = create_client(supabase_url, supabase_key)
 
 class EvaluateModelRequest(BaseModel):
     repo_namespace: str
@@ -83,7 +81,6 @@ chat_template_mappings = {
     "alpaca": "prompt_templates/alpaca_prompt_template.jinja",
 }
 
-
 def get_leaderboard() -> pd.DataFrame:
     dtype_dict = {
         'hash': str,
@@ -103,15 +100,18 @@ def get_leaderboard() -> pd.DataFrame:
     leaderboard = leaderboard.where(pd.notnull(leaderboard), None)
     return leaderboard
 
-def save_leaderboard(leaderboard: pd.DataFrame, hash=None):
+def save_leaderboard(leaderboard: pd.DataFrame, hash=None, save_remote = True):
     leaderboard.to_csv(leaderboard_file, index=False)
     if hash is not None:
         leaderboard_row = leaderboard[leaderboard['hash'] == hash].iloc[0]
-        
-        try:
-            supabase_client.table("leaderboard").upsert({"hash": leaderboard_row['hash'], "repo_namespace": leaderboard_row['repo_namespace'], "repo_name": leaderboard_row['repo_name'], "chat_template_type": leaderboard_row['chat_template_type'], "model_size_score": leaderboard_row['model_size_score'], "qualitative_score": leaderboard_row['qualitative_score'], "latency_score": leaderboard_row['latency_score'], "total_score": leaderboard_row['total_score'], "status": leaderboard_row['status'], "notes": leaderboard_row['notes']}).execute()
-        except Exception as e:
-            print(f"Error saving leaderboard row to Supabase: {e}")
+        if save_remote:
+            supabase_url = os.getenv("SUPABASE_URL")
+            supabase_key = os.getenv("SUPABASE_KEY")
+            supabase_client = create_client(supabase_url, supabase_key)
+            try:
+                supabase_client.table("leaderboard").upsert({"hash": leaderboard_row['hash'], "repo_namespace": leaderboard_row['repo_namespace'], "repo_name": leaderboard_row['repo_name'], "chat_template_type": leaderboard_row['chat_template_type'], "model_size_score": leaderboard_row['model_size_score'], "qualitative_score": leaderboard_row['qualitative_score'], "latency_score": leaderboard_row['latency_score'], "total_score": leaderboard_row['total_score'], "status": leaderboard_row['status'], "notes": leaderboard_row['notes']}).execute()
+            except Exception as e:
+                print(f"Error saving leaderboard row to Supabase: {e}")
 
 def model_evaluation_worker():
     while True:
@@ -358,7 +358,6 @@ def get_eval_score(
 
     return average_prob
 
-
 def cleanup(model, model_downloaded, request):
     """
     Clean up the model data from memory and disk
@@ -375,7 +374,6 @@ def cleanup(model, model_downloaded, request):
             shutil.rmtree(f"data/{str(request.hash)}")
         except Exception as e:
             print(f"Warning: Error deleting model data: {e}")
-
 
 def warmup_model(model):
     """
@@ -413,7 +411,6 @@ def warmup_model(model):
         
     return average_latency
         
-
 def evaluate_model_logic(request: EvaluateModelRequest):
     """
     Evaluate a model based on the model size and the quality of the model.
@@ -561,7 +558,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         leaderboard.loc[leaderboard['hash'] == request.hash, 'total_score'] = float(total_score)
         leaderboard.loc[leaderboard['hash'] == request.hash, 'status'] = "COMPLETED"
         leaderboard.loc[leaderboard['hash'] == request.hash, 'notes'] = ""
-        save_leaderboard(leaderboard, request.hash)
+        save_leaderboard(leaderboard, request.hash, SAVE_REMOTE)
     except Exception as e:
         failure_reason = str(e)
         update_leaderboard_status(request.hash, "FAILED", failure_reason)
@@ -584,14 +581,9 @@ def update_leaderboard_status(hash, status, notes=""):
         leaderboard.loc[leaderboard['hash'] == hash, 'status'] = status
         if notes:
             leaderboard.loc[leaderboard['hash'] == hash, 'notes'] = notes
-        save_leaderboard(leaderboard, hash)
+        save_leaderboard(leaderboard, hash, SAVE_REMOTE)
     except Exception as e:
         print(f"Error updating leaderboard status for {hash}: {e}")
-
-@app.get("/leaderboard")
-def display_leaderboard():
-    return get_leaderboard().to_dict(orient='records')
-
 
 def get_json_result(hash):
     leaderboard = get_leaderboard()
@@ -635,7 +627,6 @@ def regenerate_hash(namespace, name, chat_template, competition_id):
     s = " ".join([namespace, name, chat_template, competition_id])
     hash_output = hashlib.sha256(s.encode('utf-8')).hexdigest()
     return int(hash_output[:16], 16)  # Returns a 64-bit integer from the first 16 hexadecimal characters
-
 
 @app.post("/evaluate_model")
 def evaluate_model(request: EvaluateModelRequest):
@@ -689,7 +680,7 @@ def evaluate_model(request: EvaluateModelRequest):
         "notes": ""
     }])
     leaderboard = pd.concat([leaderboard, new_entry], ignore_index=True)
-    save_leaderboard(leaderboard, request.hash)
+    save_leaderboard(leaderboard, request.hash, SAVE_REMOTE)
     
     # Add the evaluation task to the queue
     evaluation_queue.put(request)
@@ -697,7 +688,18 @@ def evaluate_model(request: EvaluateModelRequest):
     print('returning result')
     return get_json_result(request.hash)
 
+@app.get("/leaderboard")
+def display_leaderboard():
+    return get_leaderboard().to_dict(orient='records')
+
 if __name__ == "__main__":
+    # Set up command line argument parsing
+    parser = argparse.ArgumentParser(description="Run the server")
+    parser.add_argument("--no-remote", action="store_false", help="Disable remote saving")
+    args = parser.parse_args()
+
+    SAVE_REMOTE = args.no_remote
+
     try:
         print("Starting evaluation thread")
         evaluation_thread.start()
@@ -717,7 +719,7 @@ if __name__ == "__main__":
         # remove any rows with status QUEUED
         leaderboard = get_leaderboard()
         leaderboard = leaderboard[leaderboard['status'] != 'QUEUED']
-        save_leaderboard(leaderboard)
+        save_leaderboard(leaderboard, None, SAVE_REMOTE)
         # add a sentinel to the queue to stop the thread
         evaluation_queue.put(None)
         evaluation_thread.join()
@@ -725,5 +727,5 @@ if __name__ == "__main__":
         # remove any RUNNING status
         leaderboard = get_leaderboard()
         leaderboard = leaderboard[leaderboard['status'] != 'RUNNING']
-        save_leaderboard(leaderboard)
+        save_leaderboard(leaderboard, None, SAVE_REMOTE)
         print("API server and evaluation thread have been stopped")

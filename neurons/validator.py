@@ -878,7 +878,5 @@ def get_model_score(namespace, name, hash):
     bt.logging.info(f"Model {namespace}/{name} has score {score} and status {status}")
     return score, status
 
-
-
 if __name__ == "__main__":
     asyncio.run(Validator().run())
