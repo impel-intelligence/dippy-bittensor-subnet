@@ -199,6 +199,17 @@ class Validator:
             default=64,
             help="Number of samples to evaluate per UID",
         )
+        parser.add_argument(
+            "--use-local-validation-api",
+            action="store_true",
+            help="Use a local validation api",
+        )
+        parser.add_argument(
+            "--local-validation-api-port",
+            type=int,
+            default=8000,
+            help="Port for local validation api",
+        )
 
         bt.subtensor.add_args(parser)
         bt.logging.add_args(parser)
@@ -646,6 +657,7 @@ class Validator:
                                     model_i_metadata.id.namespace,
                                     model_i_metadata.id.name,
                                     model_i_metadata.id.hash,
+                                    self.config
                                 )
                                 bt.logging.info(f"Score for {model_i_metadata} is {_score}")
                                 bt.logging.info(f"Status for {model_i_metadata} is {status}")
@@ -843,11 +855,14 @@ class Validator:
                 f"Error in validator loop \n {e} \n {traceback.format_exc()}"
             )
 
-def get_model_score(namespace, name, hash):
+def get_model_score(namespace, name, hash, config):
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
     # return (score, status)
-    validation_endpoint = "http://35.238.83.136:8000/evaluate_model"
+    if config.use_local_validation_api:
+        validation_endpoint = f"http://localhost:{config.local_validation_api_port}/evaluate_model"
+    else:
+        validation_endpoint = f"{constants.VALIDATION_SERVER}/evaluate_model"
 
     # Construct the payload with the model name and chat template type
     payload = {
