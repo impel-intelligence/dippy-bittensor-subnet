@@ -631,8 +631,9 @@ def regenerate_hash(namespace, name, chat_template, competition_id):
 @app.post("/evaluate_model")
 def evaluate_model(request: EvaluateModelRequest):
     # verfify hash
-    # if request.hash != regenerate_hash(request.repo_namespace, request.repo_name, request.chat_template_type, request.competition_id):
-    #     raise HTTPException(status_code=400, detail="Hash does not match the expected hash")
+    if int(request.hash) != regenerate_hash(request.repo_namespace, request.repo_name, request.chat_template_type, request.competition_id):
+        print(f"Hash does not match the expected hash: {request.hash} != {regenerate_hash(request.repo_namespace, request.repo_name, request.chat_template_type, request.competition_id)}")
+        raise HTTPException(status_code=400, detail="Hash does not match the expected hash")
     # read the leaderboard file
     # check if the model already exists in the leaderboard
     current_status = get_json_result(request.hash)
@@ -641,18 +642,21 @@ def evaluate_model(request: EvaluateModelRequest):
 
     # validate the request
     if request.chat_template_type not in chat_template_mappings:
+        print(f"Chat template type not supported: {request.chat_template_type}")
         raise HTTPException(status_code=400, detail="Chat template type not supported")
     
     # check repo size of the model to see if it is within the limit
     try:
         model_repo_size = check_model_repo_size(request.hash, request.repo_namespace, request.repo_name)
         if model_repo_size is None:
+            print("Error checking model repo size")
             raise HTTPException(status_code=400, detail="Error occured while checking model repo size on Hugging Face Hub.")
     except Exception as e:
         print(f"Error checking model repo size: {e}")
         raise HTTPException(status_code=400, detail=f'"{request.repo_namespace}/{request.repo_name}" is probably a gated model, or it does not exist on the Hugging Face Hub.')
     
     if model_repo_size > MAX_REPO_SIZE:
+        print(f"Model repo size is too large: {model_repo_size} bytes. Should be less than {MAX_REPO_SIZE} bytes")
         raise HTTPException(status_code=400, detail="Model repo size is too large: " + str(model_repo_size) + " bytes. Should be less than " + str(MAX_REPO_SIZE) + " bytes")
     
     # check model size by checking safetensors index
@@ -662,6 +666,7 @@ def evaluate_model(request: EvaluateModelRequest):
         # raise HTTPException(status_code=400, detail="Error getting model size. Make sure the model.index.safetensors.json file exists in the model repository. And it has the metadata->total_size field.")
 
     if model_size > MAX_MODEL_SIZE:
+        print(f"Model size is too large: {model_size} bytes. Should be less than {MAX_MODEL_SIZE} bytes")
         raise HTTPException(status_code=400, detail="Model size is too large: " + str(model_size) + " bytes. Should be less than " + str(MAX_MODEL_SIZE) + " bytes")
 
     leaderboard = get_leaderboard()
