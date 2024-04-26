@@ -1,1 +1,0 @@
-# TODO: Code for miners to validate their models before submitting them to huggingface.
