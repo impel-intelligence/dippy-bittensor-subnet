@@ -17,6 +17,13 @@ import huggingface_hub
 from fastapi import FastAPI, HTTPException
 
 from dataset import PippaDataset
+from supabase import create_client
+import hashlib
+import argparse
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # TODO: Add a timeout to the evaluation API to prevent it from running for too long
 
@@ -34,20 +41,24 @@ VOCAB_TRUNCATION = 1000 # truncate the vocab to top 50 tokens
 PROB_TOP_K = 10 # the correct token should be in the top 50 tokens, else a score of 0 is given to that token
 # TODO: this will truncate the sequence to MAX_SEQ_LEN tokens. This is a temporary fix to make the evaluation faster.
 MAX_SEQ_LEN = 4096 # maximum sequence length that should be allowed because eval gets really slow with longer sequences than this
+SAVE_REMOTE = True # Save the leaderboard to Supabase 
 
-leaderboard_file = '/home/manav/dippy-subnet/leaderboard.csv'
+leaderboard_file = 'leaderboard.csv'
 
 # if the leaderboard file does not exist, create it with proper columns
-columns = ['model_name', 'chat_template_type', 'model_size_score', 'qualitative_score', 'latency_score', 'timestamp', 'status', 'notes']
+columns = ['hash', 'repo_namespace', 'repo_name', 'chat_template_type', 'model_size_score', 'qualitative_score', 'latency_score', 'total_score', 'timestamp', 'status', 'notes']
 if not os.path.exists(leaderboard_file):
     pd.DataFrame(columns=columns).to_csv(leaderboard_file, index=False)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 class EvaluateModelRequest(BaseModel):
-    model_name: str
+    repo_namespace: str
+    repo_name: str
     chat_template_type: str
+    hash: str
     revision: Optional[str] = "main"
+    competition_id: Optional[str] = "d1"
 
 evaluation_queue = Queue()
 
@@ -70,13 +81,16 @@ chat_template_mappings = {
     "alpaca": "prompt_templates/alpaca_prompt_template.jinja",
 }
 
-
 def get_leaderboard() -> pd.DataFrame:
     dtype_dict = {
-        'model_name': str,
+        'hash': str,
+        'repo_namespace': str,
+        'repo_name': str,
         'chat_template_type': str,
         'model_size_score': 'float64',  # Use 'float64' to allow NaNs
         'qualitative_score': 'float64',  # Use 'float64' to allow NaNs
+        'latency_score': 'float64',  # Use 'float64' to allow NaNs
+        'total_score': 'float64',  # Use 'float64' to allow NaNs
         'timestamp': str,
         'status': str,
         'notes': str
@@ -86,8 +100,18 @@ def get_leaderboard() -> pd.DataFrame:
     leaderboard = leaderboard.where(pd.notnull(leaderboard), None)
     return leaderboard
 
-def save_leaderboard(leaderboard: pd.DataFrame):
+def save_leaderboard(leaderboard: pd.DataFrame, hash=None, save_remote = True):
     leaderboard.to_csv(leaderboard_file, index=False)
+    if hash is not None:
+        leaderboard_row = leaderboard[leaderboard['hash'] == hash].iloc[0]
+        if save_remote:
+            supabase_url = os.getenv("SUPABASE_URL")
+            supabase_key = os.getenv("SUPABASE_KEY")
+            supabase_client = create_client(supabase_url, supabase_key)
+            try:
+                supabase_client.table("leaderboard").upsert({"hash": leaderboard_row['hash'], "repo_namespace": leaderboard_row['repo_namespace'], "repo_name": leaderboard_row['repo_name'], "chat_template_type": leaderboard_row['chat_template_type'], "model_size_score": leaderboard_row['model_size_score'], "qualitative_score": leaderboard_row['qualitative_score'], "latency_score": leaderboard_row['latency_score'], "total_score": leaderboard_row['total_score'], "status": leaderboard_row['status'], "notes": leaderboard_row['notes']}).execute()
+            except Exception as e:
+                print(f"Error saving leaderboard row to Supabase: {e}")
 
 def model_evaluation_worker():
     while True:
@@ -108,12 +132,12 @@ def model_evaluation_worker():
 
 evaluation_thread = Thread(target=model_evaluation_worker)
 
-def load_model_no_download(model_name: Any):
+def load_model_no_download(repo_namespace: str, repo_name: str):
     """
     Validate the model by loading it, without downloading it from the Hugging Face Hub
     """
     try:
-        config = AutoConfig.from_pretrained(model_name)
+        config = AutoConfig.from_pretrained('/'.join([repo_namespace, repo_name]), revision='main')
     except Exception as e:
         return None, str(e)
     
@@ -159,21 +183,23 @@ def parse_size(line):
         print(f"Error parsing size string '{size}{unit}': {e}")
         return 0
 
-def check_model_repo_size(model_name: str) -> int:
+def check_model_repo_size(hash: int, repo_namespace: str, repo_name: str) -> int:
     """
     Check the size of a model hosted on Hugging Face using Git LFS without checking out the files,
     and clean up the cloned repository afterwards, even if an error occurs.
     
     Args:
-    - model_name (str): The name of the model in the format 'username/modelname'
+    - hash (int): The hash of the model
+    - repo_namespace (str): The namespace of the model repository
+    - repo_name (str): The name of the model repository
     
     Returns:
     - int: The total size of the model files in bytes
     """
-    repo_dir = model_name.split('/')[-1]
+    repo_dir = f"data/{str(hash)}/models--{repo_namespace}--{repo_name}"
     original_dir = os.getcwd()
     try:
-        subprocess.run(["git", "clone", "--no-checkout", f"https://huggingface.co/{model_name}", repo_dir], check=True, timeout=10)
+        subprocess.run(["git", "clone", "--no-checkout", f"https://huggingface.co/{repo_namespace}/{repo_name}", repo_dir], check=True, timeout=10)
         os.chdir(repo_dir)
         lfs_files_output = subprocess.check_output(["git", "lfs", "ls-files", "-s"], text=True, timeout=10)
         total_size = sum(parse_size(line) for line in lfs_files_output.strip().split('\n') if line)
@@ -332,7 +358,6 @@ def get_eval_score(
 
     return average_prob
 
-
 def cleanup(model, model_downloaded, request):
     """
     Clean up the model data from memory and disk
@@ -346,10 +371,9 @@ def cleanup(model, model_downloaded, request):
     if model_downloaded:
         # Check if the SSD is more than 90% full before deleting the model data
         try:
-            shutil.rmtree("data/models--" + request.model_name.split("/")[0] + "--"+request.model_name.split("/")[1])
+            shutil.rmtree(f"data/{str(request.hash)}")
         except Exception as e:
             print(f"Warning: Error deleting model data: {e}")
-
 
 def warmup_model(model):
     """
@@ -387,24 +411,31 @@ def warmup_model(model):
         
     return average_latency
         
-
 def evaluate_model_logic(request: EvaluateModelRequest):
     """
     Evaluate a model based on the model size and the quality of the model.
     """
     # ensure that the model is on the leaderboard with status pending
     leaderboard = get_leaderboard()
-    if not (leaderboard['model_name'] == request.model_name).any():
-        raise ValueError(f"Model {request.model_name} not found in the leaderboard")
+    if not (leaderboard['hash'] == request.hash).any():
+        print(leaderboard)
+        print(leaderboard['hash'])
+        print(type(leaderboard['hash']))
+        print(request.hash)
+        print(type(request.hash))
+        raise ValueError(f"Model {request.hash} not found in the leaderboard")
     
     # changed status to in progress
-    update_leaderboard_status(request.model_name, "RUNNING", "Model evaluation in progress")
+    update_leaderboard_status(request.hash, "RUNNING", "Model evaluation in progress")
 
     # Now download the weights
     print('Downloading model weights')
     model_downloaded = False
     failure_reason = ""
     try:
+        # make dir data/hash if not exist
+        if not os.path.exists(f"data/{str(request.hash)}"):
+            os.makedirs(f"data/{str(request.hash)}")
         quant_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_use_double_quant=True, # This does not hurt performance much according to 
@@ -412,22 +443,22 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         )
         try:
             model = AutoModelForCausalLM.from_pretrained(
-                request.model_name,
+                f"{request.repo_namespace}/{request.repo_name}",
                 revision=request.revision,
                 device_map='auto',
                 quantization_config=quant_config,
                 attn_implementation="flash_attention_2",       
-                cache_dir = "data",
+                cache_dir = f"data/{str(request.hash)}",
                 force_download=True
             )
         except Exception as e:
             print(f"Error loading model in 4 bit quant with flash attention.: {e}. Trying vanilla load.")
             model = AutoModelForCausalLM.from_pretrained(
-                request.model_name,
+                f"{request.repo_namespace}/{request.repo_name}",
                 revision=request.revision,
                 device_map='auto',
                 attn_implementation="sdpa",       
-                cache_dir = "data",
+                cache_dir = f"data/{str(request.hash)}",
                 force_download=True
             )
         print('Model weights downloaded successfully')
@@ -442,7 +473,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         model_downloaded = True
     except Exception as e:
         failure_reason = str(e)
-        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        update_leaderboard_status(request.hash, "FAILED", failure_reason)
         cleanup(None, model_downloaded, request)
         raise RuntimeError("Error loading model: " + failure_reason)
 
@@ -450,11 +481,11 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     print('Downloading tokenizer')
     try:
         input_tokenizer = AutoTokenizer.from_pretrained(
-            request.model_name,
+            f"{request.repo_namespace}/{request.repo_name}",
             padding_side='left',
         )
         output_tokenizer = AutoTokenizer.from_pretrained(
-            request.model_name,
+            f"{request.repo_namespace}/{request.repo_name}",
             padding_side='right',
         )
         if input_tokenizer.pad_token is None:
@@ -468,7 +499,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     except Exception as e:
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
-        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        update_leaderboard_status(request.hash, "FAILED", failure_reason)
         raise RuntimeError("Error downloading tokenizer: " + failure_reason)
 
     # warm up the model
@@ -480,7 +511,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
             
     except Exception as e:
         failure_reason = str(e)
-        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        update_leaderboard_status(request.hash, "FAILED", failure_reason)
         cleanup(model, model_downloaded, request)
         raise RuntimeError("Error warming up model: " + failure_reason)
     
@@ -492,7 +523,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         sampled_data = dataset.sample_dataset(SAMPLE_SIZE)
     except Exception as e:
         failure_reason = str(e)
-        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        update_leaderboard_status(request.hash, "FAILED", failure_reason)
         cleanup(model, model_downloaded, request)
         raise RuntimeError("Error sampling dataset: " + failure_reason)
     
@@ -508,22 +539,29 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         print('Model evaluation score: ', eval_score)
     except Exception as e:
         failure_reason = str(e)
-        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        update_leaderboard_status(request.hash, "FAILED", failure_reason)
         cleanup(model, model_downloaded, request)
         raise RuntimeError("Error evaluating model: " + failure_reason)
+
+    # calculate the total score
+    if model_size_score == -1.0 or eval_score == -1.0 or latency_score == -1.0:
+        total_score = 0
+    else:
+        total_score = model_size_score * MODEL_SIZE_SCORE_WEIGHT + eval_score * QUALITATIVE_SCORE_WEIGHT + latency_score * LATENCY_SCORE_WEIGHT
 
     # update the model on the leaderboard
     try:
         leaderboard = get_leaderboard()
-        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'model_size_score'] = float(model_size_score)
-        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'qualitative_score'] = float(eval_score)
-        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'latency_score'] = float(latency_score)
-        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'status'] = "COMPLETED"
-        leaderboard.loc[leaderboard['model_name'] == request.model_name, 'notes'] = ""
-        save_leaderboard(leaderboard)
+        leaderboard.loc[leaderboard['hash'] == request.hash, 'model_size_score'] = float(model_size_score)
+        leaderboard.loc[leaderboard['hash'] == request.hash, 'qualitative_score'] = float(eval_score)
+        leaderboard.loc[leaderboard['hash'] == request.hash, 'latency_score'] = float(latency_score)
+        leaderboard.loc[leaderboard['hash'] == request.hash, 'total_score'] = float(total_score)
+        leaderboard.loc[leaderboard['hash'] == request.hash, 'status'] = "COMPLETED"
+        leaderboard.loc[leaderboard['hash'] == request.hash, 'notes'] = ""
+        save_leaderboard(leaderboard, request.hash, SAVE_REMOTE)
     except Exception as e:
         failure_reason = str(e)
-        update_leaderboard_status(request.model_name, "FAILED", failure_reason)
+        update_leaderboard_status(request.hash, "FAILED", failure_reason)
         cleanup(model, model_downloaded, request)
         raise RuntimeError("Error updating leaderboard: " + failure_reason)
     
@@ -533,48 +571,40 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     return {
         "model_size_score": model_size_score,
         "qualitative_score": eval_score,
-        "latency_score": latency_score
+        "latency_score": latency_score,
+        "total_score": total_score
     }
 
-def update_leaderboard_status(model_name, status, notes=""):
+def update_leaderboard_status(hash, status, notes=""):
     try:
         leaderboard = get_leaderboard()
-        leaderboard.loc[leaderboard['model_name'] == model_name, 'status'] = status
+        leaderboard.loc[leaderboard['hash'] == hash, 'status'] = status
         if notes:
-            leaderboard.loc[leaderboard['model_name'] == model_name, 'notes'] = notes
-        save_leaderboard(leaderboard)
+            leaderboard.loc[leaderboard['hash'] == hash, 'notes'] = notes
+        save_leaderboard(leaderboard, hash, SAVE_REMOTE)
     except Exception as e:
-        print(f"Error updating leaderboard status for {model_name}: {e}")
+        print(f"Error updating leaderboard status for {hash}: {e}")
 
-@app.get("/leaderboard")
-def display_leaderboard():
-    return get_leaderboard().to_dict(orient='records')
-
-
-def get_json_result(model_name):
+def get_json_result(hash):
     leaderboard = get_leaderboard()
-    if (leaderboard['model_name'] == model_name).any():
+    if (leaderboard['hash'] == hash).any():
         # if it exists, return score and status
-        total_score = 0
-        model_entry = leaderboard[leaderboard['model_name'] == model_name].iloc[0]
-        total_score += model_entry['model_size_score'] * MODEL_SIZE_SCORE_WEIGHT 
-        total_score += model_entry['qualitative_score'] * QUALITATIVE_SCORE_WEIGHT
-        total_score += model_entry['latency_score'] * LATENCY_SCORE_WEIGHT
+        model_entry = leaderboard[leaderboard['hash'] == hash].iloc[0]
         
         return {
             "score": {
                 "model_size_score": model_entry['model_size_score'],
                 "qualitative_score": model_entry['qualitative_score'],
                 "latency_score": model_entry['latency_score'],
-                "total_score": total_score
+                "total_score": model_entry['total_score']
             },
             "status": model_entry['status']
         }
     else:
         None
 
-def get_model_size(model_name):
-    safetensor_index = f"https://huggingface.co/{model_name}/resolve/main/model.safetensors.index.json"
+def get_model_size(repo_namespace: str, repo_name: str):
+    safetensor_index = f"https://huggingface.co/{repo_namespace}/{repo_name}/resolve/main/model.safetensors.index.json"
     response = requests.get(safetensor_index)
     if response.status_code != 200:
         print(f"Error getting safetensors index: {response.text}")
@@ -593,12 +623,19 @@ def get_model_size(model_name):
     
     return total_size
 
+def regenerate_hash(namespace, name, chat_template, competition_id):
+    s = " ".join([namespace, name, chat_template, competition_id])
+    hash_output = hashlib.sha256(s.encode('utf-8')).hexdigest()
+    return int(hash_output[:16], 16)  # Returns a 64-bit integer from the first 16 hexadecimal characters
 
 @app.post("/evaluate_model")
 def evaluate_model(request: EvaluateModelRequest):
+    # verfify hash
+    # if request.hash != regenerate_hash(request.repo_namespace, request.repo_name, request.chat_template_type, request.competition_id):
+    #     raise HTTPException(status_code=400, detail="Hash does not match the expected hash")
     # read the leaderboard file
     # check if the model already exists in the leaderboard
-    current_status = get_json_result(request.model_name)
+    current_status = get_json_result(request.hash)
     if current_status is not None:
         return current_status
 
@@ -608,18 +645,18 @@ def evaluate_model(request: EvaluateModelRequest):
     
     # check repo size of the model to see if it is within the limit
     try:
-        model_repo_size = check_model_repo_size(request.model_name)
+        model_repo_size = check_model_repo_size(request.hash, request.repo_namespace, request.repo_name)
         if model_repo_size is None:
             raise HTTPException(status_code=400, detail="Error occured while checking model repo size on Hugging Face Hub.")
     except Exception as e:
         print(f"Error checking model repo size: {e}")
-        raise HTTPException(status_code=400, detail=f'"{request.model_name}" is probably a gated model, or it does not exist on the Hugging Face Hub.')
+        raise HTTPException(status_code=400, detail=f'"{request.repo_namespace}/{request.repo_name}" is probably a gated model, or it does not exist on the Hugging Face Hub.')
     
     if model_repo_size > MAX_REPO_SIZE:
         raise HTTPException(status_code=400, detail="Model repo size is too large: " + str(model_repo_size) + " bytes. Should be less than " + str(MAX_REPO_SIZE) + " bytes")
     
     # check model size by checking safetensors index
-    model_size = get_model_size(request.model_name)
+    model_size = get_model_size(request.repo_namespace, request.repo_name)
     if model_size is None:
         model_size = 0
         # raise HTTPException(status_code=400, detail="Error getting model size. Make sure the model.index.safetensors.json file exists in the model repository. And it has the metadata->total_size field.")
@@ -630,25 +667,39 @@ def evaluate_model(request: EvaluateModelRequest):
     leaderboard = get_leaderboard()
     # add the model to leaderboard with status pending
     new_entry = pd.DataFrame([{
-        "model_name": request.model_name,
+        "hash": request.hash,
+        "repo_namespace": request.repo_namespace,
+        "repo_name": request.repo_name,
         "chat_template_type": request.chat_template_type,
         "model_size_score": -1.0,
         "qualitative_score": -1.0,
         "latency_score": -1.0,
+        "total_score": -1.0,
         "timestamp": pd.Timestamp.utcnow(),
         "status": "QUEUED",
         "notes": ""
     }])
     leaderboard = pd.concat([leaderboard, new_entry], ignore_index=True)
-    save_leaderboard(leaderboard)
+    save_leaderboard(leaderboard, request.hash, SAVE_REMOTE)
     
     # Add the evaluation task to the queue
     evaluation_queue.put(request)
 
     print('returning result')
-    return get_json_result(request.model_name)
+    return get_json_result(request.hash)
+
+@app.get("/leaderboard")
+def display_leaderboard():
+    return get_leaderboard().to_dict(orient='records')
 
 if __name__ == "__main__":
+    # Set up command line argument parsing
+    parser = argparse.ArgumentParser(description="Run the server")
+    parser.add_argument("--no-remote", action="store_false", help="Disable remote saving")
+    args = parser.parse_args()
+
+    SAVE_REMOTE = args.no_remote
+
     try:
         print("Starting evaluation thread")
         evaluation_thread.start()
@@ -668,7 +719,7 @@ if __name__ == "__main__":
         # remove any rows with status QUEUED
         leaderboard = get_leaderboard()
         leaderboard = leaderboard[leaderboard['status'] != 'QUEUED']
-        save_leaderboard(leaderboard)
+        save_leaderboard(leaderboard, None, SAVE_REMOTE)
         # add a sentinel to the queue to stop the thread
         evaluation_queue.put(None)
         evaluation_thread.join()
@@ -676,5 +727,5 @@ if __name__ == "__main__":
         # remove any RUNNING status
         leaderboard = get_leaderboard()
         leaderboard = leaderboard[leaderboard['status'] != 'RUNNING']
-        save_leaderboard(leaderboard)
+        save_leaderboard(leaderboard, None, SAVE_REMOTE)
         print("API server and evaluation thread have been stopped")

@@ -60,19 +60,21 @@ class HuggingFaceModelStore(RemoteModelStore):
         model_id_with_commit = ModelId(
             namespace=model.id.namespace,
             name=model.id.name,
+            chat_template=model.id.chat_template,
             hash=model.id.hash,
             commit=commit_info.oid,
             competition_id=model.id.competition_id,
         )
-
-        # TODO consider skipping the redownload if a hash is already provided.
-        # To get the hash we need to redownload it at a local tmp directory after which it can be deleted.
-        with tempfile.TemporaryDirectory() as temp_dir:
-            model_with_hash = await self.download_model(
-                model_id_with_commit, temp_dir, competition_parameters
-            )
-            # Return a ModelId with both the correct commit and hash.
-            return model_with_hash.id
+        
+        return model_id_with_commit
+        # # TODO consider skipping the redownload if a hash is already provided.
+        # # To get the hash we need to redownload it at a local tmp directory after which it can be deleted.
+        # with tempfile.TemporaryDirectory() as temp_dir:
+        #     model_with_hash = await self.download_model(
+        #         model_id_with_commit, temp_dir, competition_parameters
+        #     )
+        #     # Return a ModelId with both the correct commit and hash.
+        #     return model_with_hash.id
 
     async def download_model(
         self,

@@ -1,7 +1,7 @@
 <div align="center">
 
 # Dippy Subnet: Creating The World's Best Open-Source Roleplay LLM <!-- omit in toc -->
-[![DIPPY](/Dippy.png)](https://dippy.ai)
+[![DIPPY](/assests/Dippy.png)](https://dippy.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
 ---
@@ -34,7 +34,7 @@ Our team at Impel Intelligence Inc. knows this issue intimately through building
 Given the complexity of creating a state of the art roleplay LLM, we plan to divide the process into 3 distinct phases.
 
 **Phase 1:** 
-- [X] Subnet launch with robust pipeline for roleplay LLM evaluation on public datasets and response length 
+- [ ] Subnet launch with robust pipeline for roleplay LLM evaluation on public datasets and response length 
 - [ ] New, evolving evaluation datasets curated by community as well as contributed by Dippy's mobile app users
 - [ ] Public model leaderboard based on evaluation criteria
 
@@ -50,7 +50,7 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 
 ## Overview of Miner and Validator Functionality
 
-![overview](/drawio.png)
+![overview](/assests/model_architecture.png)
 
 **Miners** would use existing frameworks, fine tuning techniques, or MergeKit, to train, fine tune, or merge models to create a unique roleplay LLM. These models would be submitted to a shared Hugging Face pool. 
 
@@ -61,17 +61,69 @@ testing and benchmarking protocols with state-of-the-art datasets.
 
 ## Running Miners and Validators
 ### Running a Miner
-python dippy_subnet/check_model.py --hotkey HOTKEY --subtensor.network test 
+
+
 #### Requirements
+- Python 3.8+
+- GPU with at least 24 GB of VRAM
 
 #### Setup
+To start, clone the repository and `cd` to it:
+```
+git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
+cd dippy-bittensor-subnet
+pip install -e .
+```
+#### Submitting a model
+As a miner, you're responsible for leveraging all methods available at your disposal, including but not limited to training new models, merging existing models (we recommend [MergeKit](https://github.com/arcee-ai/mergekit)), finetuning existing models, and so on to push roleplay LLMs forward.
+
+We outline the following criteria for Phase 1:
+
+- Models should be 7B-13B in size
+- Models shouldn't be quantized, just submit safetensors
+
+Once you're happy with the performance of the model for the usecase of Roleplay, you can simply submit it to Hugging Face 🤗 and then use the following command:
+
+```
+python3 dippy_subnet/upload_model.py --hf_repo_id HF_REPO --wallet.name WALLET  --wallet.hotkey HOTKEY --subtensor.network test --chat_template MODEL_CHAT_TEMPLATE --model_dir PATH_TO_MODEL   
+```
+
 
 ### Running a Validator
-python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME
+
 #### Requirements
+- Python 3.8+
 
 #### Setup
+To start, clone the repository and `cd` to it:
+```
+git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
+cd dippy-bittensor-subnet
+pip install -e .
+```
+To run the evaluation, simply use the following command:
 
+```
+python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME
+```
+
+## Model Evaluation Criteria
+### Model Size
+A smaller model will score higher than a big model. Model size is the disk space occupied by the model repo from HF. The max model size is limited to 18GB.
+
+<!-- $S_{size} = 1 - ModelSize/ MaxModelSize$ -->
+### Latency
+A faster model will score higher than a slow model.
+
+### Output Similarity
+Evaluted against datasets, a model that generates similiar resposne to groundtruth will score higher.
+
+### Vibe Matching
+A model that can generate outputs with similiar length to its inputs will score higher.
+
+## Acknowledgement
+
+Our codebase is built upon [Nous Research's](https://github.com/NousResearch/finetuning-subnet) and [MyShell's](https://github.com/myshell-ai/MyShell-TTS-Subnet?tab=readme-ov-file) Subnets.
 
 ## License
 

@@ -47,6 +47,13 @@ def get_config():
     )
 
     parser.add_argument(
+        "--chat_template",
+        type=str,
+        default="vicuna",
+        help="The chat template for the model.",
+    )
+
+    parser.add_argument(
         "--netuid",
         type=str,
         default=constants.SUBNET_UID,
@@ -73,7 +80,9 @@ def get_config():
 
 def regenerate_hash(namespace, name, chat_template, competition_id):
     s = " ".join([namespace, name, chat_template, competition_id])
-    return int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 10**8 
+    hash_output = hashlib.sha256(s.encode('utf-8')).hexdigest()
+    return int(hash_output[:16], 16)  # Returns a 64-bit integer from the first 16 hexadecimal characters
+
 
 def check_model_dir(model_dir):
     """Check if model dir has all the required files."""
@@ -112,18 +121,18 @@ def check_model_dir(model_dir):
         )
     
     # check if model.safetensors.index.json exists
-    if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
-        raise FileNotFoundError(
-            f"No model.safetensors.index.json file found in model directory {model_dir}."
-        )
+    # if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
+    #     raise FileNotFoundError(
+    #         f"No model.safetensors.index.json file found in model directory {model_dir}."
+    #     )
     
     # check if this file contains metadata.total_size
-    with open(os.path.join(model_dir, "model.safetensors.index.json"), "r") as f:
-        index = json.load(f)
-        if "metadata" not in index or "total_size" not in index["metadata"]:
-            raise FileNotFoundError(
-                f"model.safetensors.index.json file in model directory {model_dir} does not contain metadata.total_size."
-            )
+    # with open(os.path.join(model_dir, "model.safetensors.index.json"), "r") as f:
+    #     index = json.load(f)
+    #     if "metadata" not in index or "total_size" not in index["metadata"]:
+    #         raise FileNotFoundError(
+    #             f"model.safetensors.index.json file in model directory {model_dir} does not contain metadata.total_size."
+    #         )
 
 
 async def main(config: bt.config):
@@ -150,6 +159,7 @@ async def main(config: bt.config):
     model_id = ModelId(
         namespace=repo_namespace,
         name=repo_name,
+        chat_template=config.chat_template,
         competition_id=config.competition_id,
     )
 
@@ -164,17 +174,17 @@ async def main(config: bt.config):
         competition_parameters=parameters,
     )
 
-    print(
-        f"Model uploaded to Hugging Face with commit {model_id_with_commit.commit} and hash {model_id_with_commit.hash}"
-    )
-
-    model_id_with_commit = ModelId(
+    model_id_with_hash = ModelId(
         namespace=repo_namespace,
         name=repo_name,
-        chat_template="vicuna", # TODO: change this to a variable
-        hash=regenerate_hash(repo_namespace, repo_name, "vicuna", config.competition_id), # TODO: change chat template to a variable
+        chat_template=config.chat_template, 
+        hash=regenerate_hash(repo_namespace, repo_name, config.chat_template, config.competition_id), 
         commit=model_id_with_commit.commit,
         competition_id=config.competition_id,
+    )
+    
+    print(
+        f"Model uploaded to Hugging Face with commit {model_id_with_hash.commit} and hash {model_id_with_hash.hash}"
     )
 
     model_metadata_store = ChainModelMetadataStore(
@@ -190,9 +200,8 @@ async def main(config: bt.config):
                 token=os.getenv("HF_ACCESS_TOKEN"),
             )
             await model_metadata_store.store_model_metadata(
-                wallet.hotkey.ss58_address, model_id_with_commit
+                wallet.hotkey.ss58_address, model_id_with_hash
             )
-            bt.logging.error(model_id_with_commit)
             bt.logging.success("Committed model to the chain.")
             break
         except Exception as e:

@@ -18,6 +18,9 @@ class CompetitionParameters:
 # Project Constants.
 # ---------------------------------
 
+# Validation API hosted by SN Owner
+VALIDATION_SERVER = "http://35.238.83.136:8000"
+
 # The uid for this subnet.
 SUBNET_UID = 135
 # The start block of this subnet
