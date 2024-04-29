@@ -7,9 +7,9 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Load the dataset
 dataset_path = "data/pippa_deduped.jsonl"
-dataset = PippaDataset(dataset_path)
+dataset = PippaDataset(dataset_path, max_input_len=256)
 
-model_name = 'openai-community/gpt2' # Replace with your actual model name
+model_name = 'Manavshah/llama-test' # Replace with your actual model name
 
 # model_name = 'openai-community/gpt2'
 quant_config = BitsAndBytesConfig(
@@ -38,12 +38,12 @@ if input_tokenizer.pad_token is None:
 dataset.set_chat_template_params('prompt_templates/vicuna_prompt_template.jinja', input_tokenizer)
 
 # Prepare sample data
-sample_size = 10  # Adjust as needed
-# sampled_data = dataset.sample_dataset(sample_size)
+sample_size = 2  # Adjust as needed
+sampled_data = dataset.sample_dataset(sample_size)
 
-sampled_data = [
-    ("What is the capital of France?", "\n\nParis is the capital of France.")
-]
+# sampled_data = [
+#     ("What is the capital of France?", "\n\nParis is the capital of France.")
+# ]
 
 # Evaluate the model
 eval_score = get_eval_score(

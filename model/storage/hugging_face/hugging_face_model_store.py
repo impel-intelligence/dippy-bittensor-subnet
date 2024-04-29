@@ -1,17 +1,12 @@
-import tempfile
 import os
 from huggingface_hub import HfApi
 from model.data import Model, ModelId
 from model.storage.disk import utils
-from transformers import AutoModelForCausalLM, AutoTokenizer
 from constants import CompetitionParameters, MAX_HUGGING_FACE_BYTES
 
 from model.storage.remote_model_store import RemoteModelStore
-import constants
-from huggingface_hub import HfApi
-from safetensors.torch import load_file, save_file
+from huggingface_hub import HfApi, file_exists
 from collections import defaultdict
-import torch
 
 
 def shared_pointers(tensors):
@@ -37,7 +32,8 @@ class HuggingFaceModelStore(RemoteModelStore):
 
 
     async def upload_model(
-        self, model: Model, competition_parameters: CompetitionParameters
+        self, model: Model, 
+        competition_parameters: CompetitionParameters,
     ) -> ModelId:
         """Uploads a trained model to Hugging Face."""
         token = HuggingFaceModelStore.assert_access_token_exists()
