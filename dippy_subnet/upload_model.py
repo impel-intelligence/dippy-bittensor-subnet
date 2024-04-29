@@ -69,6 +69,14 @@ def get_config():
         "--list_competitions", action="store_true", help="Print out all competitions"
     )
 
+    parser.add_argument(
+        "--model_commit_id", type=str, help="The commit id of the model to upload"
+    )
+
+    parser.add_argument(
+        "--skip_model_upload", action="store_true", help="Skip model upload"
+    )
+
     # Include wallet and logging arguments from bittensor
     bt.wallet.add_args(parser)
     bt.subtensor.add_args(parser)
@@ -108,11 +116,11 @@ def check_model_dir(model_dir):
             f"No config.json file found in model directory {model_dir}."
         )
     
-    # check if generation_config.json exists
-    if not any(file.endswith("generation_config.json") for file in ls_dir):
-        raise FileNotFoundError(
-            f"No generation_config.json file found in model directory {model_dir}."
-        )
+    # # check if generation_config.json exists
+    # if not any(file.endswith("generation_config.json") for file in ls_dir):
+    #     raise FileNotFoundError(
+    #         f"No generation_config.json file found in model directory {model_dir}."
+    #     )
     
     # check if special_tokens_map.json exists
     if not any(file.endswith("special_tokens_map.json") for file in ls_dir):
@@ -121,10 +129,10 @@ def check_model_dir(model_dir):
         )
     
     # check if model.safetensors.index.json exists
-    # if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
-    #     raise FileNotFoundError(
-    #         f"No model.safetensors.index.json file found in model directory {model_dir}."
-    #     )
+    if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
+        raise FileNotFoundError(
+            f"No model.safetensors.index.json file found in model directory {model_dir}."
+        )
     
     # check if this file contains metadata.total_size
     # with open(os.path.join(model_dir, "model.safetensors.index.json"), "r") as f:
@@ -141,7 +149,7 @@ async def main(config: bt.config):
 
     wallet = bt.wallet(config=config)
     subtensor = bt.subtensor(config=config)
-    print("Subtensor network: ", subtensor.network)
+    bt.logging.debug("Subtensor network: ", subtensor.network)
     metagraph: bt.metagraph = subtensor.metagraph(config.netuid)
 
     # Make sure we're registered and have a HuggingFace token.
@@ -155,7 +163,6 @@ async def main(config: bt.config):
         )
 
     repo_namespace, repo_name = utils.validate_hf_repo_id(config.hf_repo_id)
-    
     model_id = ModelId(
         namespace=repo_namespace,
         name=repo_name,
@@ -163,16 +170,27 @@ async def main(config: bt.config):
         competition_id=config.competition_id,
     )
 
-    model = Model(id=model_id, local_repo_dir=config.model_dir)
+    if not config.skip_model_upload:
+        model = Model(id=model_id, local_repo_dir=config.model_dir)
 
-    check_model_dir(config.model_dir)
+        check_model_dir(config.model_dir)
 
-    remote_model_store = HuggingFaceModelStore()
+        remote_model_store = HuggingFaceModelStore()
 
-    model_id_with_commit = await remote_model_store.upload_model(
-        model=model,
-        competition_parameters=parameters,
-    )
+        bt.logging.info(f"Uploading model to Hugging Face with id {model_id}")
+
+
+        model_id_with_commit = await remote_model_store.upload_model(
+            model=model,
+            competition_parameters=parameters,
+        )
+    else:
+        # get the latest commit id of hf repo
+        model_id_with_commit = model_id
+        if config.model_commit_id is None or config.model_commit_id == "":
+            raise ValueError("model_commit_id should not be set when skip_model_upload is set to True")
+        
+        model_id_with_commit.commit = config.model_commit_id
 
     model_id_with_hash = ModelId(
         namespace=repo_namespace,
@@ -183,7 +201,7 @@ async def main(config: bt.config):
         competition_id=config.competition_id,
     )
     
-    print(
+    bt.logging.info(
         f"Model uploaded to Hugging Face with commit {model_id_with_hash.commit} and hash {model_id_with_hash.hash}"
     )
 
@@ -191,7 +209,7 @@ async def main(config: bt.config):
         subtensor=subtensor, wallet=wallet, subnet_uid=config.netuid
     )
 
-    # We can only commit to the chain every 20 minutes, so run this in a loop, until successful.
+    # We can only commit to the chain every n minutes, so run this in a loop, until successful.
     while True:
         try:
             update_repo_visibility(
@@ -214,7 +232,7 @@ if __name__ == "__main__":
     # Parse and print configuration
     config = get_config()
     if config.list_competitions:
-        print(constants.COMPETITION_SCHEDULE)
+        bt.logging.info(constants.COMPETITION_SCHEDULE)
     else:
-        print(config)
+        bt.logging.info(config)
         asyncio.run(main(config))

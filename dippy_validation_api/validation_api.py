@@ -28,12 +28,15 @@ load_dotenv()
 # TODO: Add a timeout to the evaluation API to prevent it from running for too long
 
 # Constants
-QUALITATIVE_SCORE_WEIGHT = 0.8
+MAX_GENERATION_LEN = 300 # maximum length of the generated sequence in tokens
+LENGTH_DIFF_PENALTY_STEEPNESS = 0.1
+QUALITATIVE_SCORE_WEIGHT = 0.7
 MODEL_SIZE_SCORE_WEIGHT = 0.1
 LATENCY_SCORE_WEIGHT = 0.1
+VIBE_SCORE_WEIGHT = 0.1
 MAX_AVG_LATENCY = 10000 # in milliseconds
 
-MAX_MODEL_SIZE = 18 * 1024 * 1024 * 1024 # in bytes
+MAX_MODEL_SIZE = 30 * 1024 * 1024 * 1024 # in bytes
 MAX_REPO_SIZE = 80 * 1024 * 1024 * 1024 #  in bytes
 SAMPLE_SIZE = 100 # number of samples to evaluate the model from the dataset
 BATCH_SIZE = 2 # batch size for evaluation
@@ -46,7 +49,7 @@ SAVE_REMOTE = True # Save the leaderboard to Supabase
 leaderboard_file = 'leaderboard.csv'
 
 # if the leaderboard file does not exist, create it with proper columns
-columns = ['hash', 'repo_namespace', 'repo_name', 'chat_template_type', 'model_size_score', 'qualitative_score', 'latency_score', 'total_score', 'timestamp', 'status', 'notes']
+columns = ['hash', 'repo_namespace', 'repo_name', 'chat_template_type', 'model_size_score', 'qualitative_score', 'latency_score', 'vibe_score', 'total_score', 'timestamp', 'status', 'notes']
 if not os.path.exists(leaderboard_file):
     pd.DataFrame(columns=columns).to_csv(leaderboard_file, index=False)
 
@@ -71,7 +74,7 @@ if not os.path.exists("data"):
 if not os.path.exists("data/pippa_deduped.jsonl"):
     huggingface_hub.hf_hub_download(repo_id="PygmalionAI/PIPPA", filename="pippa_deduped.jsonl", repo_type="dataset", local_dir = "data")
 
-dataset = PippaDataset("data/pippa_deduped.jsonl")
+dataset = PippaDataset("data/pippa_deduped.jsonl", max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LEN)
 
 chat_template_mappings = {
     "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
@@ -90,6 +93,7 @@ def get_leaderboard() -> pd.DataFrame:
         'model_size_score': 'float64',  # Use 'float64' to allow NaNs
         'qualitative_score': 'float64',  # Use 'float64' to allow NaNs
         'latency_score': 'float64',  # Use 'float64' to allow NaNs
+        'vibe_score': 'float64',  # Use 'float64' to allow NaNs
         'total_score': 'float64',  # Use 'float64' to allow NaNs
         'timestamp': str,
         'status': str,
@@ -214,6 +218,65 @@ def check_model_repo_size(hash: int, repo_namespace: str, repo_name: str) -> int
         os.chdir(original_dir)
         shutil.rmtree(os.path.join(original_dir, repo_dir), ignore_errors=True)
     
+
+def get_vibe_match_score(model, inputs, input_tokenizer, output_tokenizer, last_user_messages):
+    # apart from the probs assigned to the target tokens, we also want the actual generation without teacher forcing
+    # the input would be "inputs"
+    stop_token_id = output_tokenizer.eos_token_id
+    batch_ended = torch.zeros(inputs['input_ids'].shape[0], dtype=torch.bool, device=device)
+    generated_sequences = torch.full((inputs['input_ids'].shape[0], 0), stop_token_id, dtype=torch.long, device=device)  # Initialize empty tensor for generated sequences
+    for i in range(MAX_GENERATION_LEN):
+        if batch_ended.all():
+            break
+
+        # Move input tensors to the same device as the model
+        input_ids = inputs['input_ids'].to(device)
+        attention_mask = inputs['attention_mask'].to(device)
+
+        print('input_ids: ', input_ids.shape)
+        print('attention_mask: ', attention_mask.shape)
+
+        outputs = model(
+            input_ids, 
+            attention_mask=attention_mask,
+            use_cache=True,
+        )
+        # get the logits for the next token
+        logits = outputs.logits[:, -1, :]
+        # get the next token
+        next_token = torch.argmax(torch.nn.functional.softmax(logits, dim=-1), dim=-1, keepdim=True)
+        batch_ended |= (next_token.squeeze(-1) == stop_token_id)
+        # append the next token to the inputs and generated sequences
+        inputs['input_ids'] = torch.cat([input_ids, next_token], dim=-1).detach()
+        inputs['attention_mask'] = torch.cat([attention_mask, torch.ones_like(next_token).to(device)], dim=-1)
+        generated_sequences = torch.cat([generated_sequences, next_token], dim=-1).detach()
+
+        # fix memory leak
+        del logits, next_token, outputs
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    if torch.isnan(outputs.logits).any():
+        raise ValueError("NaN values detected in outputs.logits tensor")
+    
+    # now decode the generated sequences
+    decoded_text = input_tokenizer.batch_decode(generated_sequences.cpu(), skip_special_tokens=True)
+    
+    # penalize text that is too long or too short compared to the last user message
+    # the score approaches 0 exponentially as the length difference increases
+    vibe_score = 0
+    for last_user_message, decoded in zip(last_user_messages, decoded_text):
+        last_user_message_len = len(last_user_message)
+        decoded_len = len(decoded)
+        if last_user_message_len == 0:
+            decoded_len_score = 0
+        else:
+            length_difference = abs(decoded_len - last_user_message_len)
+            decoded_len_score = torch.exp(-torch.tensor(length_difference) * LENGTH_DIFF_PENALTY_STEEPNESS).item()
+        vibe_score += decoded_len_score
+
+    return vibe_score
+
 def get_eval_score(
         model: Any, 
         sampled_data: list[tuple], 
@@ -231,10 +294,12 @@ def get_eval_score(
         raise ValueError("Model does not have a maximum position embedding set")
     
     # unzip the sampled data
-    contexts, target_texts = zip(*sampled_data)
+    contexts, target_texts, last_user_messages = zip(*sampled_data)
 
     total_prob = 0
     token_count = 0
+
+    total_vibe_score = 0
 
     # now we want to calculate the average probability of the target tokens that model assigns.
     batch_size = BATCH_SIZE
@@ -328,7 +393,6 @@ def get_eval_score(
                         top_10_predicted_tokens = [output_tokenizer.decode([id]) for id in top_10_predicted_ids]
                         print(f"Actual token: {actual_token}", f" -> top 10 pred tokens: {top_10_predicted_tokens}")
 
-            
             # normalize the logits to get probabilities
             probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1).cuda()
 
@@ -349,14 +413,23 @@ def get_eval_score(
             total_prob += token_probabilities.sum().cpu().item()
             token_count += targets_ids_mask.sum().cpu().item()
 
+            total_vibe_score += get_vibe_match_score(
+                model, 
+                inputs, 
+                input_tokenizer, 
+                output_tokenizer, 
+                last_user_messages[i:i+batch_size]
+            )
+
             del input_ids, attention_mask, targets_ids_mask, outputs, probabilities, top_k_logits, top_k_indices, mask, token_probabilities
             gc.collect()
             torch.cuda.empty_cache()
     
     # Calculate the average probability
     average_prob = total_prob / token_count if token_count > 0 else 0
+    average_vibe_score = total_vibe_score / len(contexts)
 
-    return average_prob
+    return average_prob, average_vibe_score
 
 def cleanup(model, model_downloaded, request):
     """
@@ -468,6 +541,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         # check if model size is within the limit. If not, return an error
         if model_size > MAX_MODEL_SIZE:
             raise ValueError(f"Model is too large when loaded in 4 bit quant: {model_size} Bytes. Should be less than {MAX_MODEL_SIZE} Bytes")
+        
         model_size_score = 1 - (model_size / MAX_MODEL_SIZE)
         print('Model size score: ', model_size_score)
         model_downloaded = True
@@ -530,7 +604,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     # Part 2: Evaluate the model
     print('Evaluating model')
     try:
-        eval_score = get_eval_score(
+        eval_score, vibe_score = get_eval_score(
             model, 
             sampled_data, 
             input_tokenizer=input_tokenizer,
@@ -547,7 +621,10 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     if model_size_score == -1.0 or eval_score == -1.0 or latency_score == -1.0:
         total_score = 0
     else:
-        total_score = model_size_score * MODEL_SIZE_SCORE_WEIGHT + eval_score * QUALITATIVE_SCORE_WEIGHT + latency_score * LATENCY_SCORE_WEIGHT
+        total_score = model_size_score * MODEL_SIZE_SCORE_WEIGHT
+        total_score += eval_score * QUALITATIVE_SCORE_WEIGHT 
+        total_score += latency_score * LATENCY_SCORE_WEIGHT
+        total_score += vibe_score * VIBE_SCORE_WEIGHT
 
     # update the model on the leaderboard
     try:
@@ -555,6 +632,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         leaderboard.loc[leaderboard['hash'] == request.hash, 'model_size_score'] = float(model_size_score)
         leaderboard.loc[leaderboard['hash'] == request.hash, 'qualitative_score'] = float(eval_score)
         leaderboard.loc[leaderboard['hash'] == request.hash, 'latency_score'] = float(latency_score)
+        leaderboard.loc[leaderboard['hash'] == request.hash, 'vibe_score'] = float(vibe_score)
         leaderboard.loc[leaderboard['hash'] == request.hash, 'total_score'] = float(total_score)
         leaderboard.loc[leaderboard['hash'] == request.hash, 'status'] = "COMPLETED"
         leaderboard.loc[leaderboard['hash'] == request.hash, 'notes'] = ""
@@ -572,6 +650,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         "model_size_score": model_size_score,
         "qualitative_score": eval_score,
         "latency_score": latency_score,
+        "vibe_score": vibe_score,
         "total_score": total_score
     }
 
@@ -665,7 +744,7 @@ def evaluate_model(request: EvaluateModelRequest):
         model_size = 0
         # raise HTTPException(status_code=400, detail="Error getting model size. Make sure the model.index.safetensors.json file exists in the model repository. And it has the metadata->total_size field.")
 
-    if model_size > MAX_MODEL_SIZE:
+    if (model_size // 4) > MAX_MODEL_SIZE:
         print(f"Model size is too large: {model_size} bytes. Should be less than {MAX_MODEL_SIZE} bytes")
         raise HTTPException(status_code=400, detail="Model size is too large: " + str(model_size) + " bytes. Should be less than " + str(MAX_MODEL_SIZE) + " bytes")
 

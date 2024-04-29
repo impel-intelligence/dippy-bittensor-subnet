@@ -1,3 +1,4 @@
+import os
 import functools
 import multiprocessing
 from typing import Any, Tuple
@@ -92,3 +93,21 @@ def run_in_subprocess(func: functools.partial, ttl: int) -> Any:
         raise Exception(f"BaseException raised in subprocess: {str(result)}")
 
     return result
+
+
+def save_model(model, tokenizer, path: str, model_name: str):
+    """Saves a model and tokenizer to a path.
+
+    Args:
+        model: The model to save.
+        tokenizer: The tokenizer to save.
+        path (str): The path to save the model and tokenizer to.
+    """
+    # make sure the path exists
+    os.makedirs(path, exist_ok=True)
+
+    model_path = os.path.join(path, model_name)
+
+    model.save_pretrained(model_path)
+    tokenizer.save_pretrained(model_path)
+    bt.logging.success(f"Model and tokenizer saved to {path}")

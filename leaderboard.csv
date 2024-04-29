@@ -1,0 +1,23 @@
+model_name,chat_template_type,model_size_score,qualitative_score,timestamp,status,notes
+openai-community/gpt2,vicuna,0.9930636870364348,0.1866812041813738,2024-04-21 00:00:40.342244+00:00,COMPLETE,
+NousResearch/Meta-Llama-3-8B-Instruct,vicuna,0.703748067220052,0.3570716982350982,2024-04-21 22:30:23.670413+00:00,COMPLETE,
+HuggingFaceH4/zephyr-7b-beta,vicuna,0.764511956108941,0.4046733165812715,2024-04-21 23:59:27.243701+00:00,COMPLETE,
+dreamgen/opus-v1.2-llama-3-8b,chatml,0.703748067220052,0.3393025217216847,2024-04-22 04:44:35.866287+00:00,COMPLETE,
+dreamgen/WizardLM-2-7B,vicuna,-1.0,-1.0,2024-04-22 04:59:00.018537+00:00,FAILED,NaN values detected in the logits tensor
+NousResearch/Nous-Hermes-2-Yi-34B,chatml,0.0317019886440701,0.4297623737401165,2024-04-22 05:11:19.898288+00:00,COMPLETE,
+PygmalionAI/pygmalion-6b,vicuna,-1.0,-1.0,2024-04-22 05:14:09.932344+00:00,FAILED,"GPTJForCausalLM does not support Flash Attention 2.0 yet. Please request to add support where the model is hosted, on its model hub page: https://huggingface.co/PygmalionAI/pygmalion-6b/discussions/new or in the Transformers GitHub repo: https://github.com/huggingface/transformers/issues/new"
+openerotica/Occult-Roleplay-Mixtral-4x7B,vicuna,-1.0,-1.0,2024-04-22 05:19:19.709171+00:00,FAILED,"openerotica/Occult-Roleplay-Mixtral-4x7B does not appear to have a file named pytorch_model.bin, tf_model.h5, model.ckpt or flax_model.msgpack."
+CohereForAI/c4ai-command-r-plus-4bit,chatml,-1.0,-1.0,2024-04-22 05:41:11.354090+00:00,FAILED,"
+                    Some modules are dispatched on the CPU or the disk. Make sure you have enough GPU RAM to fit the
+                    quantized model. If you want to dispatch the model on the CPU or the disk while keeping these modules
+                    in 32-bit, you need to set `llm_int8_enable_fp32_cpu_offload=True` and pass a custom `device_map` to
+                    `from_pretrained`. Check
+                    https://huggingface.co/docs/transformers/main/en/main_classes/quantization#offload-between-cpu-and-gpu
+                    for more details.
+                    "
+bwuzhang/gpt6,vicuna,-1.0,-1.0,2024-04-22 15:17:39.175732+00:00,FAILED,bwuzhang/gpt6 does not appear to have a file named config.json. Checkout 'https://huggingface.co/bwuzhang/gpt6/main' for available files.
+fhai50032/RolePlayLake-7B,vicuna,-1.0,-1.0,2024-04-22 16:13:19.187717+00:00,FAILED,"CUDA error: an illegal memory access was encountered
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1.
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+"

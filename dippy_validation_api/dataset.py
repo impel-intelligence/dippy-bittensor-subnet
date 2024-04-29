@@ -4,15 +4,15 @@ import jinja2
 
 from transformers import AutoTokenizer
 from torch.utils.data import Dataset
-
+import tiktoken
 
 class PippaDataset(Dataset):
-    def __init__(self, filename):
+    def __init__(self, filename, max_input_len):
         self.filename = filename
         with open(filename, 'r') as f:
             data = [json.loads(line) for line in f]
 
-        self.dataset = self.process_data(data)
+        self.dataset = self.process_data(data, max_input_len)
 
         self._chat_template = None
         self._tokenizer = None
@@ -21,10 +21,11 @@ class PippaDataset(Dataset):
         self._chat_template = jinja2.Template(open(template_path).read())
         self._tokenizer = tokenizer
 
-    def process_data(self, data):
+    def process_data(self, data, max_input_len):
         """
         Convert pippa dataset to a format that can be used downstream.
         """
+        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo") # to get approx token count
         converted_dataset = []
         for data_point in data:
             # construct the system prompt using the bot_description and bot_greeting
@@ -53,11 +54,17 @@ The themes of the conversation are: {data_point['categories']}."""
 
             # get index of the last message from the chatbot
             last_message_index = 0
+            input_len_so_far = len(encoding.encode(messages[0]['content'] + messages[1]['content']))
             for i, message in enumerate(data_point['conversation']):
+                input_len_so_far += len(encoding.encode(message['message']))
+                if input_len_so_far > max_input_len:
+                    break
+
                 if not message['is_human']:
                     last_message_index = i
             
-            for message in data_point['conversation'][:last_message_index]:
+            last_user_message_index = 0
+            for i, message in enumerate(data_point['conversation'][:last_message_index]):
                 if message['is_human']:
                     messages.append(
                         {
@@ -65,6 +72,7 @@ The themes of the conversation are: {data_point['categories']}."""
                             'content': message['message']
                         }
                     )
+                    last_user_message_index = i
                 else:
                     messages.append(
                         {
@@ -78,6 +86,7 @@ The themes of the conversation are: {data_point['categories']}."""
             converted_dataset.append(
                 {
                     'messages': messages,
+                    'last_user_message': messages[last_user_message_index]['content'], # get the last user message
                     'character_response': character_response
                 }
             )
@@ -102,8 +111,7 @@ The themes of the conversation are: {data_point['categories']}."""
             add_generation_prompt=True
         )
 
-
-        return chat_input, f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}"
+        return chat_input, f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}", self.dataset[idx]['last_user_message']
     
     def sample_dataset(self, n: int):
         # get indices of the dataset
