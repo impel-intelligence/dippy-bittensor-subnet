@@ -1,8 +1,13 @@
+import hashlib
 import os
 import functools
+import subprocess
+import shutil
 import multiprocessing
 from typing import Any, Tuple
 import bittensor as bt
+import requests
+from transformers import AutoModelForCausalLM, AutoConfig
 
 from model.data import ModelId
 

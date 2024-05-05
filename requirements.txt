@@ -1,5 +1,6 @@
-bittensor
-transformers==4.40.0
+vllm==0.4.1
+pydantic >= 2.0
+transformers
 torch
 accelerate
 bitsandbytes
