@@ -92,7 +92,7 @@ python3 dippy_subnet/upload_model.py --hf_repo_id HF_REPO --wallet.name WALLET  
 ### Running a Validator
 
 #### Requirements
-- Python 3.8+
+- Python 3.9+
 
 #### Setup
 To start, clone the repository and `cd` to it:

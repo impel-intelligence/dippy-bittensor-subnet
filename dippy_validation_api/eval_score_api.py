@@ -65,9 +65,8 @@ def get_eval_score(
     # now we want to calculate the average probability of the target tokens that model assigns.
     batch_size = BATCH_SIZE
     model.eval()
-
-    for i in tqdm.tqdm(range(0, len(contexts), batch_size), desc="Evaluating batches"):
-        with torch.no_grad():
+    with torch.no_grad():
+        for i in tqdm.tqdm(range(0, len(contexts), batch_size), desc="Evaluating batches"):
             # Tokenize the inputs and labels
 
             # Pad the inputs and expected outputs to the same length in such a way that the 
@@ -78,25 +77,24 @@ def get_eval_score(
             targets = output_tokenizer(
                 target_texts[i:i+batch_size], 
                 return_tensors='pt', 
-                padding=True,
+                padding='max_length',
+                truncation=True,
+                max_length=MAX_GENERATION_LENGTH,
                 add_special_tokens=False # we don't want to add special tokens to the target as it continues from the context and already contains eos token.
-            ) # this will put padding to the right
-
-            # get the max length of the input by subtracting the length of the targets from the max length
-            max_input_len = max_len - targets['input_ids'].shape[1]
+            ) # this will put padding to the right and truncate if necessary
 
             inputs = input_tokenizer(
                 contexts[i:i+batch_size], 
                 return_tensors='pt', 
-                padding=True,
+                padding='max_length',
                 truncation=True, 
-                max_length=max_input_len,
+                max_length=max_len - MAX_GENERATION_LENGTH,
                 add_special_tokens=True,
             ) # this will put padding to the left and truncate the input if it is too long
 
-            # concatenate the inputs and targets and their attention masks
-            input_ids = torch.cat([inputs['input_ids'], targets['input_ids']], dim=1).to('cuda')
-            attention_mask = torch.cat([inputs['attention_mask'], targets['attention_mask']], dim=1).to('cuda')
+            # concatenate the inputs and targets and their attention masks using torch.cat
+            input_ids = torch.cat((inputs['input_ids'], targets['input_ids']), dim=1).to('cuda')
+            attention_mask = torch.cat((inputs['attention_mask'], targets['attention_mask']), dim=1).to('cuda')
 
             if input_ids.shape[1] > max_len:
                 print(f"Input sequence length is greater than the maximum length the model can handle: {input_ids.shape[1]}")
@@ -197,7 +195,8 @@ def get_eval_score(
             count += 1
             
             # delete the tensors to free up memory
-            del outputs, input_ids, attention_mask, targets_ids_mask, probabilities, token_probabilities
+            del outputs, targets_ids_mask, probabilities, token_probabilities, one_gram_probabilities, two_gram_probabilities, three_gram_probabilities
+            del four_gram_probabilities, n_gram_prob, mask, top_prob_indices, top_k_logits, top_k_indices, inputs, targets
             gc.collect()
             torch.cuda.empty_cache()
     
@@ -208,10 +207,10 @@ def get_eval_score(
     return average_prob
 
 
-def _prepare_dummy_inputs(model, device='cpu'):
+def _prepare_dummy_inputs(model, device='cuda'):
     max_model_len = min(model.config.max_position_embeddings, MAX_SEQ_LEN)
-    input_ids = torch.randint(0, model.config.vocab_size, (BATCH_SIZE, max_model_len), requires_grad=False, dtype=torch.int64).to(device)
-    attention_mask = torch.ones_like(input_ids, requires_grad=False, dtype=torch.int64)
+    input_ids = torch.randint(0, model.config.vocab_size, (BATCH_SIZE, max_model_len), requires_grad=False, dtype=torch.int64, device=device)
+    attention_mask = torch.ones_like(input_ids, requires_grad=False, dtype=torch.int64, device=device)
     return input_ids, attention_mask
 
 def warmup_model(model):
@@ -295,10 +294,10 @@ def eval_score(request: EvaluateModelRequest):
         model = AutoModelForCausalLM.from_pretrained(
             f"{request.repo_namespace}/{request.repo_name}",
             revision=request.revision,
-            device_map='auto',
             quantization_config=quant_config,
             attn_implementation="flash_attention_2",
             torch_dtype=torch.bfloat16,
+            device_map='auto',
             # cache_dir=f"data/{str(request.hash)}",
             # force_download=True
         )
@@ -309,7 +308,7 @@ def eval_score(request: EvaluateModelRequest):
             model = AutoModelForCausalLM.from_pretrained(
                 f"{request.repo_namespace}/{request.repo_name}",
                 revision=request.revision,
-                low_cpu_mem_usage=True,
+                device_map='auto',
                 # cache_dir = f"data/{str(request.hash)}",
                 # force_download=True
             )

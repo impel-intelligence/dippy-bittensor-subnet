@@ -37,7 +37,7 @@ BATCH_SIZE = 4 # batch size for evaluation
 VOCAB_TRUNCATION = 1000 # truncate the vocab to top n tokens
 PROB_TOP_K = 10 # the correct token should be in the top n tokens, else a score of 0 is given to that token
 # TODO: this will truncate the sequence to MAX_SEQ_LEN tokens. This is a temporary fix to make the evaluation faster.
-MAX_SEQ_LEN = 4000 # maximum sequence length that should be allowed because eval gets really slow with longer sequences than this
+MAX_SEQ_LEN = 4096 # maximum sequence length that should be allowed because eval gets really slow with longer sequences than this
 
 MAX_SEQ_LEN_VIBE_SCORE = 2048 # maximum sequence length that should be allowed for vibe score calculation because it is slow with longer sequences than this
 BATCH_SIZE_VIBE_SCORE = 4 # batch size for vibe score calculation
@@ -165,7 +165,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         except Exception as e:
             if time.time() - start_time > 30:
                 # update leaderboard status to failed
-                update_leaderboard_status(request.hash, "FAILED", "Error calling eval_score API with message: " + eval_score_response.text)
+                update_leaderboard_status(request.hash, "FAILED", "Error calling eval_score API with message: " + eval_score_response.content)
                 try:
                     shutdown_response = requests.post("http://localhost:8001/shutdown", timeout=1)
                 except Exception as e:
@@ -199,8 +199,8 @@ def evaluate_model_logic(request: EvaluateModelRequest):
                 shutdown_response = requests.post("http://localhost:8002/shutdown", timeout=1)
             except Exception as e:
                 pass
-            update_leaderboard_status(request.hash, "FAILED", "Error calling vibe_score API with message: " + vibe_score_response.text)
-            raise RuntimeError(f"Error calling vibe_score API: {vibe_score_response.text}")
+            update_leaderboard_status(request.hash, "FAILED", "Error calling vibe_score API with message: " + vibe_score_response.content)
+            raise HTTPException(status_code=500, detail=f"Error calling vibe_score API: {vibe_score_response.content}")
         time.sleep(1)  # Wait for 1 second before retrying
     
     # Call the shutdown endpoint to restart the vibe_score_api for the next evaluation to avoid memory leaks that were observed with loading and unloading different models
@@ -213,7 +213,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     vibe_score = vibe_score_response.json()["vibe_score"]
 
     if eval_score is None or latency_score is None or model_size_score is None or vibe_score is None:
-        raise RuntimeError("Error calculating scores, one or more scores are None")
+        raise HTTPException(status_code=500, detail="Error calculating scores, one or more scores are None")
     
     total_score = model_size_score * MODEL_SIZE_SCORE_WEIGHT
     total_score += eval_score * QUALITATIVE_SCORE_WEIGHT
