@@ -130,6 +130,12 @@ chmod +x start_validation_service.sh
 ./start_validation_service.sh
 ```
 
+#### Stop
+```
+chmod +x kill_validation_api.sh
+./kill_validation_api.sh
+```
+
 ## Model Evaluation Criteria
 ### Model Size
 A smaller model will score higher than a big model. Model size is the disk space occupied by the model repo from HF. The max model size is limited to 18GB.
