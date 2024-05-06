@@ -115,8 +115,12 @@ The themes of the conversation are: {data_point['categories']}."""
             messages=self.dataset[idx]['messages'],
             include_beginning_of_conversation=True,
             add_generation_prompt=True
-        )
+        ) # shouldn't end with eos token
+        
+        if chat_input.endswith(self._tokenizer.eos_token):
+            chat_input = chat_input[:-len(self._tokenizer.eos_token)]
 
+        assert chat_input.startswith(self._tokenizer.bos_token)
         return chat_input, f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}", self.dataset[idx]['last_user_message']
     
     def sample_dataset(self, n: int):

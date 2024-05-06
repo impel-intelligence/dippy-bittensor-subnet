@@ -1,11 +1,14 @@
 import requests
 from utilities.validation_utils import regenerate_hash
 
+
+llm = 'lmsys/vicuna-13b-v1.5'
+
 def test_evaluate_model():
     # Define the request payload
     request_payload = {
-        "repo_namespace": "Manavshah",
-        "repo_name": "llama-test",
+        "repo_namespace": llm.split('/')[0],
+        "repo_name": llm.split('/')[1],
         "chat_template_type": "vicuna",
         "hash": None,
         "revision": "main",
