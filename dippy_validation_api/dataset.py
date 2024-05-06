@@ -120,7 +120,9 @@ The themes of the conversation are: {data_point['categories']}."""
         if chat_input.endswith(self._tokenizer.eos_token):
             chat_input = chat_input[:-len(self._tokenizer.eos_token)]
 
-        assert chat_input.startswith(self._tokenizer.bos_token)
+        if not chat_input.startswith(self._tokenizer.bos_token):
+            chat_input = f"{self._tokenizer.bos_token}{chat_input}"
+
         return chat_input, f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}", self.dataset[idx]['last_user_message']
     
     def sample_dataset(self, n: int):

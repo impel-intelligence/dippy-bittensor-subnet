@@ -5,7 +5,7 @@
   {%- set loop_messages = messages %}
   {%- set system_message = '' %}
 {%- endif %}
-{{- system_message }}
+{{- bos_token + system_message }}
 {%- if include_beginning_of_conversation %}
 {{ 'BEGINNING OF CONVERSATION:' }}
 {%- endif %}
