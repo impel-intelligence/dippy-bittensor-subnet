@@ -123,6 +123,7 @@ def get_eval_score(
                 outputs = model(
                     input_ids=input_ids, 
                     attention_mask=attention_mask,
+                    use_cache=False, # don't use cache as we are not generating text. To prevent bug for Mistral models
                 )
             except Exception as e:
                 print("Error getting model predictions for sequence length: ", input_ids.shape[1], " batch size: ", input_ids.shape[0])
