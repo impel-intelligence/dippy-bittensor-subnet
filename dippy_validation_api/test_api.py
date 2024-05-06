@@ -2,7 +2,7 @@ import requests
 from utilities.validation_utils import regenerate_hash
 
 
-llm = 'lmsys/vicuna-13b-v1.5'
+llm = 'core42/jais-13b'
 
 def test_evaluate_model():
     # Define the request payload
