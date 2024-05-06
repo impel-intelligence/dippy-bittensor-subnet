@@ -55,6 +55,11 @@ The themes of the conversation are: {data_point['categories']}."""
             # get index of the last message from the chatbot
             last_message_index = 0
             input_len_so_far = len(encoding.encode(messages[0]['content'] + messages[1]['content']))
+            
+            if input_len_so_far > max_input_len:
+                # skip this data point
+                continue
+
             for i, message in enumerate(data_point['conversation']):
                 input_len_so_far += len(encoding.encode(message['message']))
                 if input_len_so_far > max_input_len:
@@ -82,11 +87,12 @@ The themes of the conversation are: {data_point['categories']}."""
                     )
             
             character_response = data_point['conversation'][last_message_index]['message']
+            last_user_message = messages[last_user_message_index]['content']
 
             converted_dataset.append(
                 {
                     'messages': messages,
-                    'last_user_message': messages[last_user_message_index]['content'], # get the last user message
+                    'last_user_message': last_user_message, # get the last user message
                     'character_response': character_response
                 }
             )
@@ -109,8 +115,12 @@ The themes of the conversation are: {data_point['categories']}."""
             messages=self.dataset[idx]['messages'],
             include_beginning_of_conversation=True,
             add_generation_prompt=True
-        )
+        ) # shouldn't end with eos token
+        
+        if chat_input.endswith(self._tokenizer.eos_token):
+            chat_input = chat_input[:-len(self._tokenizer.eos_token)]
 
+        assert chat_input.startswith(self._tokenizer.bos_token)
         return chat_input, f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}", self.dataset[idx]['last_user_message']
     
     def sample_dataset(self, n: int):

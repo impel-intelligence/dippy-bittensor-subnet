@@ -13,9 +13,10 @@ login(
     token=os.environ["HF_ACCESS_TOKEN"],
 )
 
-model_name = 'cognitivecomputations/dolphin-2.9-llama3-8b'
+
+model_name = 'lmsys/vicuna-13b-v1.5'
 save_path = 'bittensor_models'
-model_dir_name = 'llama4-dolphin-8B'
+model_dir_name = model_name.split('/')[1]
 
 print(f"Loading model {model_name}")
 # Load the tokenizer and model

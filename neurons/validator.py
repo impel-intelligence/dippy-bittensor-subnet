@@ -45,7 +45,6 @@ import multiprocessing
 from rich.table import Table
 from rich.console import Console
 
-import bittensor as bt
 from utilities.miner_iterator import MinerIterator
 from utilities import utils
 from utilities.perf_monitor import PerfMonitor

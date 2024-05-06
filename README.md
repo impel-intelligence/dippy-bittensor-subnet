@@ -62,7 +62,6 @@ testing and benchmarking protocols with state-of-the-art datasets.
 ## Running Miners and Validators
 ### Running a Miner
 
-
 #### Requirements
 - Python 3.8+
 - GPU with at least 24 GB of VRAM
@@ -92,7 +91,7 @@ python3 dippy_subnet/upload_model.py --hf_repo_id HF_REPO --wallet.name WALLET  
 ### Running a Validator
 
 #### Requirements
-- Python 3.8+
+- Python 3.9+
 
 #### Setup
 To start, clone the repository and `cd` to it:
@@ -106,6 +105,30 @@ To run the evaluation, simply use the following command:
 ```
 python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME
 ```
+
+### Running the model evaluation api
+
+### Requirements
+- Python 3.9+
+- Linux
+
+#### Setup
+To start, clone the repository and `cd` into it:
+```
+git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
+cd dippy-bittensor-subnet
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+pip install -r requirements_val_api.txt
+cd dippy_validation_api
+chmod +x start_validation_service.sh
+./start_validation_service.sh
+```
+
+### Run
+```
+
 
 ## Model Evaluation Criteria
 ### Model Size

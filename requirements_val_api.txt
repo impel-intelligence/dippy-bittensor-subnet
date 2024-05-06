@@ -1,11 +1,12 @@
-pydantic
+vllm==0.4.1
+pydantic >= 2.0
 transformers
 torch
+accelerate
+bitsandbytes
 pandas
 sentencepiece
 protobuf
 python-dotenv
 supabase
 tiktoken
-bittensor
-threadpoolctl
