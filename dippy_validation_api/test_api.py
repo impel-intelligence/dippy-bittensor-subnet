@@ -2,7 +2,7 @@ import requests
 from utilities.validation_utils import regenerate_hash
 
 
-llm = 'core42/jais-13b'
+llm = 'Manavshah/gpt2-safetensors'
 
 def test_evaluate_model():
     # Define the request payload

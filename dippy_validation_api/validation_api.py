@@ -45,38 +45,9 @@ MAX_SEQ_LEN_VIBE_SCORE = 2048 # maximum sequence length that should be allowed f
 BATCH_SIZE_VIBE_SCORE = 4 # batch size for vibe score calculation
 SAMPLE_SIZE_VIBE_SCORE = 128 # number of samples to evaluate the model from the dataset for vibe score calculation
 
-SAVE_REMOTE = True # Save the leaderboard to Supabase 
 
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_KEY")
-try:
-    supabase_client = create_client(supabase_url, supabase_key)
-except Exception as e:
-    logger.warning(f"Failed to create Supabase client: {e}. Leaderboard will only be saved locally.")
-    supabase_client = None
-    SAVE_REMOTE = False
 
 leaderboard_file = 'leaderboard.csv'
-
-# if the leaderboard file does not exist, create it with proper columns
-columns = ['hash', 'repo_namespace', 'repo_name', 'chat_template_type', 'model_size_score', 'qualitative_score', 'latency_score', 'vibe_score', 'total_score', 'timestamp', 'status', 'notes']
-if not os.path.exists(leaderboard_file):
-    # fetch from supabase
-    try:
-        if SAVE_REMOTE:
-            leaderboard = supabase_client.table("leaderboard").select("*").execute().get('data')
-            if leaderboard:
-                leaderboard = pd.DataFrame(leaderboard)
-                leaderboard.to_csv(leaderboard_file, index=False)
-            else:
-                raise Exception("No data found in Supabase")
-        else:
-            leaderboard = pd.DataFrame(columns=columns)
-            leaderboard.to_csv(leaderboard_file, index=False)
-    except Exception as e:
-        logger.error(f"Error fetching leaderboard from Supabase: {e}")
-        leaderboard = pd.DataFrame(columns=columns)
-        leaderboard.to_csv(leaderboard_file, index=False)
 
 class EvaluateModelRequest(BaseModel):
     repo_namespace: str
@@ -87,6 +58,7 @@ class EvaluateModelRequest(BaseModel):
     competition_id: Optional[str] = "d1"
 
 app = FastAPI()
+app.SAVE_REMOTE = False # Save the leaderboard to Supabase 
 
 chat_template_mappings = {
     "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
@@ -116,7 +88,7 @@ def get_leaderboard() -> pd.DataFrame:
     leaderboard = leaderboard.where(pd.notnull(leaderboard), None)
     return leaderboard
 
-def save_leaderboard(leaderboard: pd.DataFrame, hash=None, save_remote=SAVE_REMOTE):
+def save_leaderboard(leaderboard: pd.DataFrame, hash=None, save_remote=False):
     leaderboard.to_csv(leaderboard_file, index=False)
     if hash is not None:
         leaderboard_row = leaderboard[leaderboard['hash'] == hash].iloc[0]
@@ -148,6 +120,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     Evaluate a model based on the model size and the quality of the model.
     """
     leaderboard = get_leaderboard()
+    
     if not (leaderboard['hash'] == request.hash).any():
         logger.debug(leaderboard)
         logger.debug(leaderboard['hash'])
@@ -236,7 +209,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
         leaderboard.loc[leaderboard['hash'] == request.hash, 'total_score'] = float(total_score)
         leaderboard.loc[leaderboard['hash'] == request.hash, 'status'] = "COMPLETED"
         leaderboard.loc[leaderboard['hash'] == request.hash, 'notes'] = ""
-        save_leaderboard(leaderboard, request.hash, SAVE_REMOTE)
+        save_leaderboard(leaderboard, request.hash, app.SAVE_REMOTE)
     except Exception as e:
         failure_reason = str(e)
         update_leaderboard_status(request.hash, "FAILED", failure_reason)
@@ -256,7 +229,7 @@ def update_leaderboard_status(hash, status, notes=""):
         leaderboard.loc[leaderboard['hash'] == hash, 'status'] = status
         if notes:
             leaderboard.loc[leaderboard['hash'] == hash, 'notes'] = notes
-        save_leaderboard(leaderboard, hash, SAVE_REMOTE)
+        save_leaderboard(leaderboard, hash, app.SAVE_REMOTE)
     except Exception as e:
         logger.error(f"Error updating leaderboard status for {hash}: {e}")
 
@@ -339,7 +312,7 @@ def evaluate_model(request: EvaluateModelRequest):
         "notes": ""
     }])
     leaderboard = pd.concat([leaderboard, new_entry], ignore_index=True)
-    save_leaderboard(leaderboard, request.hash, SAVE_REMOTE)
+    save_leaderboard(leaderboard, request.hash, app.SAVE_REMOTE)
     
     # Add the evaluation task to the queue
     evaluation_queue.put(request)
@@ -361,10 +334,40 @@ if __name__ == "__main__":
 
     # Set up command line argument parsing
     parser = argparse.ArgumentParser(description="Run the server")
-    parser.add_argument("--no-remote", action="store_false", help="Disable remote saving")
+    parser.add_argument("--save-remote", action="store_true", help="Enable remote saving")
     args = parser.parse_args()
 
-    SAVE_REMOTE = args.no_remote
+    app.SAVE_REMOTE = args.save_remote
+
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    try:
+        supabase_client = create_client(supabase_url, supabase_key)
+    except Exception as e:
+        logger.warning(f"Failed to create Supabase client: {e}. Leaderboard will only be saved locally.")
+        supabase_client = None
+        app.SAVE_REMOTE = False
+        
+
+    # if the leaderboard file does not exist, create it with proper columns
+    columns = ['hash', 'repo_namespace', 'repo_name', 'chat_template_type', 'model_size_score', 'qualitative_score', 'latency_score', 'vibe_score', 'total_score', 'timestamp', 'status', 'notes']
+    if not os.path.exists(leaderboard_file):
+        # fetch from supabase
+        try:
+            if app.SAVE_REMOTE:
+                leaderboard = supabase_client.table("leaderboard").select("*").execute().get('data')
+                if leaderboard:
+                    leaderboard = pd.DataFrame(leaderboard)
+                    leaderboard.to_csv(leaderboard_file, index=False)
+                else:
+                    raise Exception("No data found in Supabase")
+            else:
+                leaderboard = pd.DataFrame(columns=columns)
+                leaderboard.to_csv(leaderboard_file, index=False)
+        except Exception as e:
+            logger.error(f"Error fetching leaderboard from Supabase: {e}")
+            leaderboard = pd.DataFrame(columns=columns)
+            leaderboard.to_csv(leaderboard_file, index=False)
 
     try:
         logger.info("Starting evaluation thread")
@@ -385,7 +388,7 @@ if __name__ == "__main__":
         # remove any rows with status QUEUED
         leaderboard = get_leaderboard()
         leaderboard = leaderboard[leaderboard['status'] != 'QUEUED']
-        save_leaderboard(leaderboard, None, SAVE_REMOTE)
+        save_leaderboard(leaderboard, None, app.SAVE_REMOTE)
         # add a sentinel to the queue to stop the thread
         evaluation_queue.put(None)
         evaluation_process.join()
@@ -393,5 +396,5 @@ if __name__ == "__main__":
         # remove any RUNNING status
         leaderboard = get_leaderboard()
         leaderboard = leaderboard[leaderboard['status'] != 'RUNNING']
-        save_leaderboard(leaderboard, None, SAVE_REMOTE)
+        save_leaderboard(leaderboard, None, app.SAVE_REMOTE)
         logger.info("API server and evaluation thread have been stopped")
