@@ -14,6 +14,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.logger import logger
 from supabase import create_client
 
+logger.setLevel("INFO")
+
 from utilities.validation_utils import regenerate_hash, check_model_repo_size, get_model_size
 
 from dotenv import load_dotenv
@@ -47,7 +49,12 @@ SAVE_REMOTE = True # Save the leaderboard to Supabase
 
 supabase_url = os.getenv("SUPABASE_URL")
 supabase_key = os.getenv("SUPABASE_KEY")
-supabase_client = create_client(supabase_url, supabase_key)
+try:
+    supabase_client = create_client(supabase_url, supabase_key)
+except Exception as e:
+    logger.warning(f"Failed to create Supabase client: {e}. Leaderboard will only be saved locally.")
+    supabase_client = None
+    SAVE_REMOTE = False
 
 leaderboard_file = 'leaderboard.csv'
 
