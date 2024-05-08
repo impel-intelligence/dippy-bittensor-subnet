@@ -119,7 +119,7 @@ git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
 cd dippy-bittensor-subnet
 python3 -m venv venv
 source venv/bin/activate
-pip install -e .
+pip install -e . --no-deps
 pip install -r requirements_val_api.txt
 ```
 
