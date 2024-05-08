@@ -316,7 +316,7 @@ def evaluate_model(request: EvaluateModelRequest):
     model_size = get_model_size(request.repo_namespace, request.repo_name)
     if model_size is None:
         model_size = 0
-        # raise HTTPException(status_code=400, detail="Error getting model size. Make sure the model.index.safetensors.json file exists in the model repository. And it has the metadata->total_size field.")
+        raise HTTPException(status_code=400, detail="Error getting model size. Make sure the model.index.safetensors.json file exists in the model repository. And it has the metadata->total_size field.")
 
     if (model_size // 4) > MAX_MODEL_SIZE:
         logger.error(f"Model size is too large: {model_size} bytes. Should be less than {MAX_MODEL_SIZE} bytes")
