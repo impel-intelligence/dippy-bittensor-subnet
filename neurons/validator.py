@@ -827,32 +827,33 @@ class Validator:
         bt.logging.warning(f"Step results: {step_log}")
 
     async def run(self):
-        try:
-            while (
-                self.metagraph.block.item() - self.last_epoch
-                < self.config.blocks_per_epoch
-            ):
-                await self.try_run_step(ttl=60 * 20)
-                bt.logging.debug(
-                    f"{self.metagraph.block.item() - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
+        while True:
+            try:
+                while (
+                    self.metagraph.block.item() - self.last_epoch
+                    < self.config.blocks_per_epoch
+                ):
+                    await self.try_run_step(ttl=60 * 20)
+                    bt.logging.debug(
+                        f"{self.metagraph.block.item() - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
+                    )
+                    self.global_step += 1
+
+                if not self.config.dont_set_weights and not self.config.offline:
+                    await self.try_set_weights(ttl=120)
+                self.last_epoch = self.metagraph.block.item()
+                self.epoch_step += 1
+
+            except KeyboardInterrupt:
+                bt.logging.info(
+                    "KeyboardInterrupt caught"
                 )
-                self.global_step += 1
+                exit()
 
-            if not self.config.dont_set_weights and not self.config.offline:
-                await self.try_set_weights(ttl=120)
-            self.last_epoch = self.metagraph.block.item()
-            self.epoch_step += 1
-
-        except KeyboardInterrupt:
-            bt.logging.info(
-                "KeyboardInterrupt caught"
-            )
-            exit()
-
-        except Exception as e:
-            bt.logging.error(
-                f"Error in validator loop \n {e} \n {traceback.format_exc()}"
-            )
+            except Exception as e:
+                bt.logging.error(
+                    f"Error in validator loop \n {e} \n {traceback.format_exc()}"
+                )
 
 def get_model_score(namespace, name, hash, config):
     # Status:
