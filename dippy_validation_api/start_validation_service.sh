@@ -6,6 +6,27 @@ mkdir -p log
 # Virtual environment name
 VENV_NAME="model_validation_venv"
 
+# Function to check if a port is in use
+is_port_in_use() {
+    local port=$1
+    netstat -tuln | grep ":$port" > /dev/null
+}
+
+# Function to exit if any port is in use
+exit_if_port_in_use() {
+    local service_name=$1
+    local port=$2
+    if is_port_in_use $port; then
+        echo "Port $port is already in use. Cannot start $service_name."
+        exit 1
+    fi
+}
+
+# Check if ports are already in use before starting services
+exit_if_port_in_use "validation_api" 8000
+exit_if_port_in_use "eval_score_api" 8001
+exit_if_port_in_use "vibe_score_api" 8002
+
 # Function to restart a service
 restart_service() {
     local service_name=$1
@@ -13,16 +34,26 @@ restart_service() {
     local log_file=$3
     local pid_file=$4
     local loop_pid_file=$5
+    local port=$6
 
     echo $$ > $loop_pid_file  # Store the PID of the loop process
 
     while true; do
-        echo "Starting $service_name..."
-        ./../$VENV_NAME/bin/python3 $service_script >> $log_file 2>&1 &
-        local pid=$!
-        echo $pid > $pid_file
-        wait $pid
-        echo "$service_name has stopped. Restarting..."
+        if is_port_in_use $port; then
+            echo "Port $port is already in use. Cannot restart $service_name."
+            exit 1
+        else
+            echo "Starting $service_name..."
+            ./../$VENV_NAME/bin/python3 $service_script >> $log_file 2>&1 &
+            local pid=$!
+            echo $pid > $pid_file
+            wait $pid
+            if [ $? -ne 0 ]; then
+                echo "Service $service_name exited with a non-zero status. Not restarting."
+                break
+            fi
+            echo "$service_name has stopped. Restarting..."
+        fi
     done
 }
 
@@ -32,9 +63,9 @@ echo "Starting validation_api..."
 echo $! > log/validation_api.pid
 
 # Start the eval_score_api in a loop to restart after each request
-restart_service "eval_score_api" "eval_score_api.py" "log/eval_score_api.log" "log/eval_score_api.pid" "log/eval_score_api_loop.pid" &
+restart_service "eval_score_api" "eval_score_api.py" "log/eval_score_api.log" "log/eval_score_api.pid" "log/eval_score_api_loop.pid" 8001 &
 
 # Start the vibe_score_api in a loop to restart after each request
-restart_service "vibe_score_api" "vibe_score_api.py" "log/vibe_score_api.log" "log/vibe_score_api.pid" "log/vibe_score_api_loop.pid" &
+restart_service "vibe_score_api" "vibe_score_api.py" "log/vibe_score_api.log" "log/vibe_score_api.pid" "log/vibe_score_api_loop.pid" 8002 &
 
 echo "All APIs are running in the background."

@@ -138,6 +138,7 @@ cd dippy-bittensor-subnet
 python3 -m venv model_validation_venv
 model_validation_venv/bin/pip install -e . --no-deps
 model_validation_venv/bin/pip install -r requirements_val_api.txt
+sudo apt-get install git-lfs -y
 ```
 
 #### Run model validation API service
