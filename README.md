@@ -34,7 +34,7 @@ Our team at Impel Intelligence Inc. knows this issue intimately through building
 Given the complexity of creating a state of the art roleplay LLM, we plan to divide the process into 3 distinct phases.
 
 **Phase 1:** 
-- [ ] Subnet launch with robust pipeline for roleplay LLM evaluation on public datasets and response length 
+- [x] Subnet launch with robust pipeline for roleplay LLM evaluation on public datasets and response length 
 - [ ] New, evolving evaluation datasets curated by community as well as contributed by Dippy's mobile app users
 - [ ] Public model leaderboard based on evaluation criteria
 
