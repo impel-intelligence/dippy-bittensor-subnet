@@ -24,8 +24,8 @@ exit_if_port_in_use() {
 
 # Check if ports are already in use before starting services
 exit_if_port_in_use "validation_api" 8000
-exit_if_port_in_use "eval_score_api" 8001
-exit_if_port_in_use "vibe_score_api" 8002
+exit_if_port_in_use "eval_score_api" 8002
+exit_if_port_in_use "vibe_score_api" 8003
 
 # Function to restart a service
 restart_service() {
@@ -63,9 +63,9 @@ echo "Starting validation_api..."
 echo $! > log/validation_api.pid
 
 # Start the eval_score_api in a loop to restart after each request
-restart_service "eval_score_api" "eval_score_api.py" "log/eval_score_api.log" "log/eval_score_api.pid" "log/eval_score_api_loop.pid" 8001 &
+restart_service "eval_score_api" "eval_score_api.py" "log/eval_score_api.log" "log/eval_score_api.pid" "log/eval_score_api_loop.pid" 8002 &
 
 # Start the vibe_score_api in a loop to restart after each request
-restart_service "vibe_score_api" "vibe_score_api.py" "log/vibe_score_api.log" "log/vibe_score_api.pid" "log/vibe_score_api_loop.pid" 8002 &
+restart_service "vibe_score_api" "vibe_score_api.py" "log/vibe_score_api.log" "log/vibe_score_api.pid" "log/vibe_score_api_loop.pid" 8003 &
 
 echo "All APIs are running in the background."

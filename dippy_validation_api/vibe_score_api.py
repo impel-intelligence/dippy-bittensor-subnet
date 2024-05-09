@@ -7,7 +7,7 @@ import gc
 import ray
 from vllm.distributed.parallel_state import destroy_model_parallel
 from dippy_validation_api.dataset import PippaDataset
-
+import huggingface_hub
 
 
 # Import necessary modules and functions from the main API file
@@ -23,6 +23,12 @@ from dippy_validation_api.validation_api import (
 )
 
 app = FastAPI()
+
+if not os.path.exists("data"):
+    os.makedirs("data")
+# download the file pippa_deduped.jsonl from huggingface
+if not os.path.exists("data/pippa_deduped.jsonl"):
+    huggingface_hub.hf_hub_download(repo_id="PygmalionAI/PIPPA", filename="pippa_deduped.jsonl", repo_type="dataset", local_dir = "data")
 
 vibe_score_dataset = PippaDataset("data/pippa_deduped.jsonl", max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200)
 
@@ -125,4 +131,4 @@ def shutdown():
 if __name__ == "__main__":
     # The multiprocessing setup and uvicorn server run command will be similar to the main API file.
     import uvicorn
-    uvicorn.run(app, host="localhost", port=8002, timeout_keep_alive=960)
+    uvicorn.run(app, host="0.0.0.0", port=8003, timeout_keep_alive=960)

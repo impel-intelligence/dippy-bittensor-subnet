@@ -422,4 +422,4 @@ if __name__ == "__main__":
     import uvicorn
     # launch the api only if main process
     if PartialState().is_main_process:
-        uvicorn.run(app, host="localhost", port=8001, timeout_keep_alive=960)
+        uvicorn.run(app, host="0.0.0.0", port=8002, timeout_keep_alive=960)
