@@ -22,7 +22,7 @@ class CompetitionParameters:
 VALIDATION_SERVER = "http://34.41.206.211:8000"
 
 # The uid for this subnet.
-SUBNET_UID = 135
+SUBNET_UID = 11
 # The start block of this subnet
 SUBNET_START_BLOCK = 2635801
 # The root directory of this project.
