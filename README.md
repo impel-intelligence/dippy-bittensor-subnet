@@ -83,8 +83,8 @@ We outline the following criteria for Phase 1:
 
 Once you're happy with the performance of the model for the usecase of Roleplay, you can simply submit it to Hugging Face 🤗 and then use the following command:
 
-```
-python3 dippy_subnet/upload_model.py --hf_repo_id HF_REPO --wallet.name WALLET  --wallet.hotkey HOTKEY --subtensor.network test --chat_template MODEL_CHAT_TEMPLATE --model_dir PATH_TO_MODEL   
+```bash
+python3 dippy_subnet/upload_model.py --hf_repo_id HF_REPO --wallet.name WALLET  --wallet.hotkey HOTKEY --chat_template MODEL_CHAT_TEMPLATE --model_dir PATH_TO_MODEL   
 ```
 
 
@@ -103,7 +103,17 @@ pip install -e .
 To run the evaluation, simply use the following command:
 
 ``` 
-python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME
+python neurons/validator.py --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME
+```
+
+To run auto-updating validator with PM2 (recommended):
+```bash
+pm2 start auto_updating_validator.sh --name dippy-validator
+    --netuid {netuid} \
+    --wallet.name {wallet} \
+    --wallet.hotkey {hotkey} \
+    --axon.port {port} \
+    --logging.trace
 ```
 
 ### Running the model evaluation API (Optional)
@@ -119,7 +129,7 @@ Starting a validator using your local validator API requires starting validator 
 
 #### Setup
 To start, clone the repository and `cd` into it:
-```
+```bash
 git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
 cd dippy-bittensor-subnet
 python3 -m venv venv
@@ -129,7 +139,7 @@ pip install -r requirements_val_api.txt
 ```
 
 #### Run
-```
+```bash
 cd dippy_validation_api
 chmod +x start_validation_service.sh
 ./start_validation_service.sh
@@ -142,8 +152,8 @@ chmod +x kill_validation_api.sh
 ```
 
 #### Starting validator with local validator api
-```
-python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME --use-local-validation-api
+```bash
+python neurons/validator.py --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME --use-local-validation-api
 ```
 
 ## Model Evaluation Criteria
