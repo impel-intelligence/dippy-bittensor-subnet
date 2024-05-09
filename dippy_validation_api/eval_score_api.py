@@ -305,7 +305,7 @@ def eval_score(request: EvaluateModelRequest):
 
     except Exception as e:
         try:
-            print(f"Error loading model in 4 bit quant with flash attention.: {e}. Trying vanilla load.")
+            print(f"Error loading model in 4 bit quant with flash attention.: {e}. Trying vanilla load. This might cause OOM.")
             model = AutoModelForCausalLM.from_pretrained(
                 f"{request.repo_namespace}/{request.repo_name}",
                 revision=request.revision,

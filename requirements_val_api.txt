@@ -3,3 +3,5 @@ pydantic >= 2.0
 accelerate
 bitsandbytes
 supabase
+pandas
+threadpoolctl

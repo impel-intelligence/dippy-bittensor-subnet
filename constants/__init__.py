@@ -19,7 +19,7 @@ class CompetitionParameters:
 # ---------------------------------
 
 # Validation API hosted by SN Owner
-VALIDATION_SERVER = "http://35.238.83.136:8000"
+VALIDATION_SERVER = "http://34.41.206.211:8000"
 
 # The uid for this subnet.
 SUBNET_UID = 135
