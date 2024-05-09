@@ -3,6 +3,9 @@
 # Create a log directory if it doesn't exist
 mkdir -p log
 
+# Virtual environment name
+VENV_NAME="model_validation_venv"
+
 # Function to restart a service
 restart_service() {
     local service_name=$1
@@ -15,7 +18,7 @@ restart_service() {
 
     while true; do
         echo "Starting $service_name..."
-        ./../venv/bin/python3 $service_script >> $log_file 2>&1 &
+        ./../$VENV_NAME/bin/python3 $service_script >> $log_file 2>&1 &
         local pid=$!
         echo $pid > $pid_file
         wait $pid
@@ -25,7 +28,7 @@ restart_service() {
 
 # Start the validation_api
 echo "Starting validation_api..."
-./../venv/bin/python3 validation_api.py >> "log/validation_api.log" 2>&1 &
+./../$VENV_NAME/bin/python3 validation_api.py >> "log/validation_api.log" 2>&1 &
 echo $! > log/validation_api.pid
 
 # Start the eval_score_api in a loop to restart after each request

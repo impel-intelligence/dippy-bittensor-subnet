@@ -116,6 +116,9 @@ pm2 start auto_updating_validator.sh --name dippy-validator
     --logging.trace
 ```
 
+Please note that this validator will call the model validation service hosted by the dippy subnet owners. If you wish to run the model validation service locally, please follow the instructions below.
+
+
 ### Running the model evaluation API (Optional)
 
 Starting a validator using your local validator API requires starting validator with `--use-local-validation-api` flag. 
@@ -132,30 +135,31 @@ To start, clone the repository and `cd` into it:
 ```bash
 git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
 cd dippy-bittensor-subnet
-python3 -m venv venv
-source venv/bin/activate
-pip install -e . --no-deps
-pip install -r requirements_val_api.txt
+python3 -m venv model_validation_venv
+model_validation_venv/bin/pip install -e . --no-deps
+model_validation_venv/bin/pip install -r requirements_val_api.txt
 ```
 
-#### Run
+#### Run model validation API service
 ```bash
 cd dippy_validation_api
 chmod +x start_validation_service.sh
 ./start_validation_service.sh
 ```
 
-#### Stop
-```
+#### Stop model validation API service
+```bash
 chmod +x kill_validation_api.sh
 ./kill_validation_api.sh
 ```
 
-#### Starting validator with local validator api
+#### Running the validator with your own validation API service running locally
 ```bash
-python neurons/validator.py --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME --use-local-validation-api
+# Make a separate venv for the validator because of pydantic version conflict
+python -m venv validator_venv
+validator_venv/bin/pip install -e .
+validator_venv/bin/python neurons/validator.py --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME --use-local-validation-api
 ```
-
 ## Model Evaluation Criteria
 ### Model Size
 A smaller model will score higher than a big model. Model size is the disk space occupied by the model repo from HF. The max model size is limited to 18GB.

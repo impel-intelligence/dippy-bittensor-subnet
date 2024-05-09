@@ -1,3 +1,4 @@
+wheel
 vllm==0.4.1
 pydantic >= 2.0
 accelerate
