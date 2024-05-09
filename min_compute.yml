@@ -57,8 +57,8 @@ compute_spec:
 
     gpu:
       required: True                       # Does the application require a GPU?
-      min_vram: 80                         # Minimum GPU VRAM (GB)
-      recommended_vram: 80                 # Recommended GPU VRAM (GB)
+      min_vram: 80                         # Minimum GPU VRAM (GB) only if you want run the model validation service locally. You may use the hosted service that we provide :) Check README.md.
+      recommended_vram: 80                 # Recommended GPU VRAM (GB) if hosting model validation service locally. No GPU needed otherwise.
       cuda_cores: 1024                     # Minimum number of CUDA cores (if applicable)
       min_compute_capability: 6.0          # Minimum CUDA compute capability
       recommended_compute_capability: 7.0  # Recommended CUDA compute capability
