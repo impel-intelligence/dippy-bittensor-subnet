@@ -102,11 +102,16 @@ pip install -e .
 ```
 To run the evaluation, simply use the following command:
 
-```
+``` 
 python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME
 ```
 
-### Running the model evaluation api
+### Running the model evaluation API (Optional)
+
+Starting a validator using your local validator API requires starting validator with `--use-local-validation-api` flag. 
+
+**Note**: Validator API needs to be installed in a different venv than validator due to `pydantic` version conflict. 
+
 
 ### Requirements
 - Python 3.9+
@@ -134,6 +139,11 @@ chmod +x start_validation_service.sh
 ```
 chmod +x kill_validation_api.sh
 ./kill_validation_api.sh
+```
+
+#### Starting validator with local validator api
+```
+python neurons/validator.py --subtensor.network test --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME --use-local-validation-api
 ```
 
 ## Model Evaluation Criteria
