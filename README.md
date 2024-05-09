@@ -131,14 +131,22 @@ Starting a validator using your local validator API requires starting validator 
 - Linux
 
 #### Setup
+
+Install Git Lfs if not installed.
+
+```
+  curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+  sudo apt-get install git-lfs
+```
+
 To start, clone the repository and `cd` into it:
 ```bash
 git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
 cd dippy-bittensor-subnet
 python3 -m venv model_validation_venv
+source model_validation_venv/bin/activate
 model_validation_venv/bin/pip install -e . --no-deps
 model_validation_venv/bin/pip install -r requirements_val_api.txt
-sudo apt-get install git-lfs -y
 ```
 
 #### Run model validation API service
