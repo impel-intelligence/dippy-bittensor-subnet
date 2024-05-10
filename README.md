@@ -1,7 +1,10 @@
 <div align="center">
 
 # Dippy Subnet: Creating The World's Best Open-Source Roleplay LLM <!-- omit in toc -->
-[![DIPPY](/assests/Dippy.png)](https://dippy.ai)
+
+*News: We are now on the mainnet with uid 11! Please join the [Bittensor Discord](https://discord.com/channels/799672011265015819/1232378968187867147) and see us at Channel λ·lambda·11! Also, please check our [Launch Tweet](https://twitter.com/angad_ai) for our vision of creating the world's best open-source roleplay LLM.  05/10*
+
+[![DIPPY](/assests/banner.png)](https://dippy.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
 ---
@@ -23,9 +26,11 @@
 
 ## Introduction
 
+> **Note:** The following documentation assumes you are familiar with basic Bittensor concepts: Miners, Validators, and incentives. If you need a primer, please check out https://docs.bittensor.com/learn/bittensor-building-blocks.
+
 The Dippy Roleplay subnet on Bittensor aims to create the world's best open-source roleplay LLM by leveraging the collective efforts of the open-source community. This subnet addresses the critical issue of loneliness, which affects a significant portion of the population and is linked to various mental and physical health problems. 
 
-Current SOTA LLMs are designed for the assistant use case and lack the empathetic qualities necessary for companionship. While some companies (c.ai, chai, inflection etc) have developed closed-source roleplay LLMs, the open-source alternatives lag significantly behind in performance. 
+Current SOTA LLMs (Claude, OpenAI etc.) are designed for the assistant use case and lack the empathetic qualities necessary for companionship. While some companies (c.ai, chai, inflection etc) have developed closed-source roleplay LLMs, the open-source alternatives lag significantly behind in performance. 
 
 Our team at Impel Intelligence Inc. knows this issue intimately through building Dippy, a proactive AI companion app for iOS.  In this subnet, we will bring together the entire open-source eco-system to build the world’s best roleplay LLM.
 
@@ -190,7 +195,7 @@ A smaller model will score higher than a big model. Model size is the disk space
 A faster model will score higher than a slow model.
 
 ### Output Similarity
-Evaluted against datasets, a model that generates similiar resposne to groundtruth will score higher.
+Evaluated against datasets, a model that generates similiar resposne to groundtruth will score higher.
 
 ### Vibe Matching
 A model that can generate outputs with similiar length to its inputs will score higher.
