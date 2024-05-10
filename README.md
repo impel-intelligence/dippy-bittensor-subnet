@@ -1,7 +1,7 @@
 <div align="center">
 
 # Dippy Subnet: Creating The World's Best Open-Source Roleplay LLM <!-- omit in toc -->
-[![DIPPY](/assests/Dippy.png)](https://dippy.ai)
+[![DIPPY](/assests/banner.png)](https://dippy.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
 ---
