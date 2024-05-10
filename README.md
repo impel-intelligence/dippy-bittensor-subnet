@@ -133,10 +133,14 @@ Starting a validator using your local validator API requires starting validator 
 #### Setup
 
 Install Git Lfs if not installed.
-
+```bash
+curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+sudo apt-get install git-lfs
 ```
-  curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
-  sudo apt-get install git-lfs
+
+If you are running on runpod you might also need to install 'netstat'.
+```bash
+apt-get install net-tools
 ```
 
 To start, clone the repository and `cd` into it:
@@ -155,6 +159,14 @@ cd dippy_validation_api
 chmod +x start_validation_service.sh
 ./start_validation_service.sh
 ```
+
+### Test that it's working
+```bash
+python3 test_api.py
+```
+And you should see a json showing that the model status is "QUEUED"
+Running the same command again for sanity's sake, you should see the status of the model as "RUNNING".
+
 
 #### Stop model validation API service
 ```bash

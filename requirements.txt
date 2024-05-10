@@ -1,3 +1,4 @@
+bittensor
 pydantic
 transformers
 torch
@@ -7,5 +8,4 @@ protobuf
 python-dotenv
 supabase
 tiktoken
-bittensor
 threadpoolctl
