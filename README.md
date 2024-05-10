@@ -11,8 +11,6 @@
 
 </div>
 
-> **Note:** The following documentation assumes you are familiar with basic Bittensor concepts: Miners, Validators, and incentives. If you need a primer, please check out https://docs.bittensor.com/learn/bittensor-building-blocks.
-
 - [Introduction](#introduction)
 - [Roadmap](#roadmap)
 - [Overview of Miner and Validator Functionality](#overview-of-miner-and-validator-functionality)
@@ -28,7 +26,7 @@
 
 ## Introduction
 
-
+> **Note:** The following documentation assumes you are familiar with basic Bittensor concepts: Miners, Validators, and incentives. If you need a primer, please check out https://docs.bittensor.com/learn/bittensor-building-blocks.
 
 The Dippy Roleplay subnet on Bittensor aims to create the world's best open-source roleplay LLM by leveraging the collective efforts of the open-source community. This subnet addresses the critical issue of loneliness, which affects a significant portion of the population and is linked to various mental and physical health problems. 
 
