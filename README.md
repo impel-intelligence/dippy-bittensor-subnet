@@ -183,7 +183,7 @@ A smaller model will score higher than a big model. Model size is the disk space
 A faster model will score higher than a slow model.
 
 ### Output Similarity
-Evaluted against datasets, a model that generates similiar resposne to groundtruth will score higher.
+Evaluated against datasets, a model that generates similiar resposne to groundtruth will score higher.
 
 ### Vibe Matching
 A model that can generate outputs with similiar length to its inputs will score higher.
