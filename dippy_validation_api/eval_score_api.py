@@ -418,8 +418,13 @@ def shutdown():
 
 
 if __name__ == "__main__":
-    # The multiprocessing setup and uvicorn server run command will be similar to the main API file.
+    # get command line argument for port 
+    import sys
+    if len(sys.argv) > 1:
+        port = int(sys.argv[1])
+    else:
+        port = 8001
     import uvicorn
     # launch the api only if main process
     if PartialState().is_main_process:
-        uvicorn.run(app, host="0.0.0.0", port=8002, timeout_keep_alive=960)
+        uvicorn.run(app, host="0.0.0.0", port=8001, timeout_keep_alive=960)

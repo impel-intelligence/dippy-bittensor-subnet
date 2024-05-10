@@ -88,6 +88,7 @@ We outline the following criteria for Phase 1:
 - Models MUST be Safetensors Format! Check upload_models.py for how the model upload precheck works.
 - Please test the model by loading model using transformers.AutoModelForCausalLM.from_pretrained
 - (Recommended) Test the model with arbitrary inputs, before submitting, to check for NaNs.
+- Models we are conf
 
 Once you're happy with the performance of the model for the usecase of Roleplay, you can simply submit it to Hugging Face 🤗 and then use the following command:
 

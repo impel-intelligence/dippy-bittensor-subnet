@@ -129,6 +129,7 @@ def shutdown():
     
 
 if __name__ == "__main__":
-    # The multiprocessing setup and uvicorn server run command will be similar to the main API file.
+    import sys
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8003, timeout_keep_alive=960)
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8002
+    uvicorn.run(app, host="0.0.0.0", port=port, timeout_keep_alive=960)

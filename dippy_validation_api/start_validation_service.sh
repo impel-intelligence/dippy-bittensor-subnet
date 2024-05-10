@@ -22,10 +22,14 @@ exit_if_port_in_use() {
     fi
 }
 
+# Define ports for services
+EVAL_SCORE_API_PORT=8001
+VIBE_SCORE_API_PORT=8002
+VALIDATION_API_PORT=8000
 # Check if ports are already in use before starting services
-exit_if_port_in_use "validation_api" 8000
-exit_if_port_in_use "eval_score_api" 8002
-exit_if_port_in_use "vibe_score_api" 8003
+exit_if_port_in_use "validation_api" $VALIDATION_API_PORT
+exit_if_port_in_use "eval_score_api" $EVAL_SCORE_API_PORT
+exit_if_port_in_use "vibe_score_api" $VIBE_SCORE_API_PORT
 
 # Function to restart a service
 restart_service() {
@@ -44,7 +48,7 @@ restart_service() {
             exit 1
         else
             echo "Starting $service_name..."
-            ./../$VENV_NAME/bin/python3 $service_script >> $log_file 2>&1 &
+            ./../$VENV_NAME/bin/python3 $service_script $port >> $log_file 2>&1 &
             local pid=$!
             echo $pid > $pid_file
             wait $pid
@@ -59,13 +63,13 @@ restart_service() {
 
 # Start the validation_api
 echo "Starting validation_api..."
-./../$VENV_NAME/bin/python3 validation_api.py >> "log/validation_api.log" 2>&1 &
+./../$VENV_NAME/bin/python3 validation_api.py --main-api-port $VALIDATION_API_PORT --eval-score-port $EVAL_SCORE_API_PORT --vibe-score-port $VIBE_SCORE_API_PORT >> "log/validation_api.log" 2>&1 &
 echo $! > log/validation_api.pid
 
 # Start the eval_score_api in a loop to restart after each request
-restart_service "eval_score_api" "eval_score_api.py" "log/eval_score_api.log" "log/eval_score_api.pid" "log/eval_score_api_loop.pid" 8002 &
+restart_service "eval_score_api" "eval_score_api.py" "log/eval_score_api.log" "log/eval_score_api.pid" "log/eval_score_api_loop.pid" $EVAL_SCORE_API_PORT &
 
 # Start the vibe_score_api in a loop to restart after each request
-restart_service "vibe_score_api" "vibe_score_api.py" "log/vibe_score_api.log" "log/vibe_score_api.pid" "log/vibe_score_api_loop.pid" 8003 &
+restart_service "vibe_score_api" "vibe_score_api.py" "log/vibe_score_api.log" "log/vibe_score_api.pid" "log/vibe_score_api_loop.pid" $VIBE_SCORE_API_PORT &
 
 echo "All APIs are running in the background."

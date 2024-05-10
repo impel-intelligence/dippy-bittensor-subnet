@@ -55,6 +55,8 @@ def parse_size(line):
             return int(size * 1024 * 1024)
         elif unit == 'gb':
             return int(size * 1024 * 1024 * 1024)
+        elif unit == 'b':
+            return int(size)  # No conversion needed for bytes
         else:
             raise ValueError(f"Unknown unit: {unit}")
     except ValueError as e:
