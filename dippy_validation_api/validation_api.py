@@ -70,6 +70,8 @@ chat_template_mappings = {
     "mistral": "prompt_templates/mistral_prompt_template.jinja",
     "zephyr": "prompt_templates/zephyr_prompt_template.jinja",
     "alpaca": "prompt_templates/alpaca_prompt_template.jinja",
+    "llama2": "prompt_templates/llama2_prompt_template.jinja",
+    "llama3": "prompt_templates/llama3_prompt_template.jinja",
 }
 
 def get_leaderboard() -> pd.DataFrame:
