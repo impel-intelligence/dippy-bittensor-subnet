@@ -2,7 +2,7 @@
 
 # Dippy Subnet: Creating The World's Best Open-Source Roleplay LLM <!-- omit in toc -->
 
-*News: We are now on the mainnet with uid 11! Please join the [Bittensor Discord](https://discord.com/channels/799672011265015819/1232378968187867147) and see us at Channel λ·lambda·11! Also, please check our [Launch Tweet](https://twitter.com/angad_ai) for our vision of creating the world's best open-source roleplay LLM.  05/10*
+*News: We are now on the mainnet with uid 11! Please join the [Bittensor Discord](https://discord.com/channels/799672011265015819/1232378968187867147) and see us at Channel λ·lambda·11! Also, please check our [Launch Tweet](https://twitter.com/angad_ai/status/1788993280002175415) for our vision of creating the world's best open-source roleplay LLM.  05/10*
 
 [![DIPPY](/assests/banner.png)](https://dippy.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
