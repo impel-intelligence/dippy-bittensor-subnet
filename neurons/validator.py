@@ -656,6 +656,7 @@ class Validator:
                                     model_i_metadata.id.namespace,
                                     model_i_metadata.id.name,
                                     model_i_metadata.id.hash,
+                                    model_i_metadata.id.chat_template,
                                     self.config
                                 )
                                 bt.logging.info(f"Score for {model_i_metadata} is {_score}")
@@ -855,7 +856,7 @@ class Validator:
                     f"Error in validator loop \n {e} \n {traceback.format_exc()}"
                 )
 
-def get_model_score(namespace, name, hash, config):
+def get_model_score(namespace, name, hash, template, config):
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
     # return (score, status)
@@ -869,7 +870,7 @@ def get_model_score(namespace, name, hash, config):
         "repo_namespace": namespace,
         "repo_name": name,
         "hash": hash,
-        "chat_template_type": "vicuna"
+        "chat_template_type": template,
     }
 
     # Make the POST request to the validation endpoint
