@@ -197,28 +197,31 @@ def evaluate_model_logic(request: EvaluateModelRequest):
     start_time = time.time()
     vibe_score_response = None
     while True:
-        vibe_score_response = requests.post(f"http://localhost:{VIBE_SCORE_PORT}/vibe_match_score", json=request.model_dump())
-        if vibe_score_response.status_code == 200:
-            break
-        elif time.time() - start_time > 30:
-            # update leaderboard status to failed
-            try:
-                shutdown_response = requests.post(f"http://localhost:{VIBE_SCORE_PORT}/shutdown", timeout=1)
-            except Exception as e:
-                pass
-                
-            error_string = "Error calling vibe_score API with message: " + (vibe_score_response.content if vibe_score_response else str(e))
-            update_leaderboard_status(request.hash, "FAILED", error_string)
-            raise HTTPException(status_code=500, detail=error_string)
+        try:
+            vibe_score_response = requests.post(f"http://localhost:{VIBE_SCORE_PORT}/vibe_match_score", json=request.model_dump())
+            if vibe_score_response.status_code == 200:
+                logger.info("vibe_score API call successful")
+                break
+            else:
+                raise RuntimeError(f"Error calling vibe_score API: {vibe_score_response.content}")
+        except Exception as e:
+            if time.time() - start_time > 30:
+                error_string = f"Error calling vibe_score API with message: {vibe_score_response.content if vibe_score_response else e}"
+                update_leaderboard_status(request.hash, "FAILED", error_string)
+                try:
+                    shutdown_response = requests.post(f"http://localhost:{VIBE_SCORE_PORT}/shutdown", timeout=1)
+                except Exception as shutdown_error:
+                    logger.error(f"Error during vibe_score_api shutdown: {shutdown_error}")
+                raise RuntimeError(error_string)
         
         time.sleep(1)  # Wait for 1 second before retrying
     
     # Call the shutdown endpoint to restart the vibe_score_api for the next evaluation to avoid memory leaks that were observed with loading and unloading different models
-
+    logger.info("Shutting down vibe_score_api")
     try:
         shutdown_response = requests.post(f"http://localhost:{VIBE_SCORE_PORT}/shutdown", timeout=1)
     except Exception as e:
-        pass
+        logger.error(f"Error during vibe_score_api shutdown: {e}")
 
     vibe_score = vibe_score_response.json()["vibe_score"]
 
