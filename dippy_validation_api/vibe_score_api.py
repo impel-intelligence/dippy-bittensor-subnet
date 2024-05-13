@@ -1,4 +1,5 @@
 import os
+import shutil
 from fastapi import FastAPI, HTTPException
 import torch
 from vllm import LLM, SamplingParams
@@ -31,6 +32,21 @@ if not os.path.exists("data/pippa_deduped.jsonl"):
     huggingface_hub.hf_hub_download(repo_id="PygmalionAI/PIPPA", filename="pippa_deduped.jsonl", repo_type="dataset", local_dir = "data")
 
 vibe_score_dataset = PippaDataset("data/pippa_deduped.jsonl", max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200)
+
+def clean_up(model_downloaded, request):
+    total, used, _ = shutil.disk_usage("/")
+    if used / total > 0.9:
+        print("Warning: SSD is more than 90% full.") 
+    if model_downloaded:
+        repo_id = f"{request.repo_namespace}/{request.repo_name}"
+        hf_cache_info = huggingface_hub.scan_cache_dir()
+        # delete from huggingface cache
+        for repo_info in hf_cache_info.repos:
+            revisions = repo_info.revisions
+            if repo_info.repo_id == repo_id:
+                for revision in revisions:
+                    print(f"Deleting {repo_id} revision {revision.commit_hash} from cache")
+                    hf_cache_info.delete_revisions(revision.commit_hash)
 
 def calculate_vibe_match_score(model_name, revision, contexts, last_user_messages, expected_outputs, verbose=False):
     # instantiate a vllm model as it is faster and more memory efficient for text generation

@@ -2,8 +2,6 @@ import gc
 import os
 from typing import Any
 import tqdm
-import shutil
-
 
 from fastapi import FastAPI, HTTPException
 import torch
@@ -263,19 +261,6 @@ def cleanup(model, model_downloaded, request: EvaluateModelRequest):
             except:
                 print("No process group to destroy")
 
-    total, used, _ = shutil.disk_usage("/")
-    if used / total > 0.9:
-        print("Warning: SSD is more than 90% full.") 
-    if model_downloaded:
-        repo_id = f"{request.repo_namespace}/{request.repo_name}"
-        hf_cache_info = huggingface_hub.scan_cache_dir()
-        # delete from huggingface cache
-        for repo_info in hf_cache_info.repos:
-            revisions = repo_info.revisions
-            if repo_info.repo_id == repo_id:
-                for revision in revisions:
-                    hf_cache_info.delete_revisions(revision.commit_hash)
-
 @app.post("/eval_score")
 def eval_score(request: EvaluateModelRequest):
     # Now download the weights
@@ -300,7 +285,7 @@ def eval_score(request: EvaluateModelRequest):
             torch_dtype=torch.bfloat16,
             device_map='auto',
             # cache_dir=f"data/{str(request.hash)}",
-            # force_download=True
+            force_download=True
         )
 
     except Exception as e:
@@ -314,7 +299,7 @@ def eval_score(request: EvaluateModelRequest):
                 # force_download=True
             )
         except Exception as e:
-            raise HTTPException(f"Error loading model: {str(e)}")
+            raise HTTPException(417, f"Error loading model: {str(e)}")
         
     model.eval()
 
@@ -324,10 +309,12 @@ def eval_score(request: EvaluateModelRequest):
         input_tokenizer = AutoTokenizer.from_pretrained(
             f"{request.repo_namespace}/{request.repo_name}",
             padding_side='left',
+            force_download=True
         )
         output_tokenizer = AutoTokenizer.from_pretrained(
             f"{request.repo_namespace}/{request.repo_name}",
             padding_side='right',
+            force_download=True,
         )
         if input_tokenizer.pad_token is None:
             input_tokenizer.pad_token = input_tokenizer.eos_token # add a pad token if not present
@@ -339,19 +326,19 @@ def eval_score(request: EvaluateModelRequest):
     except Exception as e:
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
-        raise HTTPException("Error downloading tokenizer: " + failure_reason)
+        raise HTTPException(417, "Error downloading tokenizer: " + failure_reason)
 
     # warm up the model
     print('Warming up model')
     try:
         avg_latency = warmup_model(model)
         if not avg_latency: # either 0 or None
-            raise HTTPException("Error warming up model")
+            raise HTTPException(417, "Error warming up model")
             
     except Exception as e:
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
-        raise HTTPException("Error warming up model: " + failure_reason)
+        raise HTTPException(417, "Error warming up model: " + failure_reason)
     
 
     # get latency score
@@ -368,7 +355,7 @@ def eval_score(request: EvaluateModelRequest):
         if model_size > MAX_MODEL_SIZE:
             del model
             torch.cuda.empty_cache()
-            raise HTTPException(f"Model is too large when loaded in 4 bit quant: {model_size} Bytes. Should be less than {MAX_MODEL_SIZE} Bytes")
+            raise HTTPException(412, f"Model is too large when loaded in 4 bit quant: {model_size} Bytes. Should be less than {MAX_MODEL_SIZE} Bytes")
         
         model_size_score = 1 - (model_size / MAX_MODEL_SIZE)
         print('Model size score: ', model_size_score)
@@ -376,7 +363,7 @@ def eval_score(request: EvaluateModelRequest):
     except Exception as e:
         failure_reason = str(e)
         cleanup(None, model_downloaded, request)
-        raise HTTPException("Error loading model: " + failure_reason)
+        raise HTTPException(412, "Error loading model: " + failure_reason)
 
     # set the chat template params
     dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
@@ -387,7 +374,7 @@ def eval_score(request: EvaluateModelRequest):
     except Exception as e:
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
-        raise HTTPException("Error sampling dataset: " + failure_reason)
+        raise HTTPException(500, "Error sampling dataset: " + failure_reason)
     
     # Part 2: Evaluate the model
     print('Evaluating model')
@@ -403,7 +390,7 @@ def eval_score(request: EvaluateModelRequest):
     except Exception as e:
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
-        raise HTTPException("Error evaluating model: " + failure_reason)
+        raise HTTPException(500, "Error evaluating model: " + failure_reason)
 
     return {
         "eval_score": eval_score,
