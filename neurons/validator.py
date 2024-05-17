@@ -72,9 +72,9 @@ def iswin(score_i, score_j, block_i, block_j):
     Returns:
         bool: True if loss i is better, False otherwise.
     """
-    # Adjust loss based on timestamp and pretrain epsilon
-    score_i = (1 - constants.timestamp_epsilon) * score_i if block_i < block_j else score_i
-    score_j = (1 - constants.timestamp_epsilon) * score_j if block_j < block_i else score_j
+    # Adjust score based on timestamp and pretrain epsilon
+    score_i = (1 - constants.timestamp_epsilon) * score_i if block_i > block_j else score_i
+    score_j = (1 - constants.timestamp_epsilon) * score_j if block_j > block_i else score_j
     return score_i > score_j
 
 def compute_wins(
