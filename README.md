@@ -118,12 +118,7 @@ python neurons/validator.py --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT
 
 To run auto-updating validator with PM2 (recommended):
 ```bash
-pm2 start auto_updating_validator.sh --name dippy-validator
-    --netuid {netuid} \
-    --wallet.name {wallet} \
-    --wallet.hotkey {hotkey} \
-    --axon.port {port} \
-    --logging.trace
+pm2 start --name sn11-vali-updater --interpreter python scripts/start_validator.py -- --pm2_name sn11-vali --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME [other vali flags]
 ```
 
 Please note that this validator will call the model validation service hosted by the dippy subnet owners. If you wish to run the model validation service locally, please follow the instructions below.
