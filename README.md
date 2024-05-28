@@ -41,7 +41,7 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 **Phase 1:** 
 - [x] Subnet launch with robust pipeline for roleplay LLM evaluation on public datasets and response length 
 - [ ] New, evolving evaluation datasets curated by community as well as contributed by Dippy's mobile app users
-- [ ] Public model leaderboard based on evaluation criteria
+- [x] Public model leaderboard based on evaluation criteria
 
 **Phase 2:** 
 - [ ] Multiple TAO themed characters introduced in the app with different personalities (funny, romantic, therapeutic etc)
