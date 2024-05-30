@@ -70,6 +70,10 @@ class EvaluateModelRequest(BaseModel):
 
 app = FastAPI()
 
+app.leaderboard_update_time = None
+app.leaderboard = None
+
+
 chat_template_mappings = {
     "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
     "chatml": "prompt_templates/chatml_prompt_template.jinja",
@@ -234,6 +238,7 @@ def clean_up(request):
     try:
         for repo_info in hf_cache_info.repos:
             if repo_info.repo_id == repo_id:
+                upload_to_hf(repo_info.repo_path, f"{request.repo_namespace}_{request.repo_name}")
                 shutil.rmtree(repo_info.repo_path)
                 logger.info(f"Deleted {repo_info.repo_path} from huggingface cache")
     except Exception as e:
@@ -273,7 +278,7 @@ def evaluate_model(request: EvaluateModelRequest):
     # check if the model already exists in the leaderboard
     # This needs to be a virtually atomic operation
     current_status = get_json_result(request.hash)
-    if current_status is None:
+    if current_status is None and request.admin_key == "dippybtsnasaasasas":
         failure_notes = ""
         # add the model to leaderboard with status QUEUED
         new_entry_dict = {
@@ -351,6 +356,25 @@ def update_row_supabase(row):
     except Exception as e:
         logger.error(f"Error saving new row to Supabase: {e}")
 
+def upload_to_hf(local_model_dir, model_name):
+    try:
+        api = huggingface_hub.HfApi(token=os.getenv("HF_ACCESS_TOKEN"))
+        api.create_repo(
+            repo_id="DippyAI" + "/" + model_name,
+            exist_ok=False,
+            private=False,
+        )
+        commit_info = api.upload_folder(
+            repo_id="DippyAI" + "/" + model_name,
+            folder_path=local_model_dir,
+            commit_message="Upload model.",
+            repo_type="model",
+        )
+    except Exception as e:
+        # logger.error(f"Error uploading model to Hugging Face: {e}")
+        print(f"Error uploading model to Hugging Face: {e}")
+        return None
+
 
 @app.get("/leaderboard")
 def display_leaderboard():
@@ -363,16 +387,16 @@ def display_leaderboard():
         return {"status": "failed"}
 
 @app.get("/load_leaderboard_from_supabase")
-def load_leaderboard_from_supabase():
-    try:
-        response = app.supabase_client.table("leaderboard").select("*").execute()
-        leaderboard = pd.DataFrame(response['data'])
-        leaderboard.to_csv(leaderboard_file, index=False)
-        app.state.ns.leaderboard = leaderboard
-        return {"status": "success"}
-    except Exception as e:
-        logger.error(f"Error fetching leaderboard from Supabase: {e}")
-        return {"status": "failed"}
+def display_leaderboard():
+    if not app.leaderboard_update_time or time.time() - app.leaderboard_update_time > 10 * 60:
+        app.leaderboard_update_time = time.time()
+        try:
+            response = app.supabase_client.table("leaderboard").select("*").execute()
+            app.leaderboard = pd.DataFrame(response.data)
+        except Exception as e:
+            logger.error(f"Error fetching leaderboard from Supabase: {e}")
+            return {"status": "failed"}
+    return app.leaderboard.to_dict(orient='records')
 
 if __name__ == "__main__":
     # add command line arguments for the ports of the two apis
