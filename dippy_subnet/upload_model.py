@@ -167,6 +167,8 @@ async def main(config: bt.config):
         namespace=repo_namespace,
         name=repo_name,
         chat_template=config.chat_template,
+        hash=None, 
+        commit=None,
         competition_id=config.competition_id,
     )
 
@@ -196,7 +198,7 @@ async def main(config: bt.config):
         namespace=repo_namespace,
         name=repo_name,
         chat_template=config.chat_template, 
-        hash=regenerate_hash(repo_namespace, repo_name, config.chat_template, config.competition_id), 
+        hash=str(regenerate_hash(repo_namespace, repo_name, config.chat_template, config.competition_id)), 
         commit=model_id_with_commit.commit,
         competition_id=config.competition_id,
     )
