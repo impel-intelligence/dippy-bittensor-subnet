@@ -72,6 +72,17 @@ restart_service() {
     done
 }
 
+# check if .env file exists
+if [ ! -f ../.env ]; then
+    echo "Error: .env file does not exist."
+    exit 1
+fi
+
+# Export environment variables from .env file
+export $(grep -v '^#' ../.env | xargs)
+
+
+
 # Start the validation_api
 echo "Starting validation_api..."
 ./../$VENV_NAME/bin/python3 validation_api_batch.py --main-api-port $VALIDATION_API_PORT --eval-score-port $EVAL_SCORE_API_PORT --vibe-score-port $VIBE_SCORE_API_PORT >> "log/validation_api_${BATCH_NUM}.log" 2>&1 &
