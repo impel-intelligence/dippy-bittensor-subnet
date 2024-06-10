@@ -1,4 +1,6 @@
 wheel
+packaging
+torch==2.2.1
 tqdm
 vllm==0.4.1
 pydantic >= 2.0

@@ -1,25 +1,21 @@
 import gc
 import time
-import requests
-from typing import Optional
 import os
 import multiprocessing
-import argparse
+import logging
+from datetime import datetime, timedelta
+from typing import Optional
 from pydantic import BaseModel
+import requests
+import uvicorn
 
 import pandas as pd
-import uvicorn
 import torch
 from fastapi import FastAPI, HTTPException
-from fastapi.logger import logger
 from supabase import create_client
 import huggingface_hub
 import shutil
 from dotenv import load_dotenv
-
-load_dotenv()
-
-logger.setLevel("WARNING")
 
 from utilities.validation_utils import regenerate_hash, check_model_repo_size, get_model_size
 
@@ -70,9 +66,14 @@ class EvaluateModelRequest(BaseModel):
 
 app = FastAPI()
 
-app.leaderboard_update_time = None
-app.leaderboard = None
+logger = logging.getLogger("uvicorn")
 
+logging.basicConfig(level=logging.ERROR)
+
+app.state.leaderboard_update_time = None
+app.state.leaderboard = None
+
+admin_key = os.environ['ADMIN_KEY']
 
 chat_template_mappings = {
     "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
@@ -109,7 +110,7 @@ def model_evaluation_worker():
 
 def get_next_model_to_eval():
     try:
-        response = app.supabase_client.table("leaderboard").select("*").eq("status", "QUEUED").order("timestamp", desc=False).limit(1).execute()
+        response = app.state.supabase_client.table("leaderboard").select("*").eq("status", "QUEUED").order("timestamp", desc=False).limit(1).execute()
         if len(response.data) == 0:
             return None
     except Exception as e:
@@ -133,6 +134,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
                 logger.info("eval_score API call successful")
                 break
             else:
+                clean_up(request)
                 raise RuntimeError(f"Error calling eval_score API: {eval_score_response.content}")
         except Exception as e:
             if time.time() - start_time > 30:
@@ -145,6 +147,7 @@ def evaluate_model_logic(request: EvaluateModelRequest):
                 except Exception as shutdown_error:
                     pass
                 
+                clean_up(request)
                 raise RuntimeError(error_string)
         
         time.sleep(1)  # Wait for 1 second before retrying
@@ -186,7 +189,6 @@ def evaluate_model_logic(request: EvaluateModelRequest):
                     shutdown_response = requests.post(f"http://localhost:{VIBE_SCORE_PORT}/shutdown", timeout=1)
                 except Exception as shutdown_error:
                     logger.error(f"Error during vibe_score_api shutdown: {shutdown_error}")
-                
                 clean_up(request)
                 raise RuntimeError(error_string)
         
@@ -246,14 +248,14 @@ def clean_up(request):
 
 def update_supabase_leaderboard_status(hash, status, notes=""):
     try:
-        response = app.supabase_client.table("leaderboard").upsert({"hash": hash, "status": status, "notes": notes}, returning="minimal").execute()
+        response = app.state.supabase_client.table("leaderboard").upsert({"hash": hash, "status": status, "notes": notes}, returning="minimal").execute()
     except Exception as e:
         logger.error(f"Error updating leaderboard status for {hash}: {e}")
 
 
 def get_json_result(hash):
     try:
-        response = app.supabase_client.table("leaderboard").select("*").eq("hash", hash).execute()
+        response = app.state.supabase_client.table("leaderboard").select("*").eq("hash", hash).execute()
         if len(response.data) > 0:
             return {
             "score": {
@@ -265,9 +267,10 @@ def get_json_result(hash):
             },
             "status": response.data[0]['status']
         }
+        raise RuntimeError('No record QUEUED')
     except Exception as e:
-        logger.error(f"Error fetching leaderboard from Supabase: {e}")
-    return None
+        logger.error(f"Error fetching leaderboard from database: {e}")
+        return None
 
 @app.post("/evaluate_model")
 def evaluate_model(request: EvaluateModelRequest):
@@ -278,7 +281,9 @@ def evaluate_model(request: EvaluateModelRequest):
     # check if the model already exists in the leaderboard
     # This needs to be a virtually atomic operation
     current_status = get_json_result(request.hash)
-    if current_status is None and request.admin_key == "dippybtsnasaasasas":
+    
+    if current_status is None and request.admin_key == admin_key:
+        logger.error('QUEUING NEW MODEL')
         failure_notes = ""
         # add the model to leaderboard with status QUEUED
         new_entry_dict = {
@@ -295,6 +300,9 @@ def evaluate_model(request: EvaluateModelRequest):
             "status": "QUEUED",
             "notes": ""
         }
+
+        logger.info('QUEUING: ' + str(new_entry_dict))
+
         update_row_supabase(new_entry_dict)
     else:
         return current_status
@@ -349,12 +357,10 @@ def evaluate_model(request: EvaluateModelRequest):
     return get_json_result(request.hash)
     
 def update_row_supabase(row):
-    try:
-        if 'timestamp' in row:
-            row['timestamp'] = row['timestamp'].isoformat()
-        app.supabase_client.table("leaderboard").upsert(row).execute()
-    except Exception as e:
-        logger.error(f"Error saving new row to Supabase: {e}")
+    if 'timestamp' in row:
+        row['timestamp'] = row['timestamp'].isoformat()
+    
+    app.state.supabase_client.table("leaderboard").upsert(row).execute()
 
 def upload_to_hf(local_model_dir, model_name):
     try:
@@ -372,15 +378,21 @@ def upload_to_hf(local_model_dir, model_name):
         )
     except Exception as e:
         # logger.error(f"Error uploading model to Hugging Face: {e}")
-        print(f"Error uploading model to Hugging Face: {e}")
+        logger.error(f"Error uploading model to Hugging Face: {e}")
         return None
 
 
 @app.get("/leaderboard")
 def display_leaderboard():
     try:
-        response = app.supabase_client.table("leaderboard").select("*").execute()
+        response = app.state.supabase_client.table("leaderboard").select("*").execute()
         leaderboard = pd.DataFrame(response.data)
+        # sort in descending order by total score
+        leaderboard = leaderboard.sort_values(by='total_score', ascending=False)
+        # filter out entries older than two weeks
+        two_weeks_ago = datetime.now() - timedelta(weeks=2)
+        leaderboard = leaderboard[(leaderboard['timestamp'] > two_weeks_ago) | (leaderboard.index < 1000)]
+
         return leaderboard.to_dict(orient='records')
     except Exception as e:
         logger.error(f"Error fetching leaderboard from Supabase: {e}")
@@ -388,15 +400,15 @@ def display_leaderboard():
 
 @app.get("/load_leaderboard_from_supabase")
 def display_leaderboard():
-    if not app.leaderboard_update_time or time.time() - app.leaderboard_update_time > 10 * 60:
-        app.leaderboard_update_time = time.time()
+    if not app.state.leaderboard_update_time or time.time() - app.state.leaderboard_update_time > 10 * 60:
+        app.state.leaderboard_update_time = time.time()
         try:
-            response = app.supabase_client.table("leaderboard").select("*").execute()
-            app.leaderboard = pd.DataFrame(response.data)
+            response = app.state.supabase_client.table("leaderboard").select("*").execute()
+            app.state.leaderboard = pd.DataFrame(response.data)
         except Exception as e:
             logger.error(f"Error fetching leaderboard from Supabase: {e}")
             return {"status": "failed"}
-    return app.leaderboard.to_dict(orient='records')
+    return app.state.leaderboard.to_dict(orient='records')
 
 if __name__ == "__main__":
     # add command line arguments for the ports of the two apis
@@ -415,10 +427,10 @@ if __name__ == "__main__":
     evaluation_queue = multiprocessing.Queue()
 
 
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_KEY")
+    supabase_url = os.environ["SUPABASE_URL"]
+    supabase_key = os.environ["SUPABASE_KEY"]
     try:
-        app.supabase_client = create_client(supabase_url, supabase_key)
+        app.state.supabase_client = create_client(supabase_url, supabase_key)
     except Exception as e:
         logger.warning(f"Failed to create Supabase client: {e}. Leaderboard will only be saved locally.")
         supabase_client = None

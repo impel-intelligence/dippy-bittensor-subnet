@@ -1,19 +1,36 @@
+import os
 import requests
+import dotenv
+from supabase import create_client
 from utilities.validation_utils import regenerate_hash
 
 
 llm = 'Manavshah/llama-test'
 
+dotenv.load_dotenv('../.env')
+
+
+supabase_url = os.environ["SUPABASE_URL"]
+supabase_key = os.environ["SUPABASE_KEY"]
+try:
+    supabase_client = create_client(supabase_url, supabase_key)
+except Exception as e:
+    print(f"Failed to create Supabase client: {e}. Leaderboard will only be saved locally.")
+    supabase_client = None
+
+
 def test_evaluate_model():
     # Define the request payload
     request_payload = {
+        # "admin_key": os.environ['ADMIN_KEY'],
         "repo_namespace": llm.split('/')[0],
         "repo_name": llm.split('/')[1],
-        "chat_template_type": "vicuna",
+        "chat_template_type": "zephyr",
         "hash": None,
         "revision": "main",
         "competition_id": "test"
     }
+
 
     # generate the hash based on regenerate_hash
     request_payload["hash"] = str(regenerate_hash(
@@ -22,6 +39,8 @@ def test_evaluate_model():
         request_payload["chat_template_type"],
         request_payload["competition_id"]
     ))
+
+    print('Request payload:', request_payload)
 
     # Send a POST request to the evaluate_model endpoint
     response = requests.post("http://localhost:8000/evaluate_model", json=request_payload)
@@ -33,6 +52,8 @@ def test_evaluate_model():
     response_data = response.json()
     assert "status" in response_data
     assert response_data["status"] in ["QUEUED", "RUNNING", "COMPLETED", "FAILED"]
+
+    print(response_data)
 
     # If you want to check for a specific response structure, you can do so here
     # For example, if you expect a certain JSON structure, you can compare it like this:

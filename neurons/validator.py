@@ -960,6 +960,8 @@ def get_model_score(namespace, name, hash, template, config, local_metadata: Loc
         'Hotkey': local_metadata.hotkey,
         'Coldkey': local_metadata.coldkey,
     }
+    if os.environ.get('ADMIN_KEY', None) not in [None, '']:
+        payload['admin_key'] = os.environ['ADMIN_KEY']
 
     # Make the POST request to the validation endpoint
     try:
