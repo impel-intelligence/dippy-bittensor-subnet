@@ -710,6 +710,8 @@ class Validator:
 
         bt.logging.info("Looking at model metadata", uid_to_hotkey_and_model_metadata)
 
+        # Compute the score for each model.
+        # if status is QUEUED or RUNNING, don't wait for score, just set it to 0
         for uid_i, (
                 hotkey,
                 model_i_metadata,
@@ -720,9 +722,40 @@ class Validator:
                         model_i_metadata.id.competition_id
                         == competition_parameters.competition_id
                 ):
-                    self.model_tracker.touch_miner_model(hotkey)
+                    # self.model_tracker.touch_miner_model(hotkey)
+                    # Update the block this uid last updated their model.
+                    uid_to_block[uid_i] = model_i_metadata.block
+                    while True:
+                        try:
+                            _score, status = get_model_score(
+                                model_i_metadata.id.namespace,
+                                model_i_metadata.id.name,
+                                model_i_metadata.id.hash,
+                                model_i_metadata.id.chat_template,
+                                self.config
+                            )
+                            bt.logging.info(f"Score for {model_i_metadata} is {_score}")
+                            bt.logging.info(f"Status for {model_i_metadata} is {status}")
+                            bt.logging.debug(f"Queried for score for {model_i_metadata.id} Current status: {status}")
+                            if status != 'QUEUED':
+                                break
+                        except:
+                            bt.logging.error(f"Failed to get score for {model_i_metadata.id}")
+                            break
 
+
+        for uid_i, (
+            hotkey,
+            model_i_metadata,
+        ) in uid_to_hotkey_and_model_metadata.items():
+            score = None
+            if model_i_metadata is not None:
+                if (
+                    model_i_metadata.id.competition_id
+                    == competition_parameters.competition_id
+                ):
                     try:
+                        self.model_tracker.touch_miner_model(hotkey)
                         # Update the block this uid last updated their model.
                         uid_to_block[uid_i] = model_i_metadata.block
 
@@ -963,12 +996,17 @@ def get_model_score(namespace, name, hash, template, config, local_metadata: Loc
     if os.environ.get('ADMIN_KEY', None) not in [None, '']:
         payload['admin_key'] = os.environ['ADMIN_KEY']
 
+    console = Console()
+    console.print(f"Payload: {payload}")
+
     # Make the POST request to the validation endpoint
     try:
         response = requests.post(validation_endpoint, json=payload, headers=headers)
         response.raise_for_status()  # Raise an exception for HTTP errors
         # Parse the response JSON
         result = response.json()
+        console = Console()
+        console.print(f"Payload: {payload}")
         status = result['status']
         if status == 'COMPLETED':
             score = result['score']['total_score']

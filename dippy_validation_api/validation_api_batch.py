@@ -389,9 +389,12 @@ def display_leaderboard():
         leaderboard = pd.DataFrame(response.data)
         # sort in descending order by total score
         leaderboard = leaderboard.sort_values(by='total_score', ascending=False)
-        # filter out entries older than two weeks
-        two_weeks_ago = datetime.now() - timedelta(weeks=2)
-        leaderboard = leaderboard[(leaderboard['timestamp'] > two_weeks_ago) | (leaderboard.index < 1000)]
+        # # filter out entries older than two weeks
+        # two_weeks_ago = datetime.now() - timedelta(weeks=2)
+        # # Convert the 'timestamp' column to datetime format. If parsing errors occur, 'coerce' will replace problematic inputs with NaT (Not a Time)
+        # leaderboard['timestamp'] = pd.to_datetime(leaderboard['timestamp'], errors='coerce', utc=True)
+        # leaderboard = leaderboard[(leaderboard['timestamp'].dt.tz_convert(None) > two_weeks_ago) | (leaderboard.index < 1000)]
+        # leaderboard = leaderboard.sort_values(by='total_score', ascending=False)
 
         return leaderboard.to_dict(orient='records')
     except Exception as e:
@@ -409,6 +412,7 @@ def display_leaderboard():
             logger.error(f"Error fetching leaderboard from Supabase: {e}")
             return {"status": "failed"}
     return app.state.leaderboard.to_dict(orient='records')
+
 
 if __name__ == "__main__":
     # add command line arguments for the ports of the two apis

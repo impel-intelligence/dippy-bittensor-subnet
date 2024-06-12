@@ -22,7 +22,7 @@ except Exception as e:
 def test_evaluate_model():
     # Define the request payload
     request_payload = {
-        # "admin_key": os.environ['ADMIN_KEY'],
+        "admin_key": os.environ['ADMIN_KEY'],
         "repo_namespace": llm.split('/')[0],
         "repo_name": llm.split('/')[1],
         "chat_template_type": "zephyr",
@@ -30,7 +30,6 @@ def test_evaluate_model():
         "revision": "main",
         "competition_id": "test"
     }
-
 
     # generate the hash based on regenerate_hash
     request_payload["hash"] = str(regenerate_hash(
