@@ -29,6 +29,10 @@ import argparse
 import typing
 from threadpoolctl import threadpool_limits
 import requests
+import pkg_resources
+from shlex import split
+
+import subprocess
 
 
 import constants
@@ -39,6 +43,7 @@ from model.storage.chain.chain_model_metadata_store import ChainModelMetadataSto
 from model.storage.disk.disk_model_store import DiskModelStore
 from model.storage.disk.utils import get_hf_download_path
 from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
+from model import wandb_logger
 import traceback
 import threading
 import multiprocessing
@@ -209,6 +214,12 @@ class Validator:
             default=8000,
             help="Port for local validation api",
         )
+        parser.add_argument(
+            "--wandb-key",
+            type=str,
+            default="",
+            help="A WandB API key for logging purposes",
+        )
 
         bt.subtensor.add_args(parser)
         bt.logging.add_args(parser)
@@ -216,6 +227,23 @@ class Validator:
         bt.axon.add_args(parser)
         config = bt.config(parser)
         return config
+
+
+    def metadata(self):
+        """Extract the version as current git commit hash"""
+        result = subprocess.run(
+            split("git rev-parse HEAD"),
+            check=True,
+            capture_output=True,
+            cwd=constants.ROOT_DIR,
+        )
+        commit = result.stdout.decode().strip()
+        assert len(commit) == 40, f"Invalid commit hash: {commit}"
+        commit_hash = commit[:8]
+        bittensor_version = pkg_resources.get_distribution('bittensor').version
+        # uid = bittensor_version.split(".")[0]
+        # hotkey = bittensor_version.split(".")[1]
+
 
     def state_path(self) -> str:
         """
@@ -363,7 +391,20 @@ class Validator:
 
         # Touch all models, starting a timer for them to be deleted if not used
         self.model_tracker.touch_all_miner_models()
-        
+
+        # Initialize wandb
+        if self.config.wandb_key:
+            wandb_logger.safe_login(api_key=self.config.wandb_key)
+            wandb_logger.safe_init(
+                "Validator",
+                self.wallet,
+                self.metagraph,
+                self.config,
+            )
+            wandb_logger.safe_log([1,1,1,1,1,0,0.1])
+            bt.logging.success("Logged into WandB")
+
+
         # == Initialize the update thread ==
         self.stop_event = threading.Event()
         self.update_thread = threading.Thread(
@@ -873,9 +914,16 @@ def get_model_score(namespace, name, hash, template, config):
         "chat_template_type": template,
     }
 
+    headers = {
+        'X-Git-Commit': config.git_commit,
+        'X-Bittensor-Version': config.github_event,
+        'X-UID': config.github_event,
+        'X-Hotkey': config.github_event,
+    }
+
     # Make the POST request to the validation endpoint
     try:
-        response = requests.post(validation_endpoint, json=payload)
+        response = requests.post(validation_endpoint, json=payload, headers=headers)
         response.raise_for_status()  # Raise an exception for HTTP errors
         # Parse the response JSON
         result = response.json()

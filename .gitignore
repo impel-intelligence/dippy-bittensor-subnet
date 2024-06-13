@@ -170,3 +170,4 @@ cython_debug/
 #.idea/
 
 testing/
+.idea
