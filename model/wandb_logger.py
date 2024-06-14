@@ -7,7 +7,7 @@ import psutil
 import torch
 import wandb
 
-ENTITY_NAME = "impel_validator"
+ENTITY_NAME = "dippyai"
 PROJECT_NAME = "dippy"
 
 
@@ -18,9 +18,11 @@ def safe_login(api_key):
     try:
         bt.logging.debug("Attempting to log into WandB using provided API Key")
         wandb.login(key=api_key)
+        return True
     except Exception as e:
         bt.logging.error(e)
         bt.logging.error("Failed to login to WandB. Your run will not be logged.")
+        return False
 
 
 def safe_init(name, wallet, metagraph, config):
@@ -59,13 +61,12 @@ def safe_init(name, wallet, metagraph, config):
                 config_dict["gpu_count"] = 0
                 config_dict["gpu_mem"] = []
                 config_dict["processor_count"] = []
-
+        project_name = PROJECT_NAME + "-prod"
         # Configure destination project based on target network
-        project_name = PROJECT_NAME
         if config.dev:
-            project_name = PROJECT_NAME + "-development"
+            project_name = PROJECT_NAME + "-dev"
         elif config.subtensor.network == "test":
-            project_name = PROJECT_NAME + "-testnet"
+            project_name = PROJECT_NAME + "-test"
 
         # Disable WandB if the user has requested it
         mode = "online"
@@ -87,7 +88,6 @@ def safe_init(name, wallet, metagraph, config):
             config=config_dict,
             settings=wandb.Settings(console=console),
         )
-        WANDB_ENABLED = True
         bt.logging.success("Successfully configured WandB.")
     except Exception as e:
         bt.logging.warning("Failed to configure WandB. Your run will not be logged.")
