@@ -122,6 +122,7 @@ def main(pm2_name: str, args: List[str]) -> None:
 
     validator = start_validator_process(pm2_name, args)
     current_version = latest_version = get_version()
+
     log.info("Current version: %s", current_version)
 
     try:
