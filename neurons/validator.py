@@ -424,20 +424,17 @@ class Validator:
         bt.logging.info(f"dumping localmetadata: {self.local_metadata}")
 
         # Initialize wandb
-        login_success = False
         if self.config.wandb_key:
-            login_success = wandb_logger.safe_login(api_key=self.config.wandb_key)
-        if login_success:
-            wandb_logger.safe_init(
+            wandb_logger.safe_login(api_key=self.config.wandb_key)
+        wandb_logger.safe_init(
                 "Validator",
                 self.wallet,
                 self.metagraph,
                 self.config,
             )
-            wandb_logger.safe_log({
+        wandb_logger.safe_log({
                 "log_success": 1,
-            })
-            bt.logging.success("Logged WandB")
+        })
 
         # == Initialize the update thread ==
         self.stop_event = threading.Event()
