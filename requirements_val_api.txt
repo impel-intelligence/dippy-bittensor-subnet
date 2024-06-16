@@ -10,3 +10,4 @@ flash-attn
 supabase
 pandas
 threadpoolctl
+loguru

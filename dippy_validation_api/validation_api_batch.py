@@ -11,13 +11,14 @@ import uvicorn
 
 import pandas as pd
 import torch
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from supabase import create_client
 import huggingface_hub
 import shutil
 from dotenv import load_dotenv
 
 from utilities.validation_utils import regenerate_hash, check_model_repo_size, get_model_size
+from utilities.event_logger import EventLogger
 
 from dotenv import load_dotenv
 
@@ -273,7 +274,26 @@ def get_json_result(hash):
         return None
 
 @app.post("/evaluate_model")
-def evaluate_model(request: EvaluateModelRequest):
+def evaluate_model(
+        request: EvaluateModelRequest,
+        git_commit: str = Header(None, alias='Git-Commit'),
+        bittensor_version: str = Header(None, alias='Bittensor-Version'),
+        uid: str = Header(None, alias='UID'),
+        hotkey: str = Header(None, alias='Hotkey'),
+        coldkey: str = Header(None, alias='Coldkey')):
+
+    # log incoming request details
+    if app.state.event_logger_enabled:
+        app.state.event_logger.info("Incoming request", extra={
+        "git_commit": git_commit,
+        "bittensor_version": bittensor_version,
+        "uid": uid,
+        "hotkey": hotkey,
+        "coldkey": coldkey,
+        })
+
+
+
     # verify hash
     if int(request.hash) != regenerate_hash(request.repo_namespace, request.repo_name, request.chat_template_type, request.competition_id):
         raise HTTPException(status_code=400, detail="Hash does not match the model details")
@@ -429,7 +449,12 @@ if __name__ == "__main__":
     VIBE_SCORE_PORT = args.vibe_score_port
     
     evaluation_queue = multiprocessing.Queue()
-
+    try:
+        event_logger = EventLogger()
+        app.state.event_logger = event_logger
+        app.state.event_logger_enabled = True
+    except Exception as e:
+        logger.warning(f"Failed to create event logger: {e}")
 
     supabase_url = os.environ["SUPABASE_URL"]
     supabase_key = os.environ["SUPABASE_KEY"]
