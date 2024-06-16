@@ -954,11 +954,11 @@ def get_model_score(namespace, name, hash, template, config, local_metadata: Loc
     }
 
     headers = {
-        'Git-Commit': local_metadata.commit,
-        'Bittensor-Version': local_metadata.btversion,
-        'UID': local_metadata.uid,
-        'Hotkey': local_metadata.hotkey,
-        'Coldkey': local_metadata.coldkey,
+        'Git-Commit': str(local_metadata.commit),
+        'Bittensor-Version': str(local_metadata.btversion),
+        'UID': str(local_metadata.uid),
+        'Hotkey': str(local_metadata.hotkey),
+        'Coldkey': str(local_metadata.coldkey),
     }
 
     # Make the POST request to the validation endpoint
