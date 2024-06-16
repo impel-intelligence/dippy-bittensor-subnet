@@ -258,7 +258,7 @@ def get_json_result(hash):
     try:
         response = app.state.supabase_client.table("leaderboard").select("*").eq("hash", hash).execute()
         if len(response.data) > 0:
-            return {
+            result = {
             "score": {
                 "model_size_score": response.data[0]['model_size_score'],
                 "qualitative_score": response.data[0]['qualitative_score'],
@@ -267,7 +267,10 @@ def get_json_result(hash):
                 "total_score": response.data[0]['total_score']
             },
             "status": response.data[0]['status']
-        }
+            }
+            if app.state.event_logger_enabled:
+                app.state.event_logger.info("scored_model", extras=result)
+            return result
         raise RuntimeError('No record QUEUED')
     except Exception as e:
         logger.error(f"Error fetching leaderboard from database: {e}")
@@ -282,15 +285,17 @@ def evaluate_model(
         hotkey: str = Header(None, alias='Hotkey'),
         coldkey: str = Header(None, alias='Coldkey')):
 
-    # log incoming request details
-    if app.state.event_logger_enabled:
-        app.state.event_logger.info("Incoming request", extra={
+    request_details = {
         "git_commit": git_commit,
         "bittensor_version": bittensor_version,
         "uid": uid,
         "hotkey": hotkey,
         "coldkey": coldkey,
-        })
+    }
+
+    # log incoming request details
+    if app.state.event_logger_enabled:
+        app.state.event_logger.info("Incoming request", extra=request_details)
 
 
 
