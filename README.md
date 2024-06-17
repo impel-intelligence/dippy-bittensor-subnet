@@ -194,6 +194,8 @@ Please note that this validator will call the model validation service hosted by
 
 ### Running the model evaluation API (Optional)
 
+**Note**: Currently (June 17 2024) there are some issues with the local evaluation api. We recommend using the remote validation api temporarily.
+
 Starting a validator using your local validator API requires starting validator with `--use-local-validation-api` flag. 
 Additionally, a model queue is required to push models to the validation api.
 
