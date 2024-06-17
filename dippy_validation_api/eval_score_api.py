@@ -285,7 +285,7 @@ def eval_score(request: EvaluateModelRequest):
             torch_dtype=torch.bfloat16,
             device_map='auto',
             # cache_dir=f"data/{str(request.hash)}",
-            force_download=True
+            # force_download=True
         )
 
     except Exception as e:

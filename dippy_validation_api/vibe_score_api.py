@@ -56,8 +56,9 @@ def calculate_vibe_match_score(model_name, revision, contexts, last_user_message
         tensor_parallel_size=torch.cuda.device_count(),
         gpu_memory_utilization=0.5,
         max_num_seqs=BATCH_SIZE_VIBE_SCORE,
-        max_seq_len_to_capture=MAX_SEQ_LEN_VIBE_SCORE,
+        max_model_len=MAX_SEQ_LEN_VIBE_SCORE,
     )
+    
     decoded_messages = []
     # loop through the context in batches
     for i in range(0, len(contexts), BATCH_SIZE_VIBE_SCORE):

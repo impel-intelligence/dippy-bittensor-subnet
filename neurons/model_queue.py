@@ -17,8 +17,6 @@
 # DEALINGS IN THE SOFTWARE.
 
 from collections import defaultdict
-from dataclasses import dataclass
-from typing import Dict, Optional
 import datetime as dt
 import os
 import math
@@ -27,13 +25,11 @@ import torch
 import random
 import shutil
 import asyncio
-import subprocess
 import argparse
 import typing
 from threadpoolctl import threadpool_limits
 import requests
-from importlib.metadata import version
-from shlex import split
+
 
 import constants
 from model.data import ModelMetadata
@@ -43,7 +39,6 @@ from model.storage.chain.chain_model_metadata_store import ChainModelMetadataSto
 from model.storage.disk.disk_model_store import DiskModelStore
 from model.storage.disk.utils import get_hf_download_path
 from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
-from model import wandb_logger
 import traceback
 import threading
 import multiprocessing
@@ -65,7 +60,6 @@ import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-
 def iswin(score_i, score_j, block_i, block_j):
     """
     Determines the winner between two models based on the epsilon adjusted loss.
@@ -83,11 +77,10 @@ def iswin(score_i, score_j, block_i, block_j):
     score_j = (1 - constants.timestamp_epsilon) * score_j if block_j > block_i else score_j
     return score_i > score_j
 
-
 def compute_wins(
-        uids: typing.List[int],
-        scores_per_uid: typing.Dict[int, float],
-        uid_to_block: typing.Dict[int, int],
+    uids: typing.List[int],
+    scores_per_uid: typing.Dict[int, float],
+    uid_to_block: typing.Dict[int, int],
 ):
     """
     Computes the wins and win rate for each model based on loss comparison.
@@ -119,11 +112,9 @@ def compute_wins(
 
     return wins, win_rate
 
-
 def best_uid(metagraph: bt.metagraph) -> int:
     """Returns the best performing UID in the metagraph."""
     return max(range(metagraph.n), key=lambda uid: metagraph.I[uid].item())
-
 
 def nearest_tempo(start_block, tempo, block):
     start_num = start_block + tempo
@@ -133,38 +124,7 @@ def nearest_tempo(start_block, tempo, block):
         nearest_num -= tempo
     return nearest_num
 
-
-@dataclass
-class LocalMetadata:
-    """Metadata associated with the local validator instance"""
-    commit: str
-    btversion: str
-    uid: int = 0
-    coldkey: str = ""
-    hotkey: str = ""
-
-
-def local_metadata() -> LocalMetadata:
-    """Extract the version as current git commit hash"""
-    commit_hash = ""
-    try:
-        result = subprocess.run(
-            split("git rev-parse HEAD"),
-            check=True,
-            capture_output=True,
-            cwd=constants.ROOT_DIR,
-        )
-        commit = result.stdout.decode().strip()
-        assert len(commit) == 40, f"Invalid commit hash: {commit}"
-        commit_hash = commit[:8]
-    except:
-        commit_hash = "unkown"
-
-    bittensor_version = version('bittensor')
-    return LocalMetadata(commit=commit_hash, btversion=bittensor_version, )
-
-
-class Validator:
+class ModelQueue:
     @staticmethod
     def config():
         parser = argparse.ArgumentParser()
@@ -249,12 +209,6 @@ class Validator:
             default=8000,
             help="Port for local validation api",
         )
-        parser.add_argument(
-            "--wandb-key",
-            type=str,
-            default="",
-            help="A WandB API key for logging purposes",
-        )
 
         bt.subtensor.add_args(parser)
         bt.logging.add_args(parser)
@@ -280,8 +234,8 @@ class Validator:
             )
         )
 
-    def __init__(self, local_metadata: LocalMetadata):
-        self.config = Validator.config()
+    def __init__(self):
+        self.config = ModelQueue.config()
         bt.logging(config=self.config)
 
         bt.logging.info(f"Starting validator with config: {self.config}")
@@ -394,10 +348,10 @@ class Validator:
                     try:
                         asyncio.run(self.model_updater.sync_model(hotkey))
                         if (
-                                self.model_tracker.get_model_metadata_for_miner_hotkey(
-                                    hotkey
-                                )
-                                is None
+                            self.model_tracker.get_model_metadata_for_miner_hotkey(
+                                hotkey
+                            )
+                            is None
                         ):
                             bt.logging.warning(
                                 f"Unable to get metadata for consensus UID {uid} with hotkey {hotkey}"
@@ -409,32 +363,7 @@ class Validator:
 
         # Touch all models, starting a timer for them to be deleted if not used
         self.model_tracker.touch_all_miner_models()
-
-        validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
-
-        # Set up local metadata for stats collection
-        self.local_metadata = LocalMetadata(
-            commit=local_metadata.commit,
-            btversion=local_metadata.btversion,
-            hotkey=self.wallet.hotkey.ss58_address,
-            coldkey=self.wallet.coldkeypub.ss58_address,
-            uid=validator_uid,
-        )
-        bt.logging.info(f"dumping localmetadata: {self.local_metadata}")
-
-        # Initialize wandb
-        if self.config.wandb_key:
-            wandb_logger.safe_login(api_key=self.config.wandb_key)
-        wandb_logger.safe_init(
-            "Validator",
-            self.wallet,
-            self.metagraph,
-            self.config,
-        )
-        wandb_logger.safe_log({
-            "log_success": 1,
-        })
-
+        
         # == Initialize the update thread ==
         self.stop_event = threading.Event()
         self.update_thread = threading.Thread(
@@ -479,7 +408,7 @@ class Validator:
                 if time_diff and time_diff < dt.timedelta(minutes=update_delay_minutes):
                     # If we have seen it within `update_delay_minutes` minutes then sleep until it has been at least `update_delay_minutes` minutes.
                     time_to_sleep = (
-                            dt.timedelta(minutes=update_delay_minutes) - time_diff
+                        dt.timedelta(minutes=update_delay_minutes) - time_diff
                     ).total_seconds()
                     bt.logging.info(
                         f"Update loop has already processed all UIDs in the last {update_delay_minutes} minutes. Sleeping {time_to_sleep} seconds."
@@ -494,7 +423,7 @@ class Validator:
 
                 # Compare metadata and tracker, syncing new model from remote store to local if necessary.
                 updated = asyncio.run(self.model_updater.sync_model(hotkey))
-
+                
                 # Ensure we eval the new model on the next loop.
                 if updated:
                     metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
@@ -558,12 +487,8 @@ class Validator:
                     wait_for_inclusion=False,
                     version_key=constants.weights_version_key,
                 )
-                weights_report = {"weights": {}}
-                for uid, score in enumerate(self.weights):
-                    weights_report["weights"][uid] = score
-                wandb_logger.safe_log(weights_report)
-            except Exception as e:
-                bt.logging.error(f"failed to set weights {e}")
+            except:
+                pass
             ws, ui = self.weights.topk(len(self.weights))
             table = Table(title="All Weights")
             table.add_column("uid", justify="right", style="cyan", no_wrap=True)
@@ -580,7 +505,7 @@ class Validator:
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")
 
-    async def try_sync_metagraph(self, ttl: int) -> bool:
+    async def try_sync_metagraph(self, ttl: int):
         def sync_metagraph(endpoint):
             # Update self.metagraph
             self.metagraph = bt.subtensor(endpoint).metagraph(self.config.netuid)
@@ -595,12 +520,11 @@ class Validator:
             process.terminate()
             process.join()
             bt.logging.error(f"Failed to sync metagraph after {ttl} seconds")
-            return False
+            return
 
         bt.logging.info("Synced metagraph")
         self.metagraph.load()
         self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
-        return True
 
     async def try_run_step(self, ttl: int):
         async def _try_run_step():
@@ -612,103 +536,6 @@ class Validator:
             bt.logging.warning("Finished running step.")
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to run step after {ttl} seconds")
-
-    def _fetch_scores_sync(self,
-                           uid_to_hotkey_and_model_metadata,
-                           competition_parameters,
-                           scores_per_uid,
-                           uid_to_block):
-        # Calculate the next closest half-hour mark
-        next_run_time = dt.datetime.utcnow()
-        # Only run at the five minute mark
-        interval_minutes = 5
-        next_run_time += dt.timedelta(
-            minutes=interval_minutes - next_run_time.minute % interval_minutes,
-        )
-
-        while True:
-            current_time = dt.datetime.utcnow()
-            # Check if the current time is close to or past the scheduled time
-            if current_time >= next_run_time:
-                self.fetch_scores(uid_to_hotkey_and_model_metadata,
-                                  competition_parameters,
-                                  scores_per_uid,
-                                  uid_to_block)
-                return
-            time.sleep(10)  # Check every 10 seconds
-
-    def fetch_scores(self,
-                     uid_to_hotkey_and_model_metadata,
-                     competition_parameters,
-                     scores_per_uid,
-                     uid_to_block):
-        for uid_i, (
-                hotkey,
-                model_i_metadata,
-        ) in uid_to_hotkey_and_model_metadata.items():
-            score = None
-            if model_i_metadata is not None:
-                if (
-                        model_i_metadata.id.competition_id
-                        == competition_parameters.competition_id
-                ):
-                    try:
-                        self.model_tracker.touch_miner_model(hotkey)
-                        # Update the block this uid last updated their model.
-                        uid_to_block[uid_i] = model_i_metadata.block
-
-                        while True:
-                            try:
-                                _score, status = get_model_score(model_i_metadata.id.namespace,
-                                                                 model_i_metadata.id.name, model_i_metadata.id.hash,
-                                                                 model_i_metadata.id.chat_template, self.config,
-                                                                 self.local_metadata)
-                                if _score is None:
-                                    retryWithRemote = True
-                                    _score, status = get_model_score(model_i_metadata.id.namespace,
-                                                                     model_i_metadata.id.name, model_i_metadata.id.hash,
-                                                                     model_i_metadata.id.chat_template, self.config,
-                                                                     self.local_metadata, retryWithRemote)
-                                bt.logging.info(f"Score for {model_i_metadata} is {_score}")
-                                bt.logging.info(f"Status for {model_i_metadata} is {status}")
-                                if status == 'COMPLETED':
-                                    score = _score
-                                    break
-                                elif status == 'FAILED':
-                                    score = 0
-                                    break
-                                else:
-                                    bt.logging.debug(
-                                        f"Waiting for score for {model_i_metadata.id} Current status: {status}")
-                                    time.sleep(10)
-                            except:
-                                bt.logging.error(f"Failed to get score for {model_i_metadata.id}")
-                                break
-                    except Exception as e:
-                        bt.logging.error(
-                            f"Error in eval loop: {e}. Setting score for uid: {uid_i} to 0."
-                        )
-                    finally:
-                        # After we are done with the model, release it.
-                        self.model_tracker.release_model_metadata_for_miner_hotkey(hotkey, model_i_metadata)
-                else:
-                    bt.logging.debug(
-                        f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to 0."
-                    )
-            else:
-                bt.logging.debug(
-                    f"Unable to load the model for {uid_i} (perhaps a duplicate?). Setting loss to 0."
-                )
-            if not score:
-                bt.logging.error(f"Failed to get score for {model_i_metadata}")
-                score = 0
-
-            scores_per_uid[uid_i] = score
-
-            bt.logging.warning(
-                f"Computed model score for uid: {uid_i}: {score}"
-            )
-            bt.logging.debug(f"Computed model losses for uid: {uid_i}: {score}")
 
     async def run_step(self):
         """
@@ -723,12 +550,10 @@ class Validator:
         """
 
         # Update self.metagraph
-        synced = await self.try_sync_metagraph(ttl=60)
-        if not synced:
-            return
+        await self.try_sync_metagraph(ttl=60)
         competition_parameters = constants.COMPETITION_SCHEDULE[
             self.global_step % len(constants.COMPETITION_SCHEDULE)
-            ]
+        ]
 
         # Add uids with newly updated models to the upcoming batch of evaluations.
         with self.pending_uids_to_eval_lock:
@@ -760,12 +585,13 @@ class Validator:
         bt.logging.debug(
             f"Computing metrics on {uids} for competition {competition_parameters.competition_id}"
         )
-        scores_per_uid: Dict[any, Optional[int]] = {muid: None for muid in uids}
+        scores_per_uid = {muid: None for muid in uids}
         sample_per_uid = {muid: None for muid in uids}
 
         load_model_perf = PerfMonitor("Eval: Load model")
         compute_loss_perf = PerfMonitor("Eval: Compute loss")
 
+        # Queue up model metadata
         self.model_tracker.release_all()
         uid_to_hotkey_and_model_metadata: typing.Dict[
             int, typing.Tuple[str, typing.Optional[ModelMetadata]]
@@ -779,12 +605,12 @@ class Validator:
             bt.logging.info(f"Model metadata for {uid_i} is {model_i_metadata}")
             if model_i_metadata is not None:
                 for other_uid, (
-                        other_hotkey,
-                        other_metadata,
+                    other_hotkey,
+                    other_metadata,
                 ) in uid_to_hotkey_and_model_metadata.items():
                     if (
-                            other_metadata
-                            and model_i_metadata.id.hash == other_metadata.id.hash
+                        other_metadata
+                        and model_i_metadata.id.hash == other_metadata.id.hash
                     ):
                         if model_i_metadata.block < other_metadata.block:
                             bt.logging.error(
@@ -806,15 +632,106 @@ class Validator:
                         break
 
             uid_to_hotkey_and_model_metadata[uid_i] = (hotkey, model_i_metadata)
-
+            
         bt.logging.info("Looking at model metadata", uid_to_hotkey_and_model_metadata)
-        # ADD INSTRUCTIONS FOR SCORING ON LOCAL VALIDATOR
 
-        self._fetch_scores_sync(
-            uid_to_hotkey_and_model_metadata,
-            competition_parameters,
-            scores_per_uid,
-            uid_to_block)
+        # Compute the score for each model.
+        # if status is QUEUED or RUNNING, set score to None
+        for uid_i, (
+            hotkey,
+            model_i_metadata,
+        ) in uid_to_hotkey_and_model_metadata.items():
+            score = None
+            if model_i_metadata is not None:
+                if (
+                    model_i_metadata.id.competition_id
+                    == competition_parameters.competition_id
+                ):
+                    # self.model_tracker.touch_miner_model(hotkey)
+                    # Update the block this uid last updated their model.
+                    uid_to_block[uid_i] = model_i_metadata.block
+                    while True:
+                        try:
+                            _score, status = get_model_score(
+                                model_i_metadata.id.namespace,
+                                model_i_metadata.id.name,
+                                model_i_metadata.id.hash,
+                                model_i_metadata.id.chat_template,
+                                self.config
+                            )
+                            bt.logging.info(f"Score for {model_i_metadata} is {_score}")
+                            bt.logging.info(f"Status for {model_i_metadata} is {status}")
+                            bt.logging.debug(f"Queried for score for {model_i_metadata.id} Current status: {status}")
+                            if status != 'QUEUED':
+                                break
+                        except:
+                            bt.logging.error(f"Failed to get score for {model_i_metadata.id}")
+                            break
+
+
+        for uid_i, (
+            hotkey,
+            model_i_metadata,
+        ) in uid_to_hotkey_and_model_metadata.items():
+            score = None
+            if model_i_metadata is not None:
+                if (
+                    model_i_metadata.id.competition_id
+                    == competition_parameters.competition_id
+                ):
+                    try:
+                        self.model_tracker.touch_miner_model(hotkey)
+                        # Update the block this uid last updated their model.
+                        uid_to_block[uid_i] = model_i_metadata.block
+
+                        while True:
+                            try:
+                                _score, status = get_model_score(
+                                    model_i_metadata.id.namespace,
+                                    model_i_metadata.id.name,
+                                    model_i_metadata.id.hash,
+                                    model_i_metadata.id.chat_template,
+                                    self.config
+                                )
+                                bt.logging.info(f"Score for {model_i_metadata} is {_score}")
+                                bt.logging.info(f"Status for {model_i_metadata} is {status}")
+                                if status == 'COMPLETED':
+                                    score = _score
+                                    break
+                                elif status == 'FAILED':
+                                    score = 0
+                                    break
+                                else:
+                                    bt.logging.debug(f"Waiting for score for {model_i_metadata.id} Current status: {status}")
+                                    time.sleep(10)
+                            except:
+                                bt.logging.error(f"Failed to get score for {model_i_metadata.id}")
+                                break
+                    except Exception as e:
+                        bt.logging.error(
+                            f"Error in eval loop: {e}. Setting score for uid: {uid_i} to 0."
+                        )
+                    finally:
+                        # After we are done with the model, release it.
+                        self.model_tracker.release_model_metadata_for_miner_hotkey(hotkey, model_i_metadata)
+                else:
+                    bt.logging.debug(
+                        f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to 0."
+                    )
+            else:
+                bt.logging.debug(
+                    f"Unable to load the model for {uid_i} (perhaps a duplicate?). Setting loss to 0."
+                )
+            if not score:
+                bt.logging.error(f"Failed to get score for {model_i_metadata}")
+                score = 0
+
+            scores_per_uid[uid_i] = score
+
+            bt.logging.warning(
+                f"Computed model score for uid: {uid_i}: {score}"
+            )
+            bt.logging.debug(f"Computed model losses for uid: {uid_i}: {score}")
 
         # Compute wins and win rates per uid.
         wins, win_rate = compute_wins(uids, scores_per_uid, uid_to_block)
@@ -828,8 +745,8 @@ class Validator:
         for i, uid_i in enumerate(uids):
             new_weights[uid_i] = step_weights[i]
         scale = (
-                len(constants.COMPETITION_SCHEDULE)
-                * competition_parameters.reward_percentage
+            len(constants.COMPETITION_SCHEDULE)
+            * competition_parameters.reward_percentage
         )
         new_weights *= scale / new_weights.sum()
         if new_weights.shape[0] < self.weights.shape[0]:
@@ -842,7 +759,7 @@ class Validator:
                 ]
             )
         self.weights = (
-                constants.alpha * self.weights + (1 - constants.alpha) * new_weights
+            constants.alpha * self.weights + (1 - constants.alpha) * new_weights
         )
         self.weights = self.weights.nan_to_num(0.0)
 
@@ -870,14 +787,14 @@ class Validator:
         self.run_step_count += 1
 
     def log_step(
-            self,
-            competition_id,
-            uids,
-            uid_to_block,
-            wins,
-            win_rate,
-            scores_per_uid: Dict[any, Optional[int]],
-            sample_per_uid,
+        self,
+        competition_id,
+        uids,
+        uid_to_block,
+        wins,
+        win_rate,
+        scores_per_uid,
+        sample_per_uid,
     ):
         # Build step log
         step_log = {
@@ -890,11 +807,6 @@ class Validator:
             step_log["uid_data"][str(uid)] = {
                 "uid": uid,
                 "block": uid_to_block[uid],
-                # "average_loss": (
-                #     sum(losses_per_uid[uid]) / len(losses_per_uid[uid])
-                #     if len(losses_per_uid[uid]) > 0
-                #     else math.inf
-                # ),
                 "score": scores_per_uid[uid],
                 "win_rate": win_rate[uid],
                 "win_total": wins[uid],
@@ -943,23 +855,19 @@ class Validator:
 
         # Sink step log.
         bt.logging.warning(f"Step results: {step_log}")
-        wandb_logger.safe_log({"scores": scores_per_uid})
 
     async def run(self):
         while True:
             try:
                 while (
-                        self.metagraph.block.item() - self.last_epoch
-                        < self.config.blocks_per_epoch
+                    self.metagraph.block.item() - self.last_epoch
+                    < self.config.blocks_per_epoch
                 ):
                     await self.try_run_step(ttl=60 * 20)
                     bt.logging.debug(
-                        f"{self.metagraph.block.item() - self.last_epoch} / {self.config.blocks_per_epoch} blocks until next epoch."
+                        f"{self.metagraph.block.item() - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
                     )
                     self.global_step += 1
-
-                if not self.config.dont_set_weights and not self.config.offline:
-                    await self.try_set_weights(ttl=120)
                 self.last_epoch = self.metagraph.block.item()
                 self.epoch_step += 1
 
@@ -974,13 +882,11 @@ class Validator:
                     f"Error in validator loop \n {e} \n {traceback.format_exc()}"
                 )
 
-
-def get_model_score(namespace, name, hash, template, config, local_metadata: LocalMetadata,
-                    retryWithRemote: bool = False):
+def get_model_score(namespace, name, hash, template, config):
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
     # return (score, status)
-    if config.use_local_validation_api and not retryWithRemote:
+    if config.use_local_validation_api:
         validation_endpoint = f"http://localhost:{config.local_validation_api_port}/evaluate_model"
     else:
         validation_endpoint = f"{constants.VALIDATION_SERVER}/evaluate_model"
@@ -993,13 +899,6 @@ def get_model_score(namespace, name, hash, template, config, local_metadata: Loc
         "chat_template_type": template,
     }
 
-    headers = {
-        'Git-Commit': str(local_metadata.commit),
-        'Bittensor-Version': str(local_metadata.btversion),
-        'UID': str(local_metadata.uid),
-        'Hotkey': str(local_metadata.hotkey),
-        'Coldkey': str(local_metadata.coldkey),
-    }
     if os.environ.get('ADMIN_KEY', None) not in [None, '']:
         payload['admin_key'] = os.environ['ADMIN_KEY']
 
@@ -1008,7 +907,7 @@ def get_model_score(namespace, name, hash, template, config, local_metadata: Loc
 
     # Make the POST request to the validation endpoint
     try:
-        response = requests.post(validation_endpoint, json=payload, headers=headers)
+        response = requests.post(validation_endpoint, json=payload)
         response.raise_for_status()  # Raise an exception for HTTP errors
         # Parse the response JSON
         result = response.json()
@@ -1023,7 +922,7 @@ def get_model_score(namespace, name, hash, template, config, local_metadata: Loc
         else:
             return None, status
     except Exception as e:
-        score = None
+        score = 0
         status = 'FAILED'
         bt.logging.error(e)
         bt.logging.error(f"Failed to get score and status for {namespace}/{name}")
@@ -1031,7 +930,5 @@ def get_model_score(namespace, name, hash, template, config, local_metadata: Loc
     bt.logging.info(f"Model {namespace}/{name} has score {score} and status {status}")
     return score, status
 
-
 if __name__ == "__main__":
-    metadata = local_metadata()
-    asyncio.run(Validator(metadata).run())
+    asyncio.run(ModelQueue().run())
