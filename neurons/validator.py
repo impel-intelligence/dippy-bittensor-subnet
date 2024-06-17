@@ -581,7 +581,7 @@ class Validator:
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")
 
-    async def try_sync_metagraph(self, ttl: int):
+    async def try_sync_metagraph(self, ttl: int) -> bool:
         def sync_metagraph(endpoint):
             # Update self.metagraph
             self.metagraph = bt.subtensor(endpoint).metagraph(self.config.netuid)
@@ -596,11 +596,12 @@ class Validator:
             process.terminate()
             process.join()
             bt.logging.error(f"Failed to sync metagraph after {ttl} seconds")
-            return
+            return False
 
         bt.logging.info("Synced metagraph")
         self.metagraph.load()
         self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
+        return True
 
     async def try_run_step(self, ttl: int):
         async def _try_run_step():
@@ -626,7 +627,9 @@ class Validator:
         """
 
         # Update self.metagraph
-        await self.try_sync_metagraph(ttl=60)
+        synced = await self.try_sync_metagraph(ttl=60)
+        if not synced:
+            return
         competition_parameters = constants.COMPETITION_SCHEDULE[
             self.global_step % len(constants.COMPETITION_SCHEDULE)
             ]
@@ -729,14 +732,16 @@ class Validator:
 
                         while True:
                             try:
-                                _score, status = get_model_score(
-                                    model_i_metadata.id.namespace,
-                                    model_i_metadata.id.name,
-                                    model_i_metadata.id.hash,
-                                    model_i_metadata.id.chat_template,
-                                    self.config,
-                                    self.local_metadata,
-                                )
+                                _score, status = get_model_score(model_i_metadata.id.namespace,
+                                                                 model_i_metadata.id.name, model_i_metadata.id.hash,
+                                                                 model_i_metadata.id.chat_template, self.config,
+                                                                 self.local_metadata)
+                                if _score is None:
+                                    retryWithRemote = True
+                                    _score, status = get_model_score(model_i_metadata.id.namespace,
+                                                                     model_i_metadata.id.name, model_i_metadata.id.hash,
+                                                                     model_i_metadata.id.chat_template, self.config,
+                                                                     self.local_metadata, retryWithRemote)
                                 bt.logging.info(f"Score for {model_i_metadata} is {_score}")
                                 bt.logging.info(f"Status for {model_i_metadata} is {status}")
                                 if status == 'COMPLETED':
@@ -937,11 +942,11 @@ class Validator:
                 )
 
 
-def get_model_score(namespace, name, hash, template, config, local_metadata: LocalMetadata):
+def get_model_score(namespace, name, hash, template, config, local_metadata: LocalMetadata, retryWithRemote: bool = False):
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
     # return (score, status)
-    if config.use_local_validation_api:
+    if config.use_local_validation_api and not retryWithRemote:
         validation_endpoint = f"http://localhost:{config.local_validation_api_port}/evaluate_model"
     else:
         validation_endpoint = f"{constants.VALIDATION_SERVER}/evaluate_model"

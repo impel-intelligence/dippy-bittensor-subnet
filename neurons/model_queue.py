@@ -124,7 +124,7 @@ def nearest_tempo(start_block, tempo, block):
         nearest_num -= tempo
     return nearest_num
 
-class Validator:
+class ModelQueue:
     @staticmethod
     def config():
         parser = argparse.ArgumentParser()
@@ -235,7 +235,7 @@ class Validator:
         )
 
     def __init__(self):
-        self.config = Validator.config()
+        self.config = ModelQueue.config()
         bt.logging(config=self.config)
 
         bt.logging.info(f"Starting validator with config: {self.config}")
@@ -591,6 +591,7 @@ class Validator:
         load_model_perf = PerfMonitor("Eval: Load model")
         compute_loss_perf = PerfMonitor("Eval: Compute loss")
 
+        # Queue up model metadata
         self.model_tracker.release_all()
         uid_to_hotkey_and_model_metadata: typing.Dict[
             int, typing.Tuple[str, typing.Optional[ModelMetadata]]
@@ -785,10 +786,6 @@ class Validator:
         # Increment the number of completed run steps by 1
         self.run_step_count += 1
 
-    def g(self):
-        t = 8
-        w
-
     def log_step(
         self,
         competition_id,
@@ -810,11 +807,6 @@ class Validator:
             step_log["uid_data"][str(uid)] = {
                 "uid": uid,
                 "block": uid_to_block[uid],
-                # "average_loss": (
-                #     sum(losses_per_uid[uid]) / len(losses_per_uid[uid])
-                #     if len(losses_per_uid[uid]) > 0
-                #     else math.inf
-                # ),
                 "score": scores_per_uid[uid],
                 "win_rate": win_rate[uid],
                 "win_total": wins[uid],
@@ -876,9 +868,6 @@ class Validator:
                         f"{self.metagraph.block.item() - self.last_epoch } / {self.config.blocks_per_epoch} blocks until next epoch."
                     )
                     self.global_step += 1
-
-                if not self.config.dont_set_weights and not self.config.offline:
-                    await self.try_set_weights(ttl=120)
                 self.last_epoch = self.metagraph.block.item()
                 self.epoch_step += 1
 
@@ -942,4 +931,4 @@ def get_model_score(namespace, name, hash, template, config):
     return score, status
 
 if __name__ == "__main__":
-    asyncio.run(Validator().run())
+    asyncio.run(ModelQueue().run())

@@ -195,6 +195,7 @@ Please note that this validator will call the model validation service hosted by
 ### Running the model evaluation API (Optional)
 
 Starting a validator using your local validator API requires starting validator with `--use-local-validation-api` flag. 
+Additionally, a model queue is required to push models to the validation api.
 
 **Note**: Validator API needs to be installed in a different venv than validator due to `pydantic` version conflict. 
 
@@ -253,6 +254,8 @@ chmod +x kill_validation_api.sh
 python -m venv validator_venv
 validator_venv/bin/pip install -e .
 validator_venv/bin/python neurons/validator.py --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME --use-local-validation-api
+# Run model queue to push models to validation api to be evaluated
+validator_venv/bin/python neurons/model_queue.py --use-local-validation-api
 ```
 ## Model Evaluation Criteria
 ### Model Size
