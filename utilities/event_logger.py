@@ -27,7 +27,7 @@ class EventLogger:
             sys.stderr, format=format, serialize=True  # For JSON output in console
         )
         self.logger.add(
-            filepath, rotation="500 MB", format=format, serialize=True  # For JSON output in file with rotation
+            filepath, rotation="100 MB", format=format, serialize=True  # For JSON output in file with rotation
         )
 
     def log(self, level, message, **kwargs):

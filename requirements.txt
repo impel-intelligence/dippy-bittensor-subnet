@@ -10,3 +10,4 @@ supabase
 tiktoken
 threadpoolctl
 wandb
+loguru
