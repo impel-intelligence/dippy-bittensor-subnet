@@ -740,6 +740,7 @@ class Validator:
         competition_parameters = constants.COMPETITION_SCHEDULE[
             self.global_step % len(constants.COMPETITION_SCHEDULE)
             ]
+        telemetry_report(self.local_metadata)
 
         # Add uids with newly updated models to the upcoming batch of evaluations.
         with self.pending_uids_to_eval_lock:
@@ -986,6 +987,27 @@ class Validator:
                 bt.logging.error(
                     f"Error in validator loop \n {e} \n {traceback.format_exc()}"
                 )
+
+
+
+def telemetry_report(local_metadata: LocalMetadata):
+    telemetry_endpoint = f"{constants.VALIDATION_SERVER}/telemetry_report"
+    payload = {}
+    headers = {
+        'Git-Commit': str(local_metadata.commit),
+        'Bittensor-Version': str(local_metadata.btversion),
+        'UID': str(local_metadata.uid),
+        'Hotkey': str(local_metadata.hotkey),
+        'Coldkey': str(local_metadata.coldkey),
+    }
+
+    # Make the POST request to the validation endpoint
+    try:
+        response = requests.post(telemetry_endpoint, json=payload, headers=headers)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+    except Exception as e:
+        bt.logging.error(e)
+    return
 
 
 def get_model_score(namespace, name, hash, template, config, local_metadata: LocalMetadata,
