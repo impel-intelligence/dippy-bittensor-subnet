@@ -11,7 +11,7 @@ import uvicorn
 
 import pandas as pd
 import torch
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Response
 from supabase import create_client
 import huggingface_hub
 import shutil
@@ -278,6 +278,30 @@ def get_json_result(hash):
 
         logger.error(f"Error fetching leaderboard from database: {e}")
         return None
+
+@app.post("/telemetry_report")
+def telemetry_report(
+        git_commit: str = Header(None, alias='Git-Commit'),
+        bittensor_version: str = Header(None, alias='Bittensor-Version'),
+        uid: str = Header(None, alias='UID'),
+        hotkey: str = Header(None, alias='Hotkey'),
+        coldkey: str = Header(None, alias='Coldkey')
+):
+    request_details = {
+        "git_commit": git_commit,
+        "bittensor_version": bittensor_version,
+        "uid": uid,
+        "hotkey": hotkey,
+        "coldkey": coldkey,
+    }
+
+    # log incoming request details
+    if app.state.event_logger_enabled:
+        app.state.event_logger.info("Incoming request", extra=request_details)
+    return Response(status_code=200)
+
+
+
 
 @app.post("/evaluate_model")
 def evaluate_model(
