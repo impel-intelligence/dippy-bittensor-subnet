@@ -35,7 +35,6 @@ import requests
 from importlib.metadata import version
 from shlex import split
 
-
 import constants
 from model.data import ModelMetadata
 from model.model_tracker import ModelTracker
@@ -65,6 +64,7 @@ import bittensor as bt
 import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 
 def iswin(score_i, score_j, block_i, block_j):
     """
@@ -149,10 +149,10 @@ def local_metadata() -> LocalMetadata:
     commit_hash = ""
     try:
         result = subprocess.run(
-        split("git rev-parse HEAD"),
-        check=True,
-        capture_output=True,
-        cwd=constants.ROOT_DIR,
+            split("git rev-parse HEAD"),
+            check=True,
+            capture_output=True,
+            cwd=constants.ROOT_DIR,
         )
         commit = result.stdout.decode().strip()
         assert len(commit) == 40, f"Invalid commit hash: {commit}"
@@ -410,7 +410,6 @@ class Validator:
         # Touch all models, starting a timer for them to be deleted if not used
         self.model_tracker.touch_all_miner_models()
 
-
         validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
 
         # Set up local metadata for stats collection
@@ -427,13 +426,13 @@ class Validator:
         if self.config.wandb_key:
             wandb_logger.safe_login(api_key=self.config.wandb_key)
         wandb_logger.safe_init(
-                "Validator",
-                self.wallet,
-                self.metagraph,
-                self.config,
-            )
+            "Validator",
+            self.wallet,
+            self.metagraph,
+            self.config,
+        )
         wandb_logger.safe_log({
-                "log_success": 1,
+            "log_success": 1,
         })
 
         # == Initialize the update thread ==
@@ -614,6 +613,103 @@ class Validator:
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to run step after {ttl} seconds")
 
+    def _fetch_scores_sync(self,
+                           uid_to_hotkey_and_model_metadata,
+                           competition_parameters,
+                           scores_per_uid,
+                           uid_to_block):
+        # Calculate the next closest half-hour mark
+        next_run_time = dt.datetime.utcnow()
+        # Only run at the five minute mark
+        interval_minutes = 5
+        next_run_time += dt.timedelta(
+            minutes=interval_minutes - next_run_time.minute % interval_minutes,
+        )
+
+        while True:
+            current_time = dt.datetime.utcnow()
+            # Check if the current time is close to or past the scheduled time
+            if current_time >= next_run_time:
+                self.fetch_scores(uid_to_hotkey_and_model_metadata,
+                                  competition_parameters,
+                                  scores_per_uid,
+                                  uid_to_block)
+                return
+            time.sleep(10)  # Check every 10 seconds
+
+    def fetch_scores(self,
+                     uid_to_hotkey_and_model_metadata,
+                     competition_parameters,
+                     scores_per_uid,
+                     uid_to_block):
+        for uid_i, (
+                hotkey,
+                model_i_metadata,
+        ) in uid_to_hotkey_and_model_metadata.items():
+            score = None
+            if model_i_metadata is not None:
+                if (
+                        model_i_metadata.id.competition_id
+                        == competition_parameters.competition_id
+                ):
+                    try:
+                        self.model_tracker.touch_miner_model(hotkey)
+                        # Update the block this uid last updated their model.
+                        uid_to_block[uid_i] = model_i_metadata.block
+
+                        while True:
+                            try:
+                                _score, status = get_model_score(model_i_metadata.id.namespace,
+                                                                 model_i_metadata.id.name, model_i_metadata.id.hash,
+                                                                 model_i_metadata.id.chat_template, self.config,
+                                                                 self.local_metadata)
+                                if _score is None:
+                                    retryWithRemote = True
+                                    _score, status = get_model_score(model_i_metadata.id.namespace,
+                                                                     model_i_metadata.id.name, model_i_metadata.id.hash,
+                                                                     model_i_metadata.id.chat_template, self.config,
+                                                                     self.local_metadata, retryWithRemote)
+                                bt.logging.info(f"Score for {model_i_metadata} is {_score}")
+                                bt.logging.info(f"Status for {model_i_metadata} is {status}")
+                                if status == 'COMPLETED':
+                                    score = _score
+                                    break
+                                elif status == 'FAILED':
+                                    score = 0
+                                    break
+                                else:
+                                    bt.logging.debug(
+                                        f"Waiting for score for {model_i_metadata.id} Current status: {status}")
+                                    time.sleep(10)
+                            except:
+                                bt.logging.error(f"Failed to get score for {model_i_metadata.id}")
+                                break
+                    except Exception as e:
+                        bt.logging.error(
+                            f"Error in eval loop: {e}. Setting score for uid: {uid_i} to 0."
+                        )
+                    finally:
+                        # After we are done with the model, release it.
+                        self.model_tracker.release_model_metadata_for_miner_hotkey(hotkey, model_i_metadata)
+                else:
+                    bt.logging.debug(
+                        f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to 0."
+                    )
+            else:
+                bt.logging.debug(
+                    f"Unable to load the model for {uid_i} (perhaps a duplicate?). Setting loss to 0."
+                )
+            if not score:
+                bt.logging.error(f"Failed to get score for {model_i_metadata}")
+                score = 0
+
+            scores_per_uid[uid_i] = score
+
+            bt.logging.warning(
+                f"Computed model score for uid: {uid_i}: {score}"
+            )
+            bt.logging.debug(f"Computed model losses for uid: {uid_i}: {score}")
+
     async def run_step(self):
         """
         Executes a step in the evaluation process of models. This function performs several key tasks:
@@ -714,74 +810,11 @@ class Validator:
         bt.logging.info("Looking at model metadata", uid_to_hotkey_and_model_metadata)
         # ADD INSTRUCTIONS FOR SCORING ON LOCAL VALIDATOR
 
-
-        for uid_i, (
-            hotkey,
-            model_i_metadata,
-        ) in uid_to_hotkey_and_model_metadata.items():
-            score = None
-            if model_i_metadata is not None:
-                if (
-                    model_i_metadata.id.competition_id
-                    == competition_parameters.competition_id
-                ):
-                    try:
-                        self.model_tracker.touch_miner_model(hotkey)
-                        # Update the block this uid last updated their model.
-                        uid_to_block[uid_i] = model_i_metadata.block
-
-                        while True:
-                            try:
-                                _score, status = get_model_score(model_i_metadata.id.namespace,
-                                                                 model_i_metadata.id.name, model_i_metadata.id.hash,
-                                                                 model_i_metadata.id.chat_template, self.config,
-                                                                 self.local_metadata)
-                                if _score is None:
-                                    retryWithRemote = True
-                                    _score, status = get_model_score(model_i_metadata.id.namespace,
-                                                                     model_i_metadata.id.name, model_i_metadata.id.hash,
-                                                                     model_i_metadata.id.chat_template, self.config,
-                                                                     self.local_metadata, retryWithRemote)
-                                bt.logging.info(f"Score for {model_i_metadata} is {_score}")
-                                bt.logging.info(f"Status for {model_i_metadata} is {status}")
-                                if status == 'COMPLETED':
-                                    score = _score
-                                    break
-                                elif status == 'FAILED':
-                                    score = 0
-                                    break
-                                else:
-                                    bt.logging.debug(
-                                        f"Waiting for score for {model_i_metadata.id} Current status: {status}")
-                                    time.sleep(10)
-                            except:
-                                bt.logging.error(f"Failed to get score for {model_i_metadata.id}")
-                                break
-                    except Exception as e:
-                        bt.logging.error(
-                            f"Error in eval loop: {e}. Setting score for uid: {uid_i} to 0."
-                        )
-                    finally:
-                        # After we are done with the model, release it.
-                        self.model_tracker.release_model_metadata_for_miner_hotkey(hotkey, model_i_metadata)
-                else:
-                    bt.logging.debug(
-                        f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to 0."
-                    )
-            else:
-                bt.logging.debug(
-                    f"Unable to load the model for {uid_i} (perhaps a duplicate?). Setting loss to 0."
-                )
-            if not score:
-                bt.logging.error(f"Failed to get score for {model_i_metadata}")
-                score = 0
-
-            scores_per_uid[uid_i] = score
-
-            bt.logging.warning(
-                f"Computed model score for uid: {uid_i}: {score}"
-            )
-            bt.logging.debug(f"Computed model losses for uid: {uid_i}: {score}")
+        self._fetch_scores_sync(
+            uid_to_hotkey_and_model_metadata,
+            competition_parameters,
+            scores_per_uid,
+            uid_to_block)
 
         # Compute wins and win rates per uid.
         wins, win_rate = compute_wins(uids, scores_per_uid, uid_to_block)
@@ -942,7 +975,8 @@ class Validator:
                 )
 
 
-def get_model_score(namespace, name, hash, template, config, local_metadata: LocalMetadata, retryWithRemote: bool = False):
+def get_model_score(namespace, name, hash, template, config, local_metadata: LocalMetadata,
+                    retryWithRemote: bool = False):
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
     # return (score, status)
