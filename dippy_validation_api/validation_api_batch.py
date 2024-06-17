@@ -269,10 +269,13 @@ def get_json_result(hash):
             "status": response.data[0]['status']
             }
             if app.state.event_logger_enabled:
-                app.state.event_logger.info("scored_model", extras=result)
+                log_data = result.copy()
+                log_data["hash"] = hash
+                app.state.event_logger.info("scored_model", model_info=log_data)
             return result
         raise RuntimeError('No record QUEUED')
     except Exception as e:
+
         logger.error(f"Error fetching leaderboard from database: {e}")
         return None
 

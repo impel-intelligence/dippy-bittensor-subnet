@@ -771,7 +771,7 @@ class Validator:
         bt.logging.debug(
             f"Computing metrics on {uids} for competition {competition_parameters.competition_id}"
         )
-        scores_per_uid: Dict[any, Optional[int]] = {muid: None for muid in uids}
+        scores_per_uid: Dict[any, Optional[float]] = {muid: None for muid in uids}
         sample_per_uid = {muid: None for muid in uids}
 
         load_model_perf = PerfMonitor("Eval: Load model")
@@ -896,6 +896,7 @@ class Validator:
             "competition_id": competition_id,
             "uids": uids,
             "uid_data": {},
+            "step": self.epoch_step,
         }
         for i, uid in enumerate(uids):
             step_log["uid_data"][str(uid)] = {
@@ -954,8 +955,8 @@ class Validator:
 
         # Sink step log.
         bt.logging.warning(f"Step results: {step_log}")
-        wandb_logger.safe_log({"step_log": step_log})
-        self._event_log("log_scores", scores=scores_per_uid)
+        wandb_logger.safe_log({"miner_scores/scored_per_uid": scores_per_uid})
+        self._event_log("log_scores", scores=scores_per_uid, step=self.epoch_step)
 
     async def run(self):
         while True:
