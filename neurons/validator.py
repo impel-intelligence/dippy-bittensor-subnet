@@ -50,6 +50,7 @@ import multiprocessing
 from rich.table import Table
 from rich.console import Console
 
+from utilities.event_logger import EventLogger
 from utilities.miner_iterator import MinerIterator
 from utilities import utils
 from utilities.perf_monitor import PerfMonitor
@@ -434,6 +435,11 @@ class Validator:
         wandb_logger.safe_log({
             "log_success": 1,
         })
+        try:
+            self.event_logger = EventLogger(filepath="/tmp/sn11_event_logs/event_{time}.log")
+            self.use_event_logger = True
+        except Exception as e:
+            bt.logging.error(f"could not initialize event logger: {e}")
 
         # == Initialize the update thread ==
         self.stop_event = threading.Event()
@@ -458,6 +464,11 @@ class Validator:
             self.update_thread.join()
             self.clean_thread.join()
 
+
+    def _event_log(self, msg: str, **kwargs):
+        if self.use_event_logger:
+            self.event_logger.info(msg, **kwargs)
+        return
     def update_models(self, update_delay_minutes):
         # Track how recently we updated each uid
         uid_last_checked = dict()
@@ -635,7 +646,7 @@ class Validator:
                                   scores_per_uid,
                                   uid_to_block)
                 return
-            time.sleep(10)  # Check every 10 seconds
+            time.sleep(0.5)  # Check every 10 seconds
 
     def fetch_scores(self,
                      uid_to_hotkey_and_model_metadata,
@@ -943,7 +954,8 @@ class Validator:
 
         # Sink step log.
         bt.logging.warning(f"Step results: {step_log}")
-        wandb_logger.safe_log({"scores": scores_per_uid})
+        wandb_logger.safe_log({"step_log": step_log})
+        self._event_log("log_scores", scores=scores_per_uid)
 
     async def run(self):
         while True:
