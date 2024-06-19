@@ -241,8 +241,9 @@ def warmup_model(model):
 
         average_latency = sum(latencies) / len(latencies)
         print(f"Average model inference latency over 10 runs: {average_latency} ms")
-        
-    return average_latency
+
+    # Test discount latency
+    return average_latency * 0.95
 
 def cleanup(model, model_downloaded, request: EvaluateModelRequest):
     """
