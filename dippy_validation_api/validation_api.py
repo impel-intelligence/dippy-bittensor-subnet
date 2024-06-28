@@ -1,27 +1,26 @@
 import gc
 import time
-import requests
-from typing import Optional
 import os
 import multiprocessing
-import argparse
+import logging
+from datetime import datetime, timedelta
+from typing import Optional
 from pydantic import BaseModel
+import requests
+import uvicorn
+import docker
 
 import pandas as pd
-import uvicorn
 import torch
-from fastapi import FastAPI, HTTPException
-from fastapi.logger import logger
+from fastapi import FastAPI, HTTPException, Header, Response
 from supabase import create_client
 import huggingface_hub
 import shutil
 from dotenv import load_dotenv
 
-load_dotenv()
-
-logger.setLevel("WARNING")
-
+from dippy_validation_api.evaluator import Evaluator
 from utilities.validation_utils import regenerate_hash, check_model_repo_size, get_model_size
+from utilities.event_logger import EventLogger
 
 from dotenv import load_dotenv
 
@@ -53,12 +52,6 @@ SAMPLE_SIZE_VIBE_SCORE = 128 # number of samples to evaluate the model from the 
 
 SAVE_LEADERBOARD_EVERY = 60 # save the leaderboard every 60 seconds
 
-EVAL_SCORE_PORT = 8001 # default port for the eval_score API
-VIBE_SCORE_PORT = 8002 # default port for the vibe_score API
-
-
-leaderboard_file = 'leaderboard.csv'
-
 class EvaluateModelRequest(BaseModel):
     repo_namespace: str
     repo_name: str
@@ -66,8 +59,18 @@ class EvaluateModelRequest(BaseModel):
     hash: str
     revision: Optional[str] = "main"
     competition_id: Optional[str] = "d1"
+    admin_key: Optional[str] = "admin_key"
 
 app = FastAPI()
+
+logger = logging.getLogger("uvicorn")
+
+logging.basicConfig(level=logging.ERROR)
+
+app.state.leaderboard_update_time = None
+app.state.leaderboard = None
+
+admin_key = os.environ['ADMIN_KEY']
 
 chat_template_mappings = {
     "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
@@ -79,57 +82,17 @@ chat_template_mappings = {
     "llama3": "prompt_templates/llama3_prompt_template.jinja",
 }
 
-class ThreadSafeLeaderboardManager:
-    def __init__(self, namespace):
-        self.namespace = namespace
-        self.lock = multiprocessing.Lock()
 
-    def __enter__(self):
-        self.lock.acquire()
-        return self.get_leaderboard()
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.lock.release()
-
-    def get_leaderboard(self):
-        if not hasattr(self.namespace, 'leaderboard'):
-            dtype_dict = {
-                'hash': str,
-                'repo_namespace': str,
-                'repo_name': str,
-                'chat_template_type': str,
-                'model_size_score': 'float64',  # Use 'float64' to allow NaNs
-                'qualitative_score': 'float64',  # Use 'float64' to allow NaNs
-                'latency_score': 'float64',  # Use 'float64' to allow NaNs
-                'vibe_score': 'float64',  # Use 'float64' to allow NaNs
-                'total_score': 'float64',  # Use 'float64' to allow NaNs
-                'timestamp': str,
-                'status': str,
-                'notes': str
-            }
-            leaderboard = pd.read_csv(leaderboard_file, dtype=dtype_dict, parse_dates=['timestamp'])
-            # Replace NaN with None for JSON serialization
-            leaderboard = leaderboard.where(pd.notnull(leaderboard), None)
-            self.namespace.leaderboard = leaderboard
-        
-        return self.namespace.leaderboard
-
-# Usage example:
-# with ThreadSafeLeaderboardManager(namespace) as leaderboard:
-#     # Perform thread-safe operations on leaderboard
-
-def save_leaderboard(leaderboard: pd.DataFrame):
-    leaderboard.to_csv(leaderboard_file, index=False)
-
-def model_evaluation_worker(evaluation_queue, namespace):
+def model_evaluation_queue():
     while True:
-        request = evaluation_queue.get()
+        request = get_next_model_to_eval()
         if request is None:  # Sentinel value to exit the process
-            break
+            logger.info("No more models to evaluate. Sleep for 5 seconds before checking again.")
+            time.sleep(5)
+            continue
         try:
-            with torch.no_grad():  # Disable gradient calculation
-                result = evaluate_model_logic(request, namespace)
-                logger.info(f"Model evaluation completed: {result}")
+            result = evaluate_model(request)
+            logger.info(f"Model evaluation completed: {result}")
         except Exception as e:
             logger.error(f"Error during model evaluation: {e}")
         finally:
@@ -137,111 +100,54 @@ def model_evaluation_worker(evaluation_queue, namespace):
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()  # Empty CUDA cache
 
+def get_next_model_to_eval():
+    try:
+        response = app.state.supabase_client.table("leaderboard").select("*").eq("status", "QUEUED").order("timestamp", desc=False).limit(1).execute()
+        if len(response.data) == 0:
+            return None
+    except Exception as e:
+        logger.error(f"Error fetching next model to evaluate: {e}")
+        return None
+    return EvaluateModelRequest(repo_namespace=response.data[0]["repo_namespace"], repo_name=response.data[0]["repo_name"], chat_template_type=response.data[0]["chat_template_type"], hash=response.data[0]["hash"])
         
-def evaluate_model_logic(request: EvaluateModelRequest, namespace):
+def evaluate_model(request: EvaluateModelRequest):
     """
     Evaluate a model based on the model size and the quality of the model.
     """
-    with ThreadSafeLeaderboardManager(namespace) as leaderboard:
-        if not (leaderboard['hash'] == request.hash).any():
-            logger.debug(leaderboard)
-            logger.debug(leaderboard['hash'])
-            logger.debug(type(leaderboard['hash']))
-            logger.debug(request.hash)
-            logger.debug(type(request.hash))
-            raise ValueError(f"Model {request.hash} not found in the leaderboard")
-        
-        # changed status to in progress
-        update_leaderboard_status(namespace, request.hash, "RUNNING", "Model evaluation in progress")
-    
+    update_supabase_leaderboard_status(request.hash, "RUNNING", "Model evaluation in progress")
+    evaluator = Evaluator()
     logger.info("Model evaluation in progress")
-    start_time = time.time()
     eval_score_response = None
-    while True:
-        try:
-            eval_score_response = requests.post(f"http://localhost:{EVAL_SCORE_PORT}/eval_score", json=request.model_dump())
-            if eval_score_response.status_code == 200:
-                logger.info("eval_score API call successful")
-                break
-            else:
-                raise RuntimeError(f"Error calling eval_score API: {eval_score_response.content}")
-        except Exception as e:
-            if time.time() - start_time > 30:
-                error_string = f"Error calling eval_score API with message: {eval_score_response.content if eval_score_response else e}"
-                
-                with ThreadSafeLeaderboardManager(namespace) as leaderboard:
-                    update_leaderboard_status(namespace, request.hash, "FAILED", error_string)
-                
-                try:
-                    shutdown_response = requests.post(f"http://localhost:{EVAL_SCORE_PORT}/shutdown", timeout=1)
-                except Exception as shutdown_error:
-                    pass
-                
-                raise RuntimeError(error_string)
-        
-        time.sleep(1)  # Wait for 1 second before retrying
-    
-    # Call the shutdown endpoint to restart the eval_score_api for the next evaluation to avoid memory leaks that were observed with loading and unloading different models
-    logger.info("Shutting down eval_score_api")
     try:
-        shutdown_response = requests.post(f"http://localhost:{EVAL_SCORE_PORT}/shutdown", timeout=1)
+        eval_score_result = evaluator.queue_eval_job(request)
     except Exception as e:
-        pass
-    logger.info("vibe_score_api shutdown initiated for restart.")
-    
+        error_string = f"Error calling eval_score API with message: {eval_score_response.content if eval_score_response else e}"
+        update_supabase_leaderboard_status(request.hash, "FAILED", error_string)
+        raise RuntimeError(error_string)
+
     eval_score_data = eval_score_response.json()
     eval_score = eval_score_data["eval_score"]
     latency_score = eval_score_data["latency_score"]
     model_size_score = eval_score_data["model_size_score"]
 
-    # update the leaderboard with only the scores that are available and update the notes
-    with ThreadSafeLeaderboardManager(namespace) as leaderboard:
-        leaderboard.loc[leaderboard['hash'] == request.hash, 'model_size_score'] = float(model_size_score)
-        leaderboard.loc[leaderboard['hash'] == request.hash, 'qualitative_score'] = float(eval_score)
-        leaderboard.loc[leaderboard['hash'] == request.hash, 'latency_score'] = float(latency_score)
-        leaderboard.loc[leaderboard['hash'] == request.hash, 'notes'] = "Now computing vibe score"
-        namespace.leaderboard = leaderboard
-        save_leaderboard(namespace.leaderboard)
+    update_row_supabase({"hash": request.hash, "model_size_score": model_size_score, "qualitative_score": eval_score, "latency_score": latency_score, "notes": "Now computing vibe score"})
 
-    # Call the vibe_score API
-    start_time = time.time()
     vibe_score_response = None
-    while True:
-        try:
-            vibe_score_response = requests.post(f"http://localhost:{VIBE_SCORE_PORT}/vibe_match_score", json=request.model_dump())
-            if vibe_score_response.status_code == 200:
-                logger.info("vibe_score API call successful")
-                break
-            else:
-                clean_up(request)
-                raise RuntimeError(f"Error calling vibe_score API: {vibe_score_response.content}")
-        except Exception as e:
-            if time.time() - start_time > 30:
-                error_string = f"Error calling vibe_score API with message: {vibe_score_response.content if vibe_score_response else e}"
-                with ThreadSafeLeaderboardManager(namespace):
-                    update_leaderboard_status(namespace, request.hash, "FAILED", error_string)
-                
-                try:
-                    shutdown_response = requests.post(f"http://localhost:{VIBE_SCORE_PORT}/shutdown", timeout=1)
-                except Exception as shutdown_error:
-                    logger.error(f"Error during vibe_score_api shutdown: {shutdown_error}")
-                
-                clean_up(request)
-                raise RuntimeError(error_string)
-        
-        time.sleep(1)  # Wait for 1 second before retrying
-    
-    # Call the shutdown endpoint to restart the vibe_score_api for the next evaluation to avoid memory leaks that were observed with loading and unloading different models
-    logger.info("Shutting down vibe_score_api")
+
+    vibe_score_response = evaluator.queue_vibe_score_job(request.model)
+    # vibe_score_response = requests.post(f"http://localhost:{VIBE_SCORE_PORT}/vibe_match_score", json=request.model_dump())
+
     try:
-        shutdown_response = requests.post(f"http://localhost:{VIBE_SCORE_PORT}/shutdown", timeout=1)
+        vibe_score_response = evaluator.queue_vibe_score_job(request.model)
+
     except Exception as e:
-        pass
+        error_string = f"Error calling vibe_score API with message: {vibe_score_response.content if vibe_score_response else e}"
+        update_supabase_leaderboard_status(request.hash, "FAILED", error_string)
+        raise RuntimeError(error_string)
 
     vibe_score = vibe_score_response.json()["vibe_score"]
 
     if eval_score is None or latency_score is None or model_size_score is None or vibe_score is None:
-        clean_up(request)
         raise HTTPException(status_code=500, detail="Error calculating scores, one or more scores are None")
     
     total_score = model_size_score * MODEL_SIZE_SCORE_WEIGHT
@@ -250,34 +156,21 @@ def evaluate_model_logic(request: EvaluateModelRequest, namespace):
     total_score += vibe_score * VIBE_SCORE_WEIGHT
 
     try:
-        with ThreadSafeLeaderboardManager(namespace) as leaderboard:
-            logger.info("Updating leaderboard to COMPLETED")
-            leaderboard.loc[leaderboard['hash'] == request.hash, 'model_size_score'] = float(model_size_score)
-            leaderboard.loc[leaderboard['hash'] == request.hash, 'qualitative_score'] = float(eval_score)
-            leaderboard.loc[leaderboard['hash'] == request.hash, 'latency_score'] = float(latency_score)
-            leaderboard.loc[leaderboard['hash'] == request.hash, 'vibe_score'] = float(vibe_score)
-            leaderboard.loc[leaderboard['hash'] == request.hash, 'total_score'] = float(total_score)
-            leaderboard.loc[leaderboard['hash'] == request.hash, 'status'] = "COMPLETED"
-            leaderboard.loc[leaderboard['hash'] == request.hash, 'notes'] = ""
-            namespace.leaderboard = leaderboard
+        update_row_supabase({"hash": request.hash, "model_size_score": model_size_score, "qualitative_score": eval_score, "latency_score": latency_score, "vibe_score": vibe_score, "total_score": total_score, "status": "COMPLETED", "notes": ""})
         
     except Exception as e:
         failure_reason = str(e)
-        with ThreadSafeLeaderboardManager(namespace) as leaderboard:
-            logger.error(f"Updating leaderboard to FAILED: {failure_reason}")
-            update_leaderboard_status(request.hash, "FAILED", failure_reason)
-        
-        clean_up(request)
+        logger.error(f"Updating leaderboard to FAILED: {failure_reason}")
+        update_supabase_leaderboard_status(request.hash, "FAILED", failure_reason)
         raise RuntimeError("Error updating leaderboard: " + failure_reason)
-    
-    clean_up(request)
-    return {
+    result = {
         "model_size_score": model_size_score,
         "qualitative_score": eval_score,
         "latency_score": latency_score,
         "vibe_score": vibe_score,
         "total_score": total_score
     }
+    return result
 
 def clean_up(request):
     repo_id = f"{request.repo_namespace}/{request.repo_name}"
@@ -286,149 +179,237 @@ def clean_up(request):
     try:
         for repo_info in hf_cache_info.repos:
             if repo_info.repo_id == repo_id:
+                upload_to_hf(repo_info.repo_path, f"{request.repo_namespace}_{request.repo_name}")
                 shutil.rmtree(repo_info.repo_path)
                 logger.info(f"Deleted {repo_info.repo_path} from huggingface cache")
     except Exception as e:
         logger.error(f"Error cleaning up: {e}")
 
-def update_leaderboard_status(namespace, hash, status, notes=""):
-    leaderboard = namespace.leaderboard
+def update_supabase_leaderboard_status(hash, status, notes=""):
     try:
-        leaderboard.loc[leaderboard['hash'] == hash, 'status'] = status
-        if notes:
-            leaderboard.loc[leaderboard['hash'] == hash, 'notes'] = notes
-
-        namespace.leaderboard = leaderboard
-        save_leaderboard(namespace.leaderboard)
+        response = app.state.supabase_client.table("leaderboard").upsert({"hash": hash, "status": status, "notes": notes}, returning="minimal").execute()
     except Exception as e:
         logger.error(f"Error updating leaderboard status for {hash}: {e}")
 
 
-def get_json_result(namespace, hash):
-    leaderboard = namespace.leaderboard
-    if (leaderboard['hash'] == hash).any():
-        # if it exists, return score and status
-        model_entry = leaderboard[leaderboard['hash'] == hash].iloc[0]
-        
-        return {
+def get_json_result(hash):
+    try:
+        response = app.state.supabase_client.table("leaderboard").select("*").eq("hash", hash).execute()
+        if len(response.data) > 0:
+            result = {
             "score": {
-                "model_size_score": model_entry['model_size_score'],
-                "qualitative_score": model_entry['qualitative_score'],
-                "latency_score": model_entry['latency_score'],
-                "vibe_score": model_entry['vibe_score'],
-                "total_score": model_entry['total_score']
+                "model_size_score": response.data[0]['model_size_score'],
+                "qualitative_score": response.data[0]['qualitative_score'],
+                "latency_score": response.data[0]['latency_score'],
+                "vibe_score": response.data[0]['vibe_score'],
+                "total_score": response.data[0]['total_score']
             },
-            "status": model_entry['status']
-        }
-    else:
-        None
+            "status": response.data[0]['status']
+            }
+            if app.state.event_logger_enabled:
+                log_data = result.copy()
+                log_data["hash"] = hash
+                app.state.event_logger.info("scored_model", model_info=log_data)
+            return result
+        raise RuntimeError('No record QUEUED')
+    except Exception as e:
+
+        logger.error(f"Error fetching leaderboard from database: {e}")
+        return None
+
+@app.post("/telemetry_report")
+def telemetry_report(
+        git_commit: str = Header(None, alias='Git-Commit'),
+        bittensor_version: str = Header(None, alias='Bittensor-Version'),
+        uid: str = Header(None, alias='UID'),
+        hotkey: str = Header(None, alias='Hotkey'),
+        coldkey: str = Header(None, alias='Coldkey')
+):
+    request_details = {
+        "git_commit": git_commit,
+        "bittensor_version": bittensor_version,
+        "uid": uid,
+        "hotkey": hotkey,
+        "coldkey": coldkey,
+    }
+
+    # log incoming request details
+    if app.state.event_logger_enabled:
+        app.state.event_logger.info("Incoming request", extra=request_details)
+    return Response(status_code=200)
+
+
 
 
 @app.post("/evaluate_model")
-def evaluate_model(request: EvaluateModelRequest):
+def evaluate_model(
+        request: EvaluateModelRequest,
+        git_commit: str = Header(None, alias='Git-Commit'),
+        bittensor_version: str = Header(None, alias='Bittensor-Version'),
+        uid: str = Header(None, alias='UID'),
+        hotkey: str = Header(None, alias='Hotkey'),
+        coldkey: str = Header(None, alias='Coldkey')):
+
+    request_details = {
+        "git_commit": git_commit,
+        "bittensor_version": bittensor_version,
+        "uid": uid,
+        "hotkey": hotkey,
+        "coldkey": coldkey,
+    }
+
+    # log incoming request details
+    if app.state.event_logger_enabled:
+        app.state.event_logger.info("Incoming request", extra=request_details)
+
+
+
     # verify hash
     if int(request.hash) != regenerate_hash(request.repo_namespace, request.repo_name, request.chat_template_type, request.competition_id):
         raise HTTPException(status_code=400, detail="Hash does not match the model details")
 
     # check if the model already exists in the leaderboard
-    with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-        # This needs to be a virtually atomic operation
-        current_status = get_json_result(app.state.ns, request.hash)
-        if current_status is None:
-            failure_notes = ""
-            # add the model to leaderboard with status QUEUED
-            new_entry_dict = {
-                "hash": request.hash,
-                "repo_namespace": request.repo_namespace,
-                "repo_name": request.repo_name,
-                "chat_template_type": request.chat_template_type,
-                "model_size_score": -1.0,
-                "qualitative_score": -1.0,
-                "latency_score": -1.0,
-                "vibe_score": -1.0,
-                "total_score": -1.0,
-                "timestamp": pd.Timestamp.utcnow(),
-                "status": "QUEUED",
-                "notes": ""
-            }
-            new_entry = pd.DataFrame([new_entry_dict])
-
-            app.state.ns.leaderboard = pd.concat([new_entry, leaderboard], ignore_index=True)
-            save_leaderboard(app.state.ns.leaderboard)
-
-    if current_status is not None:
-        return current_status
+    # This needs to be a virtually atomic operation
+    current_status = get_json_result(request.hash)
+    
+    # if current_status is None and request.admin_key == admin_key:
+    #     return None
+    #     logger.error('QUEUING NEW MODEL')
+    #     failure_notes = ""
+    #     # add the model to leaderboard with status QUEUED
+    #     new_entry_dict = {
+    #         "hash": request.hash,
+    #         "repo_namespace": request.repo_namespace,
+    #         "repo_name": request.repo_name,
+    #         "chat_template_type": request.chat_template_type,
+    #         "model_size_score": -1.0,
+    #         "qualitative_score": -1.0,
+    #         "latency_score": -1.0,
+    #         "vibe_score": -1.0,
+    #         "total_score": -1.0,
+    #         "timestamp": pd.Timestamp.utcnow(),
+    #         "status": "QUEUED",
+    #         "notes": ""
+    #     }
+    #
+    #     logger.info('QUEUING: ' + str(new_entry_dict))
+    #
+    #     update_row_supabase(new_entry_dict)
+    # else:
+    #     return current_status
 
     # validate the request
     if request.chat_template_type not in chat_template_mappings:
         failure_notes = f"Chat template type not supported: {request.chat_template_type}"
         logger.error(failure_notes)
-        with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-            update_leaderboard_status(app.state.ns, request.hash, "FAILED", failure_notes)
-            return get_json_result(app.state.ns, request.hash)
+        update_supabase_leaderboard_status(request.hash, "FAILED", failure_notes)
+        return get_json_result(request.hash)
 
     # check repo size of the model to see if it is within the limit
     try:
-        model_repo_size = check_model_repo_size(request.hash, request.repo_namespace, request.repo_name)
+        model_repo_size = check_model_repo_size(
+            request.hash,
+            request.repo_namespace,
+            request.repo_name)
         if model_repo_size is None:
             failure_notes = "Error checking model repo size. Make sure the model repository exists and is accessible."
             logger.error(failure_notes)
-            with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-                update_leaderboard_status(app.state.ns, request.hash, "FAILED", failure_notes)
-                return get_json_result(app.state.ns, request.hash)
+            update_supabase_leaderboard_status(request.hash, "FAILED", failure_notes)
+            return get_json_result(request.hash)
     
     except Exception as e:
         failure_notes = f"Error checking model repo size: {e}"
         logger.error(failure_notes)
-        with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-            update_leaderboard_status(app.state.ns, request.hash, "FAILED", failure_notes)
-            return get_json_result(app.state.ns, request.hash)
+        update_supabase_leaderboard_status(request.hash, "FAILED", failure_notes)
+        return get_json_result(request.hash)
 
 
     if model_repo_size > MAX_REPO_SIZE or model_repo_size < MIN_REPO_SIZE:
         failure_notes = f"Model repo size is not up to requirments: {model_repo_size} bytes. Should be less than {MAX_REPO_SIZE} bytes and greater than {MIN_REPO_SIZE} bytes"
         logger.error(failure_notes)
-        with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-            update_leaderboard_status(app.state.ns, request.hash, "FAILED", failure_notes)
-            return get_json_result(app.state.ns, request.hash)
+        update_supabase_leaderboard_status(request.hash, "FAILED", failure_notes)
+        return get_json_result(request.hash)
 
     # check model size by checking safetensors index
     model_size = get_model_size(request.repo_namespace, request.repo_name)
     if model_size is None:
         failure_notes = "Error getting model size. Make sure the model.index.safetensors.json file exists in the model repository. And it has the metadata->total_size field."
         logger.error(failure_notes)
-        with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-            update_leaderboard_status(app.state.ns, request.hash, "FAILED", failure_notes)
-            return get_json_result(app.state.ns, request.hash)
+        update_supabase_leaderboard_status(request.hash, "FAILED", failure_notes)
+        return get_json_result(request.hash)
 
     if (model_size // 4) > MAX_MODEL_SIZE:
         failure_notes = f"Model size is too large: {model_size} bytes. Should be less than {MAX_MODEL_SIZE} bytes"
         logger.error(failure_notes)
-        with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-            update_leaderboard_status(app.state.ns, request.hash, "FAILED", failure_notes)
-            return get_json_result(app.state.ns, request.hash)
+        update_supabase_leaderboard_status(request.hash, "FAILED", failure_notes)
+        return get_json_result(request.hash)
 
     # Add the evaluation task to the queue
-    evaluation_queue.put(request)
+    # evaluation_queue.put(request)
 
     logger.info('returning result')
-    with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-        return get_json_result(app.state.ns, request.hash)
-
-
-def save_leaderboard_periodically(periodic_save_event, namespace):
-    while not periodic_save_event.is_set():
-        with ThreadSafeLeaderboardManager(namespace) as leaderboard:
-            logger.info("Saving leaderboard")
-            save_leaderboard(leaderboard)
-        
-        periodic_save_event.wait(SAVE_LEADERBOARD_EVERY)
+    return get_json_result(request.hash)
     
+def update_row_supabase(row):
+    if 'timestamp' in row:
+        row['timestamp'] = row['timestamp'].isoformat()
+    
+    app.state.supabase_client.table("leaderboard").upsert(row).execute()
+
+def upload_to_hf(local_model_dir, model_name):
+    try:
+        api = huggingface_hub.HfApi(token=os.getenv("HF_ACCESS_TOKEN"))
+        api.create_repo(
+            repo_id="DippyAI" + "/" + model_name,
+            exist_ok=False,
+            private=False,
+        )
+        commit_info = api.upload_folder(
+            repo_id="DippyAI" + "/" + model_name,
+            folder_path=local_model_dir,
+            commit_message="Upload model.",
+            repo_type="model",
+        )
+    except Exception as e:
+        logger.error(f"Error uploading model to Hugging Face: {e}")
+        return None
+
 
 @app.get("/leaderboard")
 def display_leaderboard():
-    with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-        return leaderboard.to_dict(orient='records')
+    try:
+        response = app.state.supabase_client.table("leaderboard").select("*").execute()
+        leaderboard = pd.DataFrame(response.data)
+        # sort in descending order by total score
+        leaderboard = leaderboard.sort_values(by='total_score', ascending=False)
+        # # filter out entries older than two weeks
+        # two_weeks_ago = datetime.now() - timedelta(weeks=2)
+        # # Convert the 'timestamp' column to datetime format. If parsing errors occur, 'coerce' will replace problematic inputs with NaT (Not a Time)
+        # leaderboard['timestamp'] = pd.to_datetime(leaderboard['timestamp'], errors='coerce', utc=True)
+        # leaderboard = leaderboard[(leaderboard['timestamp'].dt.tz_convert(None) > two_weeks_ago) | (leaderboard.index < 1000)]
+        # leaderboard = leaderboard.sort_values(by='total_score', ascending=False)
+        leaderboard = leaderboard.dropna(subset=['total_score'])
+        leaderboard = leaderboard.to_dict(orient='records')
+        return leaderboard
+    except Exception as e:
+        logger.error(f"Error fetching leaderboard from Supabase: {e}")
+        return {"status": "failed"}
+
+@app.get("/load_leaderboard_from_supabase")
+def display_leaderboard():
+    if not app.state.leaderboard_update_time or time.time() - app.state.leaderboard_update_time > 10 * 60:
+        app.state.leaderboard_update_time = time.time()
+        try:
+            response = app.state.supabase_client.table("leaderboard").select("*").execute()
+            app.state.leaderboard = pd.DataFrame(response.data)
+        except Exception as e:
+            logger.error(f"Error fetching leaderboard from Supabase: {e}")
+            return {"status": "failed"}
+    leaderboard = app.state.leaderboard
+    leaderboard = leaderboard.dropna(subset=['total_score'])
+    leaderboard = leaderboard.to_dict(orient='records')
+    return leaderboard
+
 
 if __name__ == "__main__":
     # add command line arguments for the ports of the two apis
@@ -443,45 +424,31 @@ if __name__ == "__main__":
     MAIN_API_PORT = args.main_api_port
     EVAL_SCORE_PORT = args.eval_score_port
     VIBE_SCORE_PORT = args.vibe_score_port
-    # try:
-    #     multiprocessing.set_start_method('spawn', force=True) # need to fo
-    # except RuntimeError as e:
-    #     logger.warning(f"Warning: multiprocessing context has already been set. Details: {e}")
     
     evaluation_queue = multiprocessing.Queue()
+    try:
+        event_logger = EventLogger()
+        app.state.event_logger = event_logger
+        app.state.event_logger_enabled = True
+    except Exception as e:
+        logger.warning(f"Failed to create event logger: {e}")
+
+    supabase_url = os.environ["SUPABASE_URL"]
+    supabase_key = os.environ["SUPABASE_KEY"]
+    try:
+        app.state.supabase_client = create_client(supabase_url, supabase_key)
+    except Exception as e:
+        logger.warning(f"Failed to create Supabase client: {e}. Leaderboard will only be saved locally.")
+        supabase_client = None
+
     
     # Create a global shared namespace for the leaderboard
     manager_instance = multiprocessing.Manager()
     app.state.ns = manager_instance.Namespace()
 
-    # if the leaderboard file does not exist, create it with proper columns
-    columns = ['hash', 'repo_namespace', 'repo_name', 'chat_template_type', 'model_size_score', 'qualitative_score', 'latency_score', 'vibe_score', 'total_score', 'timestamp', 'status', 'notes']
-    if not os.path.exists(leaderboard_file):
-        # fetch from supabase
-        try:
-            leaderboard = pd.DataFrame(columns=columns)
-            leaderboard.to_csv(leaderboard_file, index=False)
-        
-        except Exception as e:
-            logger.error(f"Error fetching leaderboard from Supabase: {e}")
-            leaderboard = pd.DataFrame(columns=columns)
-            leaderboard.to_csv(leaderboard_file, index=False)
-    else:
-        # if the file exists, load it
-        with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-            # check if the leaderboard has the correct columns
-            if not all(col in leaderboard.columns for col in columns):
-                logger.error(f"Leaderboard file does not have the correct columns. Creating a new leaderboard file...")
-                # quit
-                import sys
-                sys.exit(1)
-
     try:
         logger.info("Starting evaluation thread")
-        evaluation_process = multiprocessing.Process(target=model_evaluation_worker, args=(evaluation_queue, app.state.ns))
-        periodic_save_event = multiprocessing.Event()
-        periodic_save_process = multiprocessing.Process(target=save_leaderboard_periodically, args=(periodic_save_event, app.state.ns))
-        periodic_save_process.start()
+        evaluation_process = multiprocessing.Process(target=model_evaluation_queue)
         evaluation_process.start()
         logger.info("Starting API server")
         uvicorn.run(app, host="0.0.0.0", port=MAIN_API_PORT)
@@ -491,28 +458,4 @@ if __name__ == "__main__":
         logger.error(f"An exception occurred: {e}")
     finally:
         logger.info("Stopping evaluation thread")
-        # empty the queue
-        while not evaluation_queue.empty():
-            evaluation_queue.get()
-        
-        with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-            # remove any rows with status QUEUED
-            app.state.ns.leaderboard = leaderboard[leaderboard['status'] != 'QUEUED']
-            save_leaderboard(app.state.ns.leaderboard)
-
-        # stop the periodic save process
-        periodic_save_event.set()
-
-        # add a sentinel to the queue to stop the thread
-        evaluation_queue.put(None)
-
-        # wait for the evaluation thread to finish
         evaluation_process.join()
-        # wait for the periodic save process to finish
-        periodic_save_process.join()
-
-        with ThreadSafeLeaderboardManager(app.state.ns) as leaderboard:
-            # remove any RUNNING status
-            app.state.ns.leaderboard = leaderboard[leaderboard['status'] != 'RUNNING']
-            save_leaderboard(app.state.ns.leaderboard)
-            logger.info("API server and evaluation thread have been stopped")

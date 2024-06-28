@@ -78,11 +78,13 @@ def check_model_repo_size(hash: int, repo_namespace: str, repo_name: str) -> int
     - int: The total size of the model files in bytes
     """
     repo_dir = f"data/{str(hash)}/models--{repo_namespace}--{repo_name}"
+    TOKEN= os.getenv("HF_ACCESS_TOKEN")
+    USER = os.getenv("HF_USER")
     original_dir = os.getcwd()
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            subprocess.run(["git", "clone", "--no-checkout", f"https://huggingface.co/{repo_namespace}/{repo_name}", repo_dir], check=True, timeout=10)
+            subprocess.run(["git", "clone", "--no-checkout", f"https://{USER}:{TOKEN}@huggingface.co/{repo_namespace}/{repo_name}", repo_dir], check=True, timeout=10)
             os.chdir(repo_dir)
             lfs_files_output = subprocess.check_output(["git", "lfs", "ls-files", "-s"], text=True, timeout=10)
             total_size = sum(parse_size(line) for line in lfs_files_output.strip().split('\n') if line)

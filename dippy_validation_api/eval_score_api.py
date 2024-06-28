@@ -9,7 +9,7 @@ import huggingface_hub
 from transformers import AutoTokenizer, BitsAndBytesConfig, AutoModelForCausalLM
 from accelerate.utils import release_memory
 from accelerate import PartialState
-
+from dippy_validation_api.coherence_score import get_coherence_score
 # Import necessary modules and functions from the main API file
 from dippy_validation_api.validation_api import (
     MAX_AVG_LATENCY,
@@ -25,8 +25,6 @@ from dippy_validation_api.validation_api import (
 
 from dippy_validation_api.dataset import PippaDataset
 from dippy_validation_api.validation_api import chat_template_mappings
-
-app = FastAPI()
 
 # create dir data if not exists
 if not os.path.exists("data"):
@@ -262,7 +260,18 @@ def cleanup(model, model_downloaded, request: EvaluateModelRequest):
             except:
                 print("No process group to destroy")
 
-@app.post("/eval_score")
+class CustomModel:
+    def __init__(self, model, tokenizer):
+        self.model = model
+        self.tokenizer = tokenizer
+
+    def generate(self, prompt, max_new_tokens=100):
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        with torch.no_grad():
+            outputs = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
+        return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+
 def eval_score(request: EvaluateModelRequest):
     # Now download the weights
     print('Downloading model weights')
@@ -392,27 +401,25 @@ def eval_score(request: EvaluateModelRequest):
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
         raise HTTPException(500, "Error evaluating model: " + failure_reason)
+    # Part 3: Calculate coherence score
+    print('Evaluating model coherence')
+    coherence_score = 0.0
+    try:
+        coherence_score = get_coherence_score(
+            model,
+            input_tokenizer=input_tokenizer,
+            output_tokenizer=output_tokenizer,
+        )
+        print('Model coherence score: ', coherence_score)
+    except Exception as e:
+        failure_reason = str(e)
+        cleanup(model, model_downloaded, request)
+        raise HTTPException(500, "Error evaluating model for coherence score: " + failure_reason)
 
     return {
         "eval_score": eval_score,
+        "coherence_score": coherence_score,
         "latency_score": latency_score,
         "model_size_score": model_size_score,
     }
 
-@app.post("/shutdown")
-def shutdown():
-    print("Shutting down eval_score_api")
-    os._exit(0)
-
-
-if __name__ == "__main__":
-    # get command line argument for port 
-    import sys
-    if len(sys.argv) > 1:
-        port = int(sys.argv[1])
-    else:
-        port = 8001
-    import uvicorn
-    # launch the api only if main process
-    if PartialState().is_main_process:
-        uvicorn.run(app, host="0.0.0.0", port=port, timeout_keep_alive=960)
