@@ -86,10 +86,13 @@ def get_config():
     config = bt.config(parser)
     return config
 
+
 def regenerate_hash(namespace, name, chat_template, competition_id):
     s = " ".join([namespace, name, chat_template, competition_id])
-    hash_output = hashlib.sha256(s.encode('utf-8')).hexdigest()
-    return int(hash_output[:16], 16)  # Returns a 64-bit integer from the first 16 hexadecimal characters
+    hash_output = hashlib.sha256(s.encode("utf-8")).hexdigest()
+    return int(
+        hash_output[:16], 16
+    )  # Returns a 64-bit integer from the first 16 hexadecimal characters
 
 
 def check_model_dir(model_dir):
@@ -103,37 +106,37 @@ def check_model_dir(model_dir):
         raise FileNotFoundError(
             f"No *.safetensors file found in model directory {model_dir}."
         )
-    
+
     # check if tokenizer.json exists
     if not any(file.endswith("tokenizer.json") for file in ls_dir):
         raise FileNotFoundError(
             f"No tokenizer.json file found in model directory {model_dir}."
         )
-    
+
     # check if config.json exists
     if not any(file.endswith("config.json") for file in ls_dir):
         raise FileNotFoundError(
             f"No config.json file found in model directory {model_dir}."
         )
-    
+
     # # check if generation_config.json exists
     # if not any(file.endswith("generation_config.json") for file in ls_dir):
     #     raise FileNotFoundError(
     #         f"No generation_config.json file found in model directory {model_dir}."
     #     )
-    
+
     # check if special_tokens_map.json exists
     if not any(file.endswith("special_tokens_map.json") for file in ls_dir):
         raise FileNotFoundError(
             f"No special_tokens_map.json file found in model directory {model_dir}."
         )
-    
+
     # check if model.safetensors.index.json exists
     if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
         raise FileNotFoundError(
             f"No model.safetensors.index.json file found in model directory {model_dir}."
         )
-    
+
     # check if this file contains metadata.total_size
     # with open(os.path.join(model_dir, "model.safetensors.index.json"), "r") as f:
     #     index = json.load(f)
@@ -169,7 +172,11 @@ async def main(config: bt.config):
         chat_template=config.chat_template,
         competition_id=config.competition_id,
         commit=config.model_commit_id,
-        hash=str(regenerate_hash(repo_namespace, repo_name, config.chat_template, config.competition_id)),
+        hash=str(
+            regenerate_hash(
+                repo_namespace, repo_name, config.chat_template, config.competition_id
+            )
+        ),
     )
 
     if not config.skip_model_upload:
@@ -181,7 +188,6 @@ async def main(config: bt.config):
 
         bt.logging.info(f"Uploading model to Hugging Face with id {model_id}")
 
-
         model_id_with_commit = await remote_model_store.upload_model(
             model=model,
             competition_parameters=parameters,
@@ -190,19 +196,25 @@ async def main(config: bt.config):
         # get the latest commit id of hf repo
         model_id_with_commit = model_id
         if config.model_commit_id is None or config.model_commit_id == "":
-            raise ValueError("model_commit_id should not be set when skip_model_upload is set to True")
-        
+            raise ValueError(
+                "model_commit_id should not be set when skip_model_upload is set to True"
+            )
+
         model_id_with_commit.commit = config.model_commit_id
 
     model_id_with_hash = ModelId(
         namespace=repo_namespace,
         name=repo_name,
-        chat_template=config.chat_template, 
-        hash=str(regenerate_hash(repo_namespace, repo_name, config.chat_template, config.competition_id)), 
+        chat_template=config.chat_template,
+        hash=str(
+            regenerate_hash(
+                repo_namespace, repo_name, config.chat_template, config.competition_id
+            )
+        ),
         commit=model_id_with_commit.commit,
         competition_id=config.competition_id,
     )
-    
+
     bt.logging.info(
         f"Model uploaded to Hugging Face with commit {model_id_with_hash.commit} and hash {model_id_with_hash.hash}"
     )

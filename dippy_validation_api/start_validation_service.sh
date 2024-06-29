@@ -22,14 +22,13 @@ exit_if_port_in_use() {
     fi
 }
 
-# Define ports for services
-EVAL_SCORE_API_PORT=8001
-VIBE_SCORE_API_PORT=8002
+
+# Define ports for services with offsets
 VALIDATION_API_PORT=8000
+
 # Check if ports are already in use before starting services
 exit_if_port_in_use "validation_api" $VALIDATION_API_PORT
-exit_if_port_in_use "eval_score_api" $EVAL_SCORE_API_PORT
-exit_if_port_in_use "vibe_score_api" $VIBE_SCORE_API_PORT
+
 
 # Function to restart a service
 restart_service() {
@@ -61,15 +60,22 @@ restart_service() {
     done
 }
 
+# check if .env file exists
+if [ ! -f ../.env ]; then
+    echo "Error: .env file does not exist."
+    exit 1
+fi
+
+# Export environment variables from .env file
+export $(grep -v '^#' ../.env | xargs)
+
+# check if ADMIN_KEY is loaded
+echo "ADMIN_KEY: $ADMIN_KEY"
+echo "DIPPY_KEY: $DIPPY_KEY"
+
 # Start the validation_api
 echo "Starting validation_api..."
-./../$VENV_NAME/bin/python3 validation_api.py --main-api-port $VALIDATION_API_PORT --eval-score-port $EVAL_SCORE_API_PORT --vibe-score-port $VIBE_SCORE_API_PORT >> "log/validation_api.log" 2>&1 &
-echo $! > log/validation_api.pid
+./../$VENV_NAME/bin/python3 validation_api.py --main-api-port $VALIDATION_API_PORT >> "logs/validation_api.log" 2>&1 &
+echo $! > logs/validation_api.pid
 
-# Start the eval_score_api in a loop to restart after each request
-restart_service "eval_score_api" "eval_score_api.py" "log/eval_score_api.log" "log/eval_score_api.pid" "log/eval_score_api_loop.pid" $EVAL_SCORE_API_PORT &
-
-# Start the vibe_score_api in a loop to restart after each request
-restart_service "vibe_score_api" "vibe_score_api.py" "log/vibe_score_api.log" "log/vibe_score_api.pid" "log/vibe_score_api_loop.pid" $VIBE_SCORE_API_PORT &
-
-echo "All APIs are running in the background."
+echo "All APIs are running in the background"

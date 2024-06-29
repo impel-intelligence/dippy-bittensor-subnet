@@ -30,9 +30,9 @@ class HuggingFaceModelStore(RemoteModelStore):
             raise ValueError("No Hugging Face access token found to write to the hub.")
         return os.getenv("HF_ACCESS_TOKEN")
 
-
     async def upload_model(
-        self, model: Model, 
+        self,
+        model: Model,
         competition_parameters: CompetitionParameters,
     ) -> ModelId:
         """Uploads a trained model to Hugging Face."""
@@ -43,7 +43,7 @@ class HuggingFaceModelStore(RemoteModelStore):
             exist_ok=True,
             private=True,
         )
-        
+
         # upload model.local_repo_dir to Hugging Face
         commit_info = api.upload_folder(
             repo_id=model.id.namespace + "/" + model.id.name,
@@ -51,8 +51,7 @@ class HuggingFaceModelStore(RemoteModelStore):
             commit_message="Upload model",
             repo_type="model",
         )
-        
-        
+
         model_id_with_commit = ModelId(
             namespace=model.id.namespace,
             name=model.id.name,
@@ -61,7 +60,7 @@ class HuggingFaceModelStore(RemoteModelStore):
             commit=commit_info.oid,
             competition_id=model.id.competition_id,
         )
-        
+
         return model_id_with_commit
         # # TODO consider skipping the redownload if a hash is already provided.
         # # To get the hash we need to redownload it at a local tmp directory after which it can be deleted.

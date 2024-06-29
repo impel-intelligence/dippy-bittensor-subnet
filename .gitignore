@@ -1,5 +1,5 @@
 */bittensor_models
-*/log
+*/logs
 model-store/
 dependencies_installed
 data/
@@ -173,3 +173,4 @@ wandb/
 
 testing/
 .idea
+playground/

@@ -14,9 +14,9 @@ login(
 )
 
 
-model_name = 'lmsys/vicuna-13b-v1.5'
-save_path = 'bittensor_models'
-model_dir_name = model_name.split('/')[1]
+model_name = "lmsys/vicuna-13b-v1.5"
+save_path = "bittensor_models"
+model_dir_name = model_name.split("/")[1]
 
 print(f"Loading model {model_name}")
 # Load the tokenizer and model

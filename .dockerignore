@@ -1,0 +1,6 @@
+dippy_validation_api/data
+dippy_validation_api/log
+dippy_validation_api/logs
+model_evaluation/data
+*.egg-info/
+model-store/

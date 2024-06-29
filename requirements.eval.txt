@@ -1,0 +1,13 @@
+torch==2.2.1
+tqdm
+vllm==0.4.1
+pydantic >= 2.0
+accelerate
+bitsandbytes
+flash-attn
+supabase
+pandas
+threadpoolctl
+loguru
+numpy
+typer

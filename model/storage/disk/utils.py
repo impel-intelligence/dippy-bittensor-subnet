@@ -60,7 +60,9 @@ def get_newest_datetime_under_path(path: str) -> datetime.datetime:
     return datetime.datetime.fromtimestamp(newest_filetime)
 
 
-def remove_dir_out_of_grace_by_datetime(path: str, grace_period_seconds: int, last_modified: datetime.datetime) -> bool:
+def remove_dir_out_of_grace_by_datetime(
+    path: str, grace_period_seconds: int, last_modified: datetime.datetime
+) -> bool:
     """Removes a dir if the last modified time is out of grace period secs. Returns if it was deleted."""
     grace = datetime.timedelta(seconds=grace_period_seconds)
 
@@ -70,10 +72,13 @@ def remove_dir_out_of_grace_by_datetime(path: str, grace_period_seconds: int, la
 
     return False
 
+
 def remove_dir_out_of_grace(path: str, grace_period_seconds: int) -> bool:
     """Removes a dir if the last modified time is out of grace period secs. Returns if it was deleted."""
     last_modified = get_newest_datetime_under_path(path)
-    return remove_dir_out_of_grace_by_datetime(path, grace_period_seconds, last_modified)
+    return remove_dir_out_of_grace_by_datetime(
+        path, grace_period_seconds, last_modified
+    )
 
 
 def realize_symlinks_in_directory(path: str) -> int:
