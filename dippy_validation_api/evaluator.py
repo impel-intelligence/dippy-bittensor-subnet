@@ -1,67 +1,151 @@
-from typing import Optional
-
+import json
+import tarfile
+import io
+import time
 import docker
-import os
-
 from pydantic import BaseModel
+from typing import Optional, Union
 
-from dippy_validation_api.validation_api import EvaluateModelRequest
+from model_evaluation.common import EvaluateModelRequest
+from utilities.event_logger import EventLogger
 
-MAX_RUNNING_CONTAINERS=2
+DEFAULT_IMAGE_ID = "grader:latest"
 
-class EvaluationResult(BaseModel):
-    foo: str
+class EvaluationScore(BaseModel):
+    eval_score: float
+    latency_score: float
+    eval_model_size_score: float
 
-class Evaluator():
-    def __init__(self):
+
+class RunError(BaseModel):
+    error: str
+
+
+class VibeScore(BaseModel):
+    vibe_score: float
+
+
+class Evaluator:
+    def __init__(
+        self,
+        image_name: str = DEFAULT_IMAGE_ID,
+        logger: EventLogger = EventLogger(),
+    ):
         self.client = docker.from_env()
-    def queue_eval_job(self, request: EvaluateModelRequest) -> Optional[EvaluationResult]:
+        self.logger = logger
+        self.image_name = image_name
+        self.volume_configuration = {
+            "/home/new_prod_user/dippy-bittensor-subnet/model_evaluation/prompt_templates": {
+                "bind": "/app/prompt_templates",
+                "mode": "rw",
+            },
+            "/home/new_prod_user/dippy-bittensor-subnet/dippy_validation_api/data": {
+                "bind": "/app/data",
+                "mode": "rw",
+            },
+        }
+        self.device_requests = [
+            docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])
+        ]
+        self.env = {
+            "SOME_ENV_VAR": "x",
+        }
 
+    def run_docker_container(
+        self,
+        job_type: str,
+        request: EvaluateModelRequest,
+    ) -> dict:
+        # Configure volume mounting
+        volumes = self.volume_configuration
+        # Configure GPU support
+        device_requests = [docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])]
 
-        return None
-    def queue_vibe_score_job(self, request: EvaluateModelRequest) -> Optional[EvaluationResult]:
-        return None
+        command = f"{job_type} {request.to_args()}"
+        self.logger.debug("command", command=command)
 
-# docker build -f evaluator.Dockerfile -t eval-llm .
-def run_docker_container(image_name, command=None):
+        # Run the container
+        container = self.client.containers.run(
+            self.image_name,
+            command=command,
+            volumes=volumes,
+            device_requests=device_requests,
+            environment={
+                "SOME_ENV_VAR": "x",
+            },
+            detach=True,  # Run in background
+        )
+        filepath = f"/tmp/{job_type}_output.json"
+        filename = f"{job_type}_output.json"
+        result = container.wait()
+        while container.status == 'created':
+            time.sleep(10)
+            container.reload()
+        while container.status == 'running':
+            time.sleep(30)
+            container.reload()
 
-    # Configure volume mounting
-    volumes = {
-        "/home/new_prod_user/dippy-bittensor-subnet/dippy_validation_api/prompt_templates": {'bind': "/app/prompt_templates", 'mode': 'rw'},
-        "/home/new_prod_user/dippy-bittensor-subnet/dippy_validation_api/data": {'bind': "/app/data", 'mode': 'rw'},
-        "/home/new_prod_user/dippy-bittensor-subnet/playground": {'bind': "/app/playground", 'mode': 'rw'},
-    }
+        self.logger.debug("container_run_complete")
 
-    # Configure GPU support
-    device_requests = [docker.types.DeviceRequest(count=-1, capabilities=[['gpu']])]
+        try:
+            bits, stat = container.get_archive(filepath)
+            with io.BytesIO() as file_data:
+                for chunk in bits:
+                    file_data.write(chunk)
+                file_data.seek(0)
+                with tarfile.open(fileobj=file_data) as tar:
+                    content = tar.extractfile(filename).read().decode("utf-8")
+                    container_results = json.loads(content)
+                    self.logger.info(
+                        "container_run_results",
+                        details={
+                            "filepath": filepath,
+                            "content": content,
+                            "result": result,
+                            "container_id": container.id,
+                        },
+                    )
+                    container.remove()
+                    return container_results
+        except Exception as e:
+            self.logger.error("docker_error", error=e)
+            container.remove()
+            return {"error": e}
 
-    # Run the container
-    container = client.containers.run(
-        image_name,
-        # command=command,
-        volumes=volumes,
-        device_requests=device_requests,
-        detach=True  # Run in background
-    )
+    def eval_score(
+        self, request: EvaluateModelRequest
+    ) -> Union[EvaluationScore, RunError]:
+        try:
+            eval_result = self.run_docker_container(
+                job_type="eval",
+                request=request,
+            )
+            if "error" in eval_result:
+                raise Exception(eval_result["error"])
+            if eval_result["completed"] is False:
+                raise Exception("completion internal error")
+            score = EvaluationScore(
+                eval_score=eval_result["eval_score"],
+                latency_score=eval_result["latency_score"],
+                eval_model_size_score=eval_result["model_size_score"],
+            )
+            return score
+        except Exception as e:
+            return RunError(error=f"{e}")
 
-    print(f"Container {container.id} is running.")
-    print("Container logs:")
-    for log in container.logs(stream=True):
-        print(log.strip().decode())
-
-def check_docker_queue():
-    containers = client.containers.list()
-    for c in containers:
-       print(c)
-       print(c.status)
-       print(c.logs())
-
-
-# Usage example
-if __name__ == "__main__":
-    IMAGE_NAME = "eval-llm:latest"
-
-    # COMMAND = "python run_eval.py"  # Optional: command to run in the container
-
-    check_docker_queue()
-    # run_docker_container(IMAGE_NAME)
+    def vibe_score(self, request: EvaluateModelRequest) -> Union[VibeScore, RunError]:
+        try:
+            vibe_result = self.run_docker_container(
+                job_type="vibe",
+                request=request,
+            )
+            if "error" in vibe_result:
+                raise Exception(vibe_result["error"])
+            if vibe_result["completed"] is False:
+                raise Exception("completion internal error")
+            score = VibeScore(
+                vibe_score=vibe_result["vibe_score"],
+            )
+            return score
+        except Exception as e:
+            return RunError(error=f"{e}")

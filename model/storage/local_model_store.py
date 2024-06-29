@@ -18,7 +18,9 @@ class LocalModelStore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def retrieve_model(self, hotkey: str, model_id: ModelId, parameters: CompetitionParameters) -> Model:
+    def retrieve_model(
+        self, hotkey: str, model_id: ModelId, parameters: CompetitionParameters
+    ) -> Model:
         """Retrieves a trained model from the appropriate location based on implementation."""
         pass
 

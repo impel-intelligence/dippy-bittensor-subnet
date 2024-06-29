@@ -26,19 +26,18 @@ COPY requirements.eval.txt .
 
 RUN uv pip install --system -r requirements.eval.txt --no-build-isolation
 
-
+COPY model_evaluation ./model_evaluation
 COPY dippy_validation_api ./dippy_validation_api
 COPY utilities ./utilities
 COPY template ./template
 COPY model ./model
 COPY constants ./constants
+# Required for self installing module
+COPY requirements.eval.txt requirements.txt
+COPY README.md .
+COPY setup.py .
+RUN uv pip install -e .
 
-COPY playground/run_eval.py .
+COPY dippy_validation_api/entrypoint.py .
 
-# This is to prevent the following error when starting the container.
-# bash: /opt/conda/lib/libtinfo.so.6: no version information available (required by bash)
-# See https://askubuntu.com/questions/1354890/what-am-i-doing-wrong-in-conda
-#RUN rm /opt/conda/lib/libtinfo.so.6 && \
-#    ln -s /lib/x86_64-linux-gnu/libtinfo.so.6 /opt/conda/lib/libtinfo.so.6
-
-ENTRYPOINT ["tail", "-f","/dev/null"]
+ENTRYPOINT ["python", "entrypoint.py"]

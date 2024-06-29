@@ -34,7 +34,8 @@ COMPETITION_SCHEDULE: List[CompetitionParameters] = [
     CompetitionParameters(
         reward_percentage=0.5,
         competition_id="d1",
-    ),CompetitionParameters(
+    ),
+    CompetitionParameters(
         reward_percentage=0.5,
         competition_id="d2",
     ),

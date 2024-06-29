@@ -21,16 +21,21 @@ class DiskModelStore(LocalModelStore):
         """Returns the path to where this store would locate this hotkey."""
         return utils.get_local_miner_dir(self.base_dir, hotkey)
 
-    def store_model(self, hotkey: str, model: Model, hf_model: AutoModelForCausalLM, hf_tokenizer: AutoTokenizer ) -> ModelId:
+    def store_model(
+        self,
+        hotkey: str,
+        model: Model,
+        hf_model: AutoModelForCausalLM,
+        hf_tokenizer: AutoTokenizer,
+    ) -> ModelId:
         """Stores a trained model locally."""
         # get the path to where the model should be stored
         model_dir = os.path.join(self.get_path(hotkey), model.id.name)
         hf_model.save_pretrained(model_dir)
         hf_tokenizer.save_pretrained(model_dir)
         model.local_repo_dir = model_dir
-        
-        return model.id
 
+        return model.id
 
     def retrieve_model(
         self, hotkey: str, model_id: ModelId, model_parameters: CompetitionParameters

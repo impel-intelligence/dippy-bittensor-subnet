@@ -10,3 +10,4 @@ pandas
 threadpoolctl
 loguru
 numpy
+typer

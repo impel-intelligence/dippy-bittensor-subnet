@@ -76,7 +76,7 @@ class ModelUpdater:
         bt.logging.warning(f"Syncing model for hotkey {hotkey}")
         # Get the local path based on the local store to download to (top level hotkey path)
         path = self.local_store.get_path(hotkey)
-        
+
         # bt.logging.warning(f"Downloading model to {path}")
         # # Otherwise we need to download the new model based on the metadata.
         # model = await self.remote_store.download_model(metadata.id, path, parameters)

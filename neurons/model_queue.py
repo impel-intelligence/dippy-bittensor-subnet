@@ -60,6 +60,7 @@ import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+
 def iswin(score_i, score_j, block_i, block_j):
     """
     Determines the winner between two models based on the epsilon adjusted loss.
@@ -73,9 +74,14 @@ def iswin(score_i, score_j, block_i, block_j):
         bool: True if loss i is better, False otherwise.
     """
     # Adjust score based on timestamp and pretrain epsilon
-    score_i = (1 - constants.timestamp_epsilon) * score_i if block_i > block_j else score_i
-    score_j = (1 - constants.timestamp_epsilon) * score_j if block_j > block_i else score_j
+    score_i = (
+        (1 - constants.timestamp_epsilon) * score_i if block_i > block_j else score_i
+    )
+    score_j = (
+        (1 - constants.timestamp_epsilon) * score_j if block_j > block_i else score_j
+    )
     return score_i > score_j
+
 
 def compute_wins(
     uids: typing.List[int],
@@ -112,9 +118,11 @@ def compute_wins(
 
     return wins, win_rate
 
+
 def best_uid(metagraph: bt.metagraph) -> int:
     """Returns the best performing UID in the metagraph."""
     return max(range(metagraph.n), key=lambda uid: metagraph.I[uid].item())
+
 
 def nearest_tempo(start_block, tempo, block):
     start_num = start_block + tempo
@@ -123,6 +131,7 @@ def nearest_tempo(start_block, tempo, block):
     if nearest_num >= block:
         nearest_num -= tempo
     return nearest_num
+
 
 class ModelQueue:
     @staticmethod
@@ -363,7 +372,7 @@ class ModelQueue:
 
         # Touch all models, starting a timer for them to be deleted if not used
         self.model_tracker.touch_all_miner_models()
-        
+
         # == Initialize the update thread ==
         self.stop_event = threading.Event()
         self.update_thread = threading.Thread(
@@ -423,7 +432,7 @@ class ModelQueue:
 
                 # Compare metadata and tracker, syncing new model from remote store to local if necessary.
                 updated = asyncio.run(self.model_updater.sync_model(hotkey))
-                
+
                 # Ensure we eval the new model on the next loop.
                 if updated:
                     metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
@@ -457,7 +466,11 @@ class ModelQueue:
                 old_models = self.model_tracker.get_and_clear_old_models()
 
                 if len(old_models) > 0:
-                    bt.logging.info("Starting cleanup of stale models. Removing {}...".format(len(old_models)))
+                    bt.logging.info(
+                        "Starting cleanup of stale models. Removing {}...".format(
+                            len(old_models)
+                        )
+                    )
 
                 for hotkey, model_metadata in old_models:
                     local_path = self.local_store.get_path(hotkey)
@@ -465,7 +478,11 @@ class ModelQueue:
                     shutil.rmtree(model_dir, ignore_errors=True)
 
                 if len(old_models) > 0:
-                    bt.logging.info("Starting cleanup of stale models. Removing {}... Done!".format(len(old_models)))
+                    bt.logging.info(
+                        "Starting cleanup of stale models. Removing {}... Done!".format(
+                            len(old_models)
+                        )
+                    )
 
             except Exception as e:
                 bt.logging.error(f"Error in clean loop: {e}")
@@ -617,7 +634,9 @@ class ModelQueue:
                                 f"Perferring duplicate of {other_uid} with {uid_i} since it is older"
                             )
                             # Release the other model since it is not in use.
-                            self.model_tracker.release_model_metadata_for_miner_hotkey(other_hotkey, other_metadata)
+                            self.model_tracker.release_model_metadata_for_miner_hotkey(
+                                other_hotkey, other_metadata
+                            )
                             uid_to_hotkey_and_model_metadata[other_uid] = (
                                 other_hotkey,
                                 None,
@@ -627,12 +646,14 @@ class ModelQueue:
                                 f"Perferring duplicate of {uid_i} with {other_uid} since it is newer"
                             )
                             # Release own model since it is not in use.
-                            self.model_tracker.release_model_metadata_for_miner_hotkey(hotkey, model_i_metadata)
+                            self.model_tracker.release_model_metadata_for_miner_hotkey(
+                                hotkey, model_i_metadata
+                            )
                             model_i_metadata = None
                         break
 
             uid_to_hotkey_and_model_metadata[uid_i] = (hotkey, model_i_metadata)
-            
+
         bt.logging.info("Looking at model metadata", uid_to_hotkey_and_model_metadata)
 
         # Compute the score for each model.
@@ -657,17 +678,22 @@ class ModelQueue:
                                 model_i_metadata.id.name,
                                 model_i_metadata.id.hash,
                                 model_i_metadata.id.chat_template,
-                                self.config
+                                self.config,
                             )
                             bt.logging.info(f"Score for {model_i_metadata} is {_score}")
-                            bt.logging.info(f"Status for {model_i_metadata} is {status}")
-                            bt.logging.debug(f"Queried for score for {model_i_metadata.id} Current status: {status}")
-                            if status != 'QUEUED':
+                            bt.logging.info(
+                                f"Status for {model_i_metadata} is {status}"
+                            )
+                            bt.logging.debug(
+                                f"Queried for score for {model_i_metadata.id} Current status: {status}"
+                            )
+                            if status != "QUEUED":
                                 break
                         except:
-                            bt.logging.error(f"Failed to get score for {model_i_metadata.id}")
+                            bt.logging.error(
+                                f"Failed to get score for {model_i_metadata.id}"
+                            )
                             break
-
 
         for uid_i, (
             hotkey,
@@ -691,21 +717,29 @@ class ModelQueue:
                                     model_i_metadata.id.name,
                                     model_i_metadata.id.hash,
                                     model_i_metadata.id.chat_template,
-                                    self.config
+                                    self.config,
                                 )
-                                bt.logging.info(f"Score for {model_i_metadata} is {_score}")
-                                bt.logging.info(f"Status for {model_i_metadata} is {status}")
-                                if status == 'COMPLETED':
+                                bt.logging.info(
+                                    f"Score for {model_i_metadata} is {_score}"
+                                )
+                                bt.logging.info(
+                                    f"Status for {model_i_metadata} is {status}"
+                                )
+                                if status == "COMPLETED":
                                     score = _score
                                     break
-                                elif status == 'FAILED':
+                                elif status == "FAILED":
                                     score = 0
                                     break
                                 else:
-                                    bt.logging.debug(f"Waiting for score for {model_i_metadata.id} Current status: {status}")
+                                    bt.logging.debug(
+                                        f"Waiting for score for {model_i_metadata.id} Current status: {status}"
+                                    )
                                     time.sleep(10)
                             except:
-                                bt.logging.error(f"Failed to get score for {model_i_metadata.id}")
+                                bt.logging.error(
+                                    f"Failed to get score for {model_i_metadata.id}"
+                                )
                                 break
                     except Exception as e:
                         bt.logging.error(
@@ -713,7 +747,9 @@ class ModelQueue:
                         )
                     finally:
                         # After we are done with the model, release it.
-                        self.model_tracker.release_model_metadata_for_miner_hotkey(hotkey, model_i_metadata)
+                        self.model_tracker.release_model_metadata_for_miner_hotkey(
+                            hotkey, model_i_metadata
+                        )
                 else:
                     bt.logging.debug(
                         f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to 0."
@@ -728,9 +764,7 @@ class ModelQueue:
 
             scores_per_uid[uid_i] = score
 
-            bt.logging.warning(
-                f"Computed model score for uid: {uid_i}: {score}"
-            )
+            bt.logging.warning(f"Computed model score for uid: {uid_i}: {score}")
             bt.logging.debug(f"Computed model losses for uid: {uid_i}: {score}")
 
         # Compute wins and win rates per uid.
@@ -872,9 +906,7 @@ class ModelQueue:
                 self.epoch_step += 1
 
             except KeyboardInterrupt:
-                bt.logging.info(
-                    "KeyboardInterrupt caught"
-                )
+                bt.logging.info("KeyboardInterrupt caught")
                 exit()
 
             except Exception as e:
@@ -882,12 +914,15 @@ class ModelQueue:
                     f"Error in validator loop \n {e} \n {traceback.format_exc()}"
                 )
 
+
 def get_model_score(namespace, name, hash, template, config):
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
     # return (score, status)
     if config.use_local_validation_api:
-        validation_endpoint = f"http://localhost:{config.local_validation_api_port}/evaluate_model"
+        validation_endpoint = (
+            f"http://localhost:{config.local_validation_api_port}/evaluate_model"
+        )
     else:
         validation_endpoint = f"{constants.VALIDATION_SERVER}/evaluate_model"
 
@@ -899,8 +934,8 @@ def get_model_score(namespace, name, hash, template, config):
         "chat_template_type": template,
     }
 
-    if os.environ.get('ADMIN_KEY', None) not in [None, '']:
-        payload['admin_key'] = os.environ['ADMIN_KEY']
+    if os.environ.get("ADMIN_KEY", None) not in [None, ""]:
+        payload["admin_key"] = os.environ["ADMIN_KEY"]
 
     console = Console()
     console.print(f"Payload: {payload}")
@@ -913,9 +948,9 @@ def get_model_score(namespace, name, hash, template, config):
         result = response.json()
         console = Console()
         console.print(f"Payload: {payload}")
-        status = result['status']
-        if status == 'COMPLETED':
-            score = result['score']['total_score']
+        status = result["status"]
+        if status == "COMPLETED":
+            score = result["score"]["total_score"]
         elif status == "FAILED":
             bt.logging.warning(f"Model {namespace}/{name} is in status {status}")
             score = 0
@@ -923,12 +958,13 @@ def get_model_score(namespace, name, hash, template, config):
             return None, status
     except Exception as e:
         score = 0
-        status = 'FAILED'
+        status = "FAILED"
         bt.logging.error(e)
         bt.logging.error(f"Failed to get score and status for {namespace}/{name}")
 
     bt.logging.info(f"Model {namespace}/{name} has score {score} and status {status}")
     return score, status
+
 
 if __name__ == "__main__":
     asyncio.run(ModelQueue().run())
