@@ -32,13 +32,13 @@ MAX_HUGGING_FACE_BYTES: int = 18 * 1024 * 1024 * 1024
 # Schedule of model architectures
 COMPETITION_SCHEDULE: List[CompetitionParameters] = [
     CompetitionParameters(
-        reward_percentage=0.5,
+        reward_percentage=1,
         competition_id="d1",
     ),
-    CompetitionParameters(
-        reward_percentage=0.5,
-        competition_id="d2",
-    ),
+    # CompetitionParameters(
+    #     reward_percentage=0.5,
+    #     competition_id="d2",
+    # ),
 ]
 ORIGINAL_COMPETITION_ID = "d1"
 

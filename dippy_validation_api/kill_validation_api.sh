@@ -1,6 +1,12 @@
 #!/bin/bash
 
-
+kill_process_group() {
+    local pid=$1
+    local pgrp=$(ps -o pgid= $pid | grep -o '[0-9]*')
+    echo "Stopping process group: $pgrp"
+    kill -- -$pgrp
+    rm -f "log/$2.pid"
+}
 # Function to kill child processes of a given parent PID
 kill_child_processes() {
     local PARENT_PID=$1
@@ -26,12 +32,9 @@ kill_child_processes() {
     done
 }
 
-# Example usage
-# kill_child_processes <parent_pid>
-# Kill the validation_api
 echo "Stopping validation_api..."
 
-kill_child_processes $(cat logs/validation_api.pid)
+kill_process_group $(cat logs/validation_api.pid)
 
 kill $(cat logs/validation_api.pid)
 rm -f logs/validation_api.pid

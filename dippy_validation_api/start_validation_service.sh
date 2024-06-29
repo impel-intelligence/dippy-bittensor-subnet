@@ -72,8 +72,7 @@ export $(grep -v '^#' ../.env | xargs)
 # check if ADMIN_KEY is loaded
 echo "ADMIN_KEY: $ADMIN_KEY"
 echo "DIPPY_KEY: $DIPPY_KEY"
-EVAL_SCORE_API_PORT=1111
-VIBE_SCORE_API_PORT=1111
+
 # Start the validation_api
 echo "Starting validation_api..."
 ./../$VENV_NAME/bin/python3 validation_api.py --main-api-port $VALIDATION_API_PORT >> "logs/validation_api.log" 2>&1 &
