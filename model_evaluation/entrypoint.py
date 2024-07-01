@@ -1,30 +1,75 @@
 import typer
+import torch
 import json
 from typing import Optional
 import os
+import sys
+import gc
+import traceback
 import huggingface_hub
 from model_evaluation.common import EvaluateModelRequest
 
 app = typer.Typer()
 
+
 def _dl_dataset():
     # create dir data if not exists
-    if not os.path.exists("./data"):
-        os.makedirs("./data")
+    if not os.path.exists("./datasets"):
+        os.makedirs("./datasets")
     # download the file pippa_deduped.jsonl from huggingface
-    if not os.path.exists("data/pippa_deduped.jsonl"):
+    if not os.path.exists("./datasets/pippa_deduped.jsonl"):
         huggingface_hub.hf_hub_download(
             repo_id="PygmalionAI/PIPPA",
             filename="pippa_deduped.jsonl",
             repo_type="dataset",
-            local_dir="data",
+            local_dir="datasets",
         )
+    # download the file pippa_deduped.jsonl from huggingface
+    # if not os.path.exists("./datasets/pippa_deduped.jsonl"):
+    #     huggingface_hub.hf_hub_download(
+    #         repo_id="PygmalionAI/PIPPA",
+    #         filename="pippa_deduped.jsonl",
+    #         repo_type="dataset",
+    #         local_dir="data",
+    #     )
 
 
 def write_to_json(data: dict, filepath: str = "/tmp/output.json"):
     with open(filepath, "w") as f:
         json.dump(data, f, indent=2)
     typer.echo(f"Results written to {filepath}")
+
+
+def _run(
+    request: EvaluateModelRequest,
+    run_type: str,
+):
+    from model_evaluation.eval_score import get_eval_score
+    from model_evaluation.coherence_score import get_coherence_score
+    from model_evaluation.vibe_score import get_vibe_match_score
+
+    typer.echo(f"Evaluating with parameters: {request}")
+    result = {"completed": False}
+    try:
+        if run_type == "eval":
+            result = get_eval_score(request)
+        if run_type == "vibe":
+            result = get_vibe_match_score(request)
+        if run_type == "coherence":
+            result = get_coherence_score(request)
+        result["completed"] = True
+        typer.echo(f"Evaluated with parameters: {result}")
+    except Exception as e:
+        (
+            exc_type,
+            exc_value,
+            exc_traceback,
+        ) = sys.exc_info()  # Capture exception information
+        traceback_details = traceback.format_exception(
+            exc_type, exc_value, exc_traceback
+        )
+        result["error"] = f'{"".join(traceback_details)} {str(e)}'
+    write_to_json(result, f"/tmp/{run_type}_output.json")
 
 
 @app.command("eval")
@@ -34,22 +79,13 @@ def evaluate(
     chat_template_type: str = typer.Argument(help="Chat template type"),
     hash: Optional[str] = typer.Argument(help="hash"),
 ):
-    from model_evaluation.eval_score import get_eval_score
     request = EvaluateModelRequest(
         repo_namespace=repo_namespace,
         repo_name=repo_name,
         chat_template_type=chat_template_type,
         hash=hash,
     )
-    typer.echo(f"Evaluating with parameters: {request}")
-    result = {"completed": False}
-    try:
-        result = get_eval_score(request)
-        result["completed"] = True
-        typer.echo(f"Evaluated with parameters: {result}")
-    except Exception as e:
-        result["error"] = e
-    write_to_json(result, "/tmp/eval_output.json")
+    _run(request=request, run_type="eval")
 
 
 @app.command("coherence")
@@ -59,22 +95,13 @@ def coherence(
     chat_template_type: str = typer.Argument(help="Chat template type"),
     hash: Optional[str] = typer.Argument(help="hash"),
 ):
-    from model_evaluation.coherence_score import get_coherence_score
     request = EvaluateModelRequest(
         repo_namespace=repo_namespace,
         repo_name=repo_name,
         chat_template_type=chat_template_type,
         hash=hash,
     )
-    typer.echo(f"Evaluating coherence with parameters: {request}")
-    result = {"completed": False}
-    try:
-        result = get_coherence_score(request)
-        result["completed"] = True
-        typer.echo(f"Evaluated coherence with parameters: {result}")
-    except Exception as e:
-        result["error"] = e
-    write_to_json(result, "/tmp/coherence_output.json")
+    _run(request=request, run_type="coherence")
 
 
 @app.command("vibe")
@@ -84,22 +111,13 @@ def vibe_score(
     chat_template_type: str = typer.Argument(help="Chat template type"),
     hash: Optional[str] = typer.Argument(help="hash"),
 ):
-    from model_evaluation.vibe_score import get_vibe_match_score
     request = EvaluateModelRequest(
         repo_namespace=repo_namespace,
         repo_name=repo_name,
         chat_template_type=chat_template_type,
         hash=hash,
     )
-    typer.echo(f"Evaluating with parameters: {request}")
-    result = {"completed": False}
-    try:
-        result = get_vibe_match_score(request)
-        result["completed"] = True
-        typer.echo(f"Evaluated with parameters: {result}")
-    except Exception as e:
-        result["error"] = e
-    write_to_json(result, "/tmp/vibe_output.json")
+    _run(request=request, run_type="vibe")
 
 
 @app.command("stub")
@@ -111,4 +129,8 @@ def stub():
 
 if __name__ == "__main__":
     _dl_dataset()
+    gc.collect()
+    torch.cuda.empty_cache()
     app()
+    gc.collect()
+    torch.cuda.empty_cache()

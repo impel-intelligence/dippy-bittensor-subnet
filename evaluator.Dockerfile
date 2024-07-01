@@ -27,7 +27,6 @@ COPY requirements.eval.txt .
 RUN uv pip install --system -r requirements.eval.txt --no-build-isolation
 
 COPY model_evaluation ./model_evaluation
-COPY dippy_validation_api ./dippy_validation_api
 COPY utilities ./utilities
 COPY template ./template
 COPY model ./model
@@ -38,6 +37,6 @@ COPY README.md .
 COPY setup.py .
 RUN uv pip install -e .
 
-COPY dippy_validation_api/entrypoint.py .
+COPY model_evaluation/entrypoint.py .
 
 ENTRYPOINT ["python", "entrypoint.py"]

@@ -6,10 +6,13 @@ import docker
 from pydantic import BaseModel
 from typing import Optional, Union
 
+from model_evaluation.entrypoint import _dl_dataset
 from model_evaluation.common import EvaluateModelRequest
 from utilities.event_logger import EventLogger
 
 DEFAULT_IMAGE_ID = "grader:latest"
+DEFAULT_HOME_DIR = "/home/new_prod_user/dippy-bittensor-subnet"
+
 
 class EvaluationScore(BaseModel):
     eval_score: float
@@ -30,17 +33,18 @@ class Evaluator:
         self,
         image_name: str = DEFAULT_IMAGE_ID,
         logger: EventLogger = EventLogger(),
+        trace: bool = False,
     ):
         self.client = docker.from_env()
         self.logger = logger
         self.image_name = image_name
         self.volume_configuration = {
-            "/home/new_prod_user/dippy-bittensor-subnet/model_evaluation/prompt_templates": {
+            f"{DEFAULT_HOME_DIR}/model_evaluation/prompt_templates": {
                 "bind": "/app/prompt_templates",
-                "mode": "rw",
+                "mode": "ro",
             },
-            "/home/new_prod_user/dippy-bittensor-subnet/dippy_validation_api/data": {
-                "bind": "/app/data",
+            f"{DEFAULT_HOME_DIR}/datasets": {
+                "bind": "/app/datasets",
                 "mode": "rw",
             },
         }
@@ -50,6 +54,7 @@ class Evaluator:
         self.env = {
             "SOME_ENV_VAR": "x",
         }
+        self.trace = trace
 
     def run_docker_container(
         self,
@@ -78,10 +83,10 @@ class Evaluator:
         filepath = f"/tmp/{job_type}_output.json"
         filename = f"{job_type}_output.json"
         result = container.wait()
-        while container.status == 'created':
+        while container.status == "created":
             time.sleep(10)
             container.reload()
-        while container.status == 'running':
+        while container.status == "running":
             time.sleep(30)
             container.reload()
 
@@ -105,11 +110,13 @@ class Evaluator:
                             "container_id": container.id,
                         },
                     )
-                    container.remove()
+                    if not self.trace:
+                        container.remove()
                     return container_results
         except Exception as e:
             self.logger.error("docker_error", error=e)
-            container.remove()
+            if not self.trace:
+                container.remove()
             return {"error": e}
 
     def eval_score(
@@ -131,7 +138,7 @@ class Evaluator:
             )
             return score
         except Exception as e:
-            return RunError(error=f"{e}")
+            return RunError(error=str(e))
 
     def vibe_score(self, request: EvaluateModelRequest) -> Union[VibeScore, RunError]:
         try:
@@ -148,4 +155,51 @@ class Evaluator:
             )
             return score
         except Exception as e:
-            return RunError(error=f"{e}")
+            return RunError(error=str(e))
+
+
+# Command to manually run evaluation
+def entry():
+    _dl_dataset()
+    # add command line arguments for the ports of the two apis
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run a single evaluation instance")
+    parser.add_argument(
+        "--image", type=str, default="grader:latest", help="image to use"
+    )
+    parser.add_argument(
+        "--repo_namespace", type=str, required=True, help="Repository namespace"
+    )
+    parser.add_argument("--repo_name", type=str, required=True, help="Repository name")
+    parser.add_argument(
+        "--chat_template_type", type=str, required=True, help="Chat template type"
+    )
+    parser.add_argument("--hash", type=str, required=True, help="Unique hash value")
+
+    args = parser.parse_args()
+    image_name = args.image
+    req = EvaluateModelRequest(
+        repo_namespace=args.repo_namespace,
+        repo_name=args.repo_name,
+        chat_template_type=args.chat_template_type,
+        hash=args.hash,
+    )
+    print(f"running {image_name} with {req}")
+
+    try:
+        evaler = Evaluator(image_name=image_name, trace=True)
+        eval_result = evaler.eval_score(req)
+        print(f"eval_result : {eval_result}")
+        if isinstance(eval_result, RunError):
+            raise Exception(eval_result.error)
+        vibe_result = evaler.vibe_score(req)
+        if isinstance(vibe_result, RunError):
+            raise Exception(vibe_result.error)
+        print(f"vibe_result : {vibe_result}")
+    except Exception as e:
+        print(e)
+
+
+if __name__ == "__main__":
+    entry()

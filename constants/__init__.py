@@ -56,4 +56,4 @@ alpha = 0.9
 # validator scoring exponential temperature
 temperature = 0.08
 # validator score boosting for earlier models.
-timestamp_epsilon = 0.03
+timestamp_epsilon = 0.02

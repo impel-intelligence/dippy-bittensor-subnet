@@ -24,6 +24,7 @@ from model_evaluation.common import (
 from model_evaluation.common import chat_template_mappings
 from model_evaluation.dataset import PippaDataset
 
+
 def eval_score(
     model: Any,
     sampled_data: list[tuple],
@@ -429,7 +430,8 @@ def get_eval_score(request: EvaluateModelRequest):
         cleanup(None, model_downloaded, request)
         raise Exception("Error loading model: " + failure_reason)
     dataset = PippaDataset(
-        "data/pippa_deduped.jsonl", max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LENGTH - 200
+        "datasets/pippa_deduped.jsonl",
+        max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LENGTH - 200,
     )
     # set the chat template params
     dataset.set_chat_template_params(

@@ -1,5 +1,8 @@
 import os
 import logging
+from typing import Optional
+
+import supabase
 from supabase import create_client
 import pandas as pd
 from datetime import datetime, timedelta
@@ -52,6 +55,19 @@ class SupabaseState:
             self.logger.error(f"Error fetching leaderboard entry from database: {e}")
             return None
 
+    def remove_record(self, hash: str):
+        try:
+            status = (
+                self.client.table("leaderboard")
+                .delete(returning="minimal")
+                .eq("hash", hash)
+                .execute()
+            )
+            return status
+        except Exception as e:
+            self.logger.error(f"could not delete record {str(e)}")
+            return None
+
     def update_row(self, row):
         if "timestamp" in row:
             row["timestamp"] = row["timestamp"].isoformat()
@@ -62,14 +78,27 @@ class SupabaseState:
             self.logger.error(f"Error updating row in Supabase: {e}")
             return None
 
+    def get_top_completed(self):
+        response = (
+            self.client.table("leaderboard")
+            .select("*")
+            .eq("status", "COMPLETED")
+            .order("total_score", desc=True)
+            .limit(200)
+            .execute()
+        )
+        return response.data
+
     def get_leaderboard(self):
         try:
-            response = (self.client.
-                        table("leaderboard").
-                        select("*").
-                        eq("status", "COMPLETED").
-                        order("total_score", desc=True).
-                        limit(100).execute())
+            response = (
+                self.client.table("leaderboard")
+                .select("*")
+                .eq("status", "COMPLETED")
+                .order("total_score", desc=True)
+                .limit(100)
+                .execute()
+            )
             leaderboard = pd.DataFrame(response.data)
             leaderboard = leaderboard.fillna(value=-1)
             leaderboard = leaderboard.sort_values(by="total_score", ascending=False)

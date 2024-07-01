@@ -10,6 +10,8 @@ from accelerate.utils import release_memory
 from accelerate import PartialState
 from typing import List
 
+# prompt dataset: ~256 prompts
+
 # Import necessary modules and functions from the main API file
 from model_evaluation.common import (
     MAX_AVG_LATENCY,
@@ -64,11 +66,19 @@ def get_coherence_score(request: EvaluateModelRequest):
         raise e
 
 
+def ask_corcel() -> bool:
+    # call corcel api
+    return False
+
+
 def coherence_score(
     model: Any,
     input_tokenizer: AutoTokenizer,
     output_tokenizer: AutoTokenizer,
 ) -> float:
+    coherent = ask_corcel()
+    return 1 if coherent else 0
+
     # maximum length this model can handle.
     # max_length = min(model.config.max_position_embeddings, MAX_SEQ_LEN)
     #
