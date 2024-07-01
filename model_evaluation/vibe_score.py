@@ -1,5 +1,4 @@
 import os
-import shutil
 import torch
 from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
@@ -7,8 +6,6 @@ import gc
 import ray
 from vllm.distributed.parallel_state import destroy_model_parallel
 from model_evaluation.dataset import PippaDataset
-import huggingface_hub
-
 
 # Import necessary modules and functions from the main API file
 from model_evaluation.common import (
@@ -21,26 +18,6 @@ from model_evaluation.common import (
     EvaluateModelRequest,
     chat_template_mappings,
 )
-
-
-
-
-def clean_up(model_downloaded, request):
-    total, used, _ = shutil.disk_usage("/")
-    if used / total > 0.9:
-        print("Warning: SSD is more than 90% full.")
-    if model_downloaded:
-        repo_id = f"{request.repo_namespace}/{request.repo_name}"
-        hf_cache_info = huggingface_hub.scan_cache_dir()
-        # delete from huggingface cache
-        for repo_info in hf_cache_info.repos:
-            revisions = repo_info.revisions
-            if repo_info.repo_id == repo_id:
-                for revision in revisions:
-                    print(
-                        f"Deleting {repo_id} revision {revision.commit_hash} from cache"
-                    )
-                    hf_cache_info.delete_revisions(revision.commit_hash)
 
 
 def calculate_vibe_match_score(
@@ -131,7 +108,7 @@ def get_vibe_match_score(request: EvaluateModelRequest):
             f"{request.repo_namespace}/{request.repo_name}", revision=request.revision
         )
         vibe_score_dataset = PippaDataset(
-            "data/pippa_deduped.jsonl",
+            "datasets/pippa_deduped.jsonl",
             max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
         )
         # Set chat template params

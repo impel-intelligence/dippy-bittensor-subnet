@@ -167,9 +167,7 @@ class DolphinDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        return (
-            "x"
-        )
+        return "x"
 
     def sample_dataset(self, n: int):
         # get indices of the dataset

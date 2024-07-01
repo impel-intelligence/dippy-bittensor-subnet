@@ -4,7 +4,7 @@ remove_files() {
     local dir=$1
     if [ -d "$dir" ]; then
         echo "Removing files in $dir"
-        rm -f "$dir"/*
+        rm -rf "$dir"/*
         if [ $? -eq 0 ]; then
             echo "Successfully removed files in $dir"
         else
@@ -18,5 +18,7 @@ remove_files "./logs"
 
 # Remove files in /tmp/valapi_event_logs
 remove_files "/tmp/valapi_event_logs"
+remove_files "/tmp/validation_api"
+remove_files "/tmp/validation_api_models/"
 
 echo "Cleanup completed"

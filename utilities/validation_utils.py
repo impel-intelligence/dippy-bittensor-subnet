@@ -3,36 +3,11 @@ import os
 import shutil
 import subprocess
 import time
+from datetime import datetime
+
 import requests
 
 from transformers import AutoConfig, AutoModelForCausalLM
-
-
-def load_model_no_download(repo_namespace: str, repo_name: str):
-    """
-    Validate the model by loading it, without downloading it from the Hugging Face Hub
-    """
-    try:
-        config = AutoConfig.from_pretrained(
-            "/".join([repo_namespace, repo_name]), revision="main"
-        )
-    except Exception as e:
-        return None, str(e)
-
-    if config is not None:
-        print("Model configuration retrieved from Hub")
-        try:
-            # Check if GPU is available and see if model fits in GPU
-            print("loading model in RAM to check if it fits in GPU")
-            model = AutoModelForCausalLM.from_config(
-                config=config,
-            )
-            print("Model loaded successfully")
-            return model, None
-        except Exception as e:
-            return None, str(e)
-    else:
-        return None, "Could not retrieve model configuration from Hub"
 
 
 def parse_size(line):
@@ -65,7 +40,7 @@ def parse_size(line):
         return 0
 
 
-def check_model_repo_size(hash: int, repo_namespace: str, repo_name: str) -> int:
+def check_model_repo_size(hash: str, repo_namespace: str, repo_name: str) -> int:
     """
     Check the size of a model hosted on Hugging Face using Git LFS without checking out the files,
     and clean up the cloned repository afterwards, even if an error occurs.
@@ -78,9 +53,9 @@ def check_model_repo_size(hash: int, repo_namespace: str, repo_name: str) -> int
     Returns:
     - int: The total size of the model files in bytes
     """
-    repo_dir = f"data/{str(hash)}/models--{repo_namespace}--{repo_name}"
+    now = datetime.utcnow()
+    repo_dir = f"/tmp/validation_api_models/{hash}/models--{repo_namespace}--{repo_name}/{now}"
 
-    original_dir = os.getcwd()
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -93,11 +68,13 @@ def check_model_repo_size(hash: int, repo_namespace: str, repo_name: str) -> int
                     repo_dir,
                 ],
                 check=True,
-                timeout=10,
+                timeout=15,
             )
-            os.chdir(repo_dir)
             lfs_files_output = subprocess.check_output(
-                ["git", "lfs", "ls-files", "-s"], text=True, timeout=10
+                ["git", "lfs", "ls-files", "-s"],
+                text=True,
+                timeout=10,
+                cwd=repo_dir,
             )
             total_size = sum(
                 parse_size(line)
@@ -122,8 +99,7 @@ def check_model_repo_size(hash: int, repo_namespace: str, repo_name: str) -> int
                 print("Max retries exceeded.")
                 raise e
         finally:
-            os.chdir(original_dir)
-            shutil.rmtree(os.path.join(original_dir, repo_dir), ignore_errors=True)
+            shutil.rmtree(repo_dir, ignore_errors=True)
 
 
 def regenerate_hash(namespace, name, chat_template, competition_id):

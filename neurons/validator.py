@@ -593,6 +593,7 @@ class Validator:
                 for uid, score in enumerate(self.weights):
                     weights_report["weights"][uid] = score
                 wandb_logger.safe_log(weights_report)
+                self._event_log("set_weights_complete", weights=weights_report)
             except Exception as e:
                 bt.logging.error(f"failed to set weights {e}")
             ws, ui = self.weights.topk(len(self.weights))
@@ -629,6 +630,7 @@ class Validator:
             return False
 
         bt.logging.info("Synced metagraph")
+        self._event_log("metagraph_sync_success")
         self.metagraph.load()
         self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
         return True
@@ -651,7 +653,7 @@ class Validator:
         scores_per_uid,
         uid_to_block,
     ):
-        # Calculate the next closest half-hour mark
+        # Calculate the next closest 5 minute mark
         next_run_time = dt.datetime.utcnow()
         # Only run at the five minute mark
         interval_minutes = 5
@@ -663,14 +665,13 @@ class Validator:
             current_time = dt.datetime.utcnow()
             # Check if the current time is close to or past the scheduled time
             if current_time >= next_run_time:
-                self.fetch_scores(
+                return self.fetch_scores(
                     uid_to_hotkey_and_model_metadata,
                     competition_parameters,
                     scores_per_uid,
                     uid_to_block,
                 )
-                return
-            time.sleep(0.5)  # Check every 10 seconds
+            time.sleep(10)  # Check every 10 seconds
 
     def fetch_scores(
         self,
@@ -683,7 +684,7 @@ class Validator:
             hotkey,
             model_i_metadata,
         ) in uid_to_hotkey_and_model_metadata.items():
-            score = None
+            score = 0
             if model_i_metadata is not None:
                 if (
                     model_i_metadata.id.competition_id
@@ -750,18 +751,11 @@ class Validator:
                     bt.logging.debug(
                         f"Skipping {uid_i}, submission is for a different competition ({model_i_metadata.id.competition_id}). Setting loss to 0."
                     )
-            else:
-                bt.logging.debug(
-                    f"Unable to load the model for {uid_i} (perhaps a duplicate?). Setting loss to 0."
-                )
             if not score:
                 bt.logging.error(f"Failed to get score for {model_i_metadata}")
-                score = 0
-
             scores_per_uid[uid_i] = score
-
             bt.logging.warning(f"Computed model score for uid: {uid_i}: {score}")
-            bt.logging.debug(f"Computed model losses for uid: {uid_i}: {score}")
+        return scores_per_uid, uid_to_block
 
     async def run_step(self):
         """
@@ -866,9 +860,8 @@ class Validator:
             uid_to_hotkey_and_model_metadata[uid_i] = (hotkey, model_i_metadata)
 
         bt.logging.info("Looking at model metadata", uid_to_hotkey_and_model_metadata)
-        # ADD INSTRUCTIONS FOR SCORING ON LOCAL VALIDATOR
 
-        self._fetch_scores_sync(
+        scores_per_uid, uid_to_block = self._fetch_scores_sync(
             uid_to_hotkey_and_model_metadata,
             competition_parameters,
             scores_per_uid,

@@ -4,3 +4,4 @@ dippy_validation_api/logs
 model_evaluation/data
 *.egg-info/
 model-store/
+datasets/
