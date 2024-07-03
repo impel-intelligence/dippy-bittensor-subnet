@@ -39,6 +39,7 @@ import constants
 from model.data import ModelMetadata
 from model.model_tracker import ModelTracker
 from model.model_updater import ModelUpdater
+from model.scores import Scores, StatusEnum
 from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
 from model.storage.disk.disk_model_store import DiskModelStore
 from model.storage.disk.utils import get_hf_download_path
@@ -65,7 +66,7 @@ import bittensor as bt
 import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
+COHERENCE_BLOCKHEIGHT = 3408878
 
 def iswin(score_i, score_j, block_i, block_j):
     """
@@ -123,20 +124,6 @@ def compute_wins(
         win_rate[uid_i] = wins[uid_i] / total_matches if total_matches > 0 else 0
 
     return wins, win_rate
-
-
-def best_uid(metagraph: bt.metagraph) -> int:
-    """Returns the best performing UID in the metagraph."""
-    return max(range(metagraph.n), key=lambda uid: metagraph.I[uid].item())
-
-
-def nearest_tempo(start_block, tempo, block):
-    start_num = start_block + tempo
-    intervals = (block - start_num) // tempo
-    nearest_num = start_num + intervals * tempo
-    if nearest_num >= block:
-        nearest_num -= tempo
-    return nearest_num
 
 
 @dataclass
@@ -697,7 +684,7 @@ class Validator:
 
                         while True:
                             try:
-                                _score, status = get_model_score(
+                                _score_data = get_model_score(
                                     model_i_metadata.id.namespace,
                                     model_i_metadata.id.name,
                                     model_i_metadata.id.hash,
@@ -705,9 +692,9 @@ class Validator:
                                     self.config,
                                     self.local_metadata,
                                 )
-                                if _score is None:
+                                if _score_data.total_score <= 0:
                                     retryWithRemote = True
-                                    _score, status = get_model_score(
+                                    _score_data = get_model_score(
                                         model_i_metadata.id.namespace,
                                         model_i_metadata.id.name,
                                         model_i_metadata.id.hash,
@@ -717,20 +704,20 @@ class Validator:
                                         retryWithRemote,
                                     )
                                 bt.logging.info(
-                                    f"Score for {model_i_metadata} is {_score}"
+                                    f"_score_data for {model_i_metadata} is {_score_data}"
                                 )
-                                bt.logging.info(
-                                    f"Status for {model_i_metadata} is {status}"
-                                )
-                                if status == "COMPLETED":
-                                    score = _score
+                                if _score_data.status == StatusEnum.COMPLETED:
+                                    score = _score_data.total_score
+                                    # Set hardcoded score switchover to coherence.
+                                    # if _score_data.coherence_score < 1 and model_i_metadata.block > COHERENCE_BLOCKHEIGHT:
+                                    #     score = score * _score_data.coherence_score
                                     break
-                                elif status == "FAILED":
+                                elif _score_data.status == StatusEnum.FAILED:
                                     score = 0
                                     break
                                 else:
                                     bt.logging.debug(
-                                        f"Waiting for score for {model_i_metadata.id} Current status: {status}"
+                                        f"Waiting for score for {model_i_metadata.id} Current status: {_score_data.status}"
                                     )
                                     time.sleep(10)
                             except:
@@ -1055,7 +1042,7 @@ def get_model_score(
     config,
     local_metadata: LocalMetadata,
     retryWithRemote: bool = False,
-):
+) -> Scores:
     # Status:
     # QUEUED, RUNNING, FAILED, COMPLETED
     # return (score, status)
@@ -1086,7 +1073,7 @@ def get_model_score(
 
     console = Console()
     console.print(f"Payload: {payload}")
-
+    score_data = Scores()
     # Make the POST request to the validation endpoint
     try:
         response = requests.post(validation_endpoint, json=payload, headers=headers)
@@ -1095,22 +1082,23 @@ def get_model_score(
         result = response.json()
         console = Console()
         console.print(f"Payload: {payload}")
-        status = result["status"]
-        if status == "COMPLETED":
-            score = result["score"]["total_score"]
-        elif status == "FAILED":
+        status = StatusEnum.from_string(result["status"])
+        score_data.status = status
+
+        if status == StatusEnum.COMPLETED:
+            score_data.total_score = result["score"]["total_score"]
+            score_data.vibe_score = result["score"]["vibe_score"]
+            score_data.coherence_score = result["score"]["coherence_score"]
+            # score = result["score"]["total_score"]
+        elif status == StatusEnum.FAILED:
             bt.logging.warning(f"Model {namespace}/{name} is in status {status}")
-            score = 0
-        else:
-            return None, status
     except Exception as e:
-        score = None
-        status = "FAILED"
+        score_data.status = StatusEnum.FAILED
         bt.logging.error(e)
         bt.logging.error(f"Failed to get score and status for {namespace}/{name}")
 
-    bt.logging.info(f"Model {namespace}/{name} has score {score} and status {status}")
-    return score, status
+    bt.logging.info(f"Model {namespace}/{name} has score data {score_data}")
+    return score_data
 
 
 if __name__ == "__main__":

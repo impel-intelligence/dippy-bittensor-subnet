@@ -30,8 +30,11 @@ import constants
 import traceback
 import bittensor as bt
 
+from model.scores import StatusEnum
+from neurons.validator import get_model_score, LocalMetadata
 import os
 
+l = LocalMetadata(commit="x",btversion="x")
 
 class ModelQueue:
     @staticmethod
@@ -89,16 +92,14 @@ class ModelQueue:
             self.load_latest_metagraph()
 
     def load_latest_metagraph(self):
-        endpoint = self.subtensor.chain_endpoint
-        self.metagraph = bt.subtensor(endpoint).metagraph(self.netuid)
-        self.metagraph.save()
-        all_uids = self.metagraph.uids.tolist()
+        metagraph = self.subtensor.metagraph(self.netuid)
+        all_uids = metagraph.uids.tolist()
         queued = 0
         failed = 0
         completed = 0
         for uid in all_uids:
             try:
-                hotkey = self.metagraph.hotkeys[uid]
+                hotkey = metagraph.hotkeys[uid]
                 metadata = bt.extrinsics.serving.get_metadata(
                     self.subtensor, self.netuid, hotkey
                 )
@@ -109,22 +110,25 @@ class ModelQueue:
                 chain_str = bytes.fromhex(hex_data).decode()
                 model_id = ModelId.from_compressed_str(chain_str)
 
-                result = queue_model_score(
+                result = get_model_score(
                     namespace=model_id.namespace,
                     name=model_id.name,
                     hash=model_id.hash,
                     template=model_id.chat_template,
+                    config=self.config,
+                    local_metadata=l,
+                    retryWithRemote=True,
                 )
 
-                if result["status"] == "QUEUED":
+                if result.status == StatusEnum.QUEUED:
                     stats = f"uid: {uid} hotkey : {hotkey} model_metadata : {model_id} \n result: {result}"
                     bt.logging.info(f"QUEUED : {stats}")
                     queued += 1
-                if result["status"] == "FAILED":
+                if result.status == StatusEnum.FAILED:
                     stats = f"uid: {uid} hotkey : {hotkey} model_metadata : {model_id} \n result: {result}"
                     bt.logging.info(f"FAILED : {stats}")
                     failed += 1
-                if result["status"] == "COMPLETED":
+                if result.status == StatusEnum.COMPLETED:
                     completed += 1
 
             except Exception as e:
@@ -133,24 +137,6 @@ class ModelQueue:
         bt.logging.info(f"queued {queued} failed {failed} completed {completed}")
 
 
-def queue_model_score(namespace, name, hash, template):
-    validation_endpoint = f"{constants.VALIDATION_SERVER}/evaluate_model"
-    payload = {
-        "repo_namespace": namespace,
-        "repo_name": name,
-        "hash": hash,
-        "chat_template_type": template,
-        "admin_key": os.environ["ADMIN_KEY"],
-    }
-    try:
-        response = requests.post(validation_endpoint, json=payload)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-        result = response.json()
-        return result
-    except Exception as e:
-        bt.logging.error(e)
-        bt.logging.error(f"Failed to get score and status for {namespace}/{name}")
-    return None
 
 
 if __name__ == "__main__":

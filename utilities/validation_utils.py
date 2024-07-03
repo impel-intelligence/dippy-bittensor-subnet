@@ -53,8 +53,10 @@ def check_model_repo_size(hash: str, repo_namespace: str, repo_name: str) -> int
     Returns:
     - int: The total size of the model files in bytes
     """
-    now = datetime.utcnow()
-    repo_dir = f"/tmp/validation_api_models/{hash}/models--{repo_namespace}--{repo_name}/{now}"
+    now = datetime.utcnow().isoformat()
+    repo_dir = (
+        f"/tmp/validation_api_models/{hash}/models--{repo_namespace}--{repo_name}/{now}"
+    )
 
     max_retries = 3
     for attempt in range(max_retries):

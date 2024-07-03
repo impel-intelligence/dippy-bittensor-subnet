@@ -75,18 +75,6 @@ class ModelUpdater:
             return False
         bt.logging.warning(f"Syncing model for hotkey {hotkey}")
         # Get the local path based on the local store to download to (top level hotkey path)
-        path = self.local_store.get_path(hotkey)
-
-        # bt.logging.warning(f"Downloading model to {path}")
-        # # Otherwise we need to download the new model based on the metadata.
-        # model = await self.remote_store.download_model(metadata.id, path, parameters)
-        # bt.logging.warning(f"Downloaded model to {path}")
-        # # Check that the hash of the downloaded content matches.
-        # if model.id.hash != metadata.id.hash:
-        #     raise ValueError(
-        #         f"Sync for hotkey {hotkey} failed. Hash of content downloaded from hugging face does not match chain metadata. {metadata}"
-        #     )
-
         # Update the tracker
         self.model_tracker.on_miner_model_updated(hotkey, metadata)
         bt.logging.warning(f"Model for hotkey {hotkey} updated to {metadata}")

@@ -1,13 +1,14 @@
 import json
 import tarfile
 import io
+import os
 import time
 import docker
 from pydantic import BaseModel
 from typing import Optional, Union
 
-from model_evaluation.entrypoint import _dl_dataset
-from model_evaluation.common import EvaluateModelRequest
+from scoring.entrypoint import _dl_dataset
+from scoring.common import EvaluateModelRequest
 from utilities.event_logger import EventLogger
 
 DEFAULT_IMAGE_ID = "grader:latest"
@@ -27,6 +28,9 @@ class RunError(BaseModel):
 class VibeScore(BaseModel):
     vibe_score: float
 
+class CoherenceScore(BaseModel):
+    coherence_score: int
+
 
 class Evaluator:
     def __init__(
@@ -39,7 +43,7 @@ class Evaluator:
         self.logger = logger
         self.image_name = image_name
         self.volume_configuration = {
-            f"{DEFAULT_HOME_DIR}/model_evaluation/prompt_templates": {
+            f"{DEFAULT_HOME_DIR}/scoring/prompt_templates": {
                 "bind": "/app/prompt_templates",
                 "mode": "ro",
             },
@@ -47,12 +51,16 @@ class Evaluator:
                 "bind": "/app/datasets",
                 "mode": "rw",
             },
+            # f"{DEFAULT_HOME_DIR}/scoring": {
+            #     "bind": "/app/scoring",
+            #     "mode": "ro",
+            # },
         }
         self.device_requests = [
             docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])
         ]
         self.env = {
-            "SOME_ENV_VAR": "x",
+            "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY"),
         }
         self.trace = trace
 
@@ -75,9 +83,7 @@ class Evaluator:
             command=command,
             volumes=volumes,
             device_requests=device_requests,
-            environment={
-                "SOME_ENV_VAR": "x",
-            },
+            environment=self.env,
             detach=True,  # Run in background
         )
         filepath = f"/tmp/{job_type}_output.json"
@@ -140,6 +146,25 @@ class Evaluator:
         except Exception as e:
             return RunError(error=str(e))
 
+    def coherence_score(
+        self, request: EvaluateModelRequest
+    ) -> Union[CoherenceScore,RunError]:
+        try:
+            coherence_result = self.run_docker_container(
+                job_type="coherence",
+                request=request,
+            )
+            if "error" in coherence_result:
+                raise Exception(coherence_result["error"])
+            if coherence_result["completed"] is False:
+                raise Exception("completion internal error")
+            score = CoherenceScore(
+                coherence_score=coherence_result["coherence_score"],
+            )
+            return score
+        except Exception as e:
+            return RunError(error=str(e))
+
     def vibe_score(self, request: EvaluateModelRequest) -> Union[VibeScore, RunError]:
         try:
             vibe_result = self.run_docker_container(
@@ -197,6 +222,10 @@ def entry():
         if isinstance(vibe_result, RunError):
             raise Exception(vibe_result.error)
         print(f"vibe_result : {vibe_result}")
+        coherence_result = evaler.coherence_score(req)
+        if isinstance(coherence_result, RunError):
+            raise Exception(coherence_result.error)
+        print(f"coherence_result : {coherence_result}")
     except Exception as e:
         print(e)
 

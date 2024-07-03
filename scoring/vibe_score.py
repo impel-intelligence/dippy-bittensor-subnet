@@ -5,10 +5,10 @@ from transformers import AutoTokenizer
 import gc
 import ray
 from vllm.distributed.parallel_state import destroy_model_parallel
-from model_evaluation.dataset import PippaDataset
+from scoring.dataset import PippaDataset
 
 # Import necessary modules and functions from the main API file
-from model_evaluation.common import (
+from scoring.common import (
     BATCH_SIZE_VIBE_SCORE,
     LENGTH_DIFF_PENALTY_STEEPNESS,
     MAX_GENERATION_LEEWAY,
@@ -17,6 +17,8 @@ from model_evaluation.common import (
     SAMPLE_SIZE_VIBE_SCORE,
     EvaluateModelRequest,
     chat_template_mappings,
+    PIPPA_FILENAME,
+    full_path, VLLM_GPU_MEMORY,
 )
 
 
@@ -28,7 +30,7 @@ def calculate_vibe_match_score(
         model_name,
         revision=revision,
         tensor_parallel_size=torch.cuda.device_count(),
-        gpu_memory_utilization=0.5,
+        gpu_memory_utilization=VLLM_GPU_MEMORY,
         max_num_seqs=BATCH_SIZE_VIBE_SCORE,
         max_model_len=MAX_SEQ_LEN_VIBE_SCORE,
     )
@@ -108,7 +110,7 @@ def get_vibe_match_score(request: EvaluateModelRequest):
             f"{request.repo_namespace}/{request.repo_name}", revision=request.revision
         )
         vibe_score_dataset = PippaDataset(
-            "datasets/pippa_deduped.jsonl",
+            full_path(PIPPA_FILENAME),
             max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
         )
         # Set chat template params

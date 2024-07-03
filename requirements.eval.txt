@@ -11,3 +11,4 @@ threadpoolctl
 loguru
 numpy
 typer
+openai

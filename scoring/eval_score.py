@@ -9,7 +9,7 @@ from accelerate.utils import release_memory
 from accelerate import PartialState
 
 # Import necessary modules and functions from the main API file
-from model_evaluation.common import (
+from scoring.common import (
     MAX_AVG_LATENCY,
     MAX_GENERATION_LENGTH,
     MAX_MODEL_SIZE,
@@ -21,8 +21,8 @@ from model_evaluation.common import (
     EvaluateModelRequest,
 )
 
-from model_evaluation.common import chat_template_mappings
-from model_evaluation.dataset import PippaDataset
+from scoring.common import chat_template_mappings
+from scoring.dataset import PippaDataset
 
 
 def eval_score(
@@ -444,7 +444,7 @@ def get_eval_score(request: EvaluateModelRequest):
     except Exception as e:
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
-        raise Exception("Error sampling dataset: " + failure_reason)
+        raise Exception(f"Error sampling dataset: {failure_reason}")
 
     # Part 2: Evaluate the model
     print("Evaluating model")

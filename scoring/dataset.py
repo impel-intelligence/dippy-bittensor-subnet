@@ -126,9 +126,9 @@ The themes of the conversation are: {data_point['categories']}."""
             chat_input = f"{self._tokenizer.bos_token}{chat_input}"
 
         return (
-            chat_input,
-            f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}",
-            self.dataset[idx]["last_user_message"],
+            chat_input, # context
+            f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}", # target text
+            self.dataset[idx]["last_user_message"], # last user message
         )
 
     def sample_dataset(self, n: int):
@@ -140,34 +140,78 @@ The themes of the conversation are: {data_point['categories']}."""
         return [self[i] for i in indices]
 
 
-class DolphinDataset(Dataset):
-    def __init__(self, filename, max_input_len):
-        self.filename = filename
-        with open(filename, "r") as f:
-            data = [json.loads(line) for line in f]
+class PromptDataset(Dataset):
+    def __init__(self, filenames, max_input_len):
+        all_data = []
+        for filename in filenames:
+            with open(filename, "r") as f:
+                data = [json.loads(line) for line in f]
+                all_data.append(data)
 
-        self.dataset = self.process_data(data, max_input_len)
+        self.dataset = self.process_data(all_data, max_input_len)
+        self._chat_template = None
+        self._tokenizer = None
+
+    def set_chat_template_params(self, template_path: str, tokenizer: AutoTokenizer):
+        self._chat_template = jinja2.Template(open(template_path).read())
+        self._tokenizer = tokenizer
 
     def process_data(self, data, max_input_len):
         """
-        Convert dolphin dataset to a format that can be used downstream.
+        Convert opus dataset to a format that can be used downstream.
         """
-        encoding = tiktoken.encoding_for_model(
-            "gpt-3.5-turbo"
-        )  # to get approx token count
+
         converted_dataset = []
+
         for data_point in data:
-            # construct the system prompt using the bot_description and bot_greeting
-            prompt = data_point["input"]
-            converted_dataset.append(prompt)
+            for entry in data_point:
+                # Always only 3 messages
+                conversations = entry["conversations"]
+                messages = [
+                {"role":"system", "content": conversations[0]["value"]},
+                ]
+                prompt_content = f'{conversations[1]["value"]} \n Please limit to (200-300) words.'
+                messages.append({"role":"user","content":prompt_content},)
+                output = conversations[2]["value"]
+                converted_dataset.append({
+                    "messages": messages,
+                    "output": output,
+                })
 
         return converted_dataset
+
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        return "x"
+        if self._chat_template is None:
+            raise ValueError(
+                "Chat template is not set. Please set the chat template before generating chat."
+            )
+
+        if self._tokenizer is None:
+            raise ValueError(
+                "Tokenizer is not set. Please set the tokenizer before generating chat."
+            )
+        chat_input = self._chat_template.render(
+            bos_token=self._tokenizer.bos_token,
+            eos_token=self._tokenizer.eos_token,
+            messages=self.dataset[idx]["messages"],
+            include_beginning_of_conversation=True,
+            add_generation_prompt=True,
+        )  # shouldn't end with eos token
+
+        if chat_input.endswith(self._tokenizer.eos_token):
+            chat_input = chat_input[: -len(self._tokenizer.eos_token)]
+
+        if not chat_input.startswith(self._tokenizer.bos_token):
+            chat_input = f"{self._tokenizer.bos_token}{chat_input}"
+        return (
+            chat_input, # context
+            self.dataset[idx]["messages"], # full message history
+            self.dataset[idx]["output"], # prompt output for comparison
+        )
 
     def sample_dataset(self, n: int):
         # get indices of the dataset

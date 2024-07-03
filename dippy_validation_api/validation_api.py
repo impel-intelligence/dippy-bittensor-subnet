@@ -16,13 +16,14 @@ from dotenv import load_dotenv
 
 from dippy_validation_api.evaluator import Evaluator, RunError
 from dippy_validation_api.persistence import SupabaseState
+from model.scores import StatusEnum
 from utilities.validation_utils import (
     regenerate_hash,
     check_model_repo_size,
     get_model_size,
 )
 from utilities.event_logger import EventLogger
-from model_evaluation.common import EvaluateModelRequest
+from scoring.common import EvaluateModelRequest
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -39,7 +40,7 @@ LATENCY_SCORE_WEIGHT = 0.06  # weight of the latency score in the total score
 VIBE_SCORE_WEIGHT = 0.06  # weight of the vibe score in the total score
 MAX_AVG_LATENCY = 10000  # in milliseconds
 
-MAX_MODEL_SIZE = 30 * 1024 * 1024 * 1024  # in bytes
+MAX_MODEL_SIZE = 32 * 1024 * 1024 * 1024  # in bytes
 MIN_REPO_SIZE = 10 * 1024 * 1024  # in bytes
 MAX_REPO_SIZE = 80 * 1024 * 1024 * 1024  #  in bytes
 SAMPLE_SIZE = 1024  # number of samples to evaluate the model from the dataset
@@ -155,7 +156,7 @@ def _evaluate_model(
         error_string = f"Error calling eval_score job with message: {e}"
         update_supabase_leaderboard_status(
             request.hash,
-            "FAILED",
+            StatusEnum.FAILED,
             error_string,
         )
         raise RuntimeError(error_string)
@@ -170,7 +171,7 @@ def _evaluate_model(
             "model_size_score": model_size_score,
             "qualitative_score": eval_score,
             "latency_score": latency_score,
-            "notes": "Now computing vibe score",
+            "notes": "Now computing vibe and coherence score",
         }
     )
     try:
@@ -184,6 +185,17 @@ def _evaluate_model(
         raise RuntimeError(error_string)
 
     vibe_score = vibe_score_response.vibe_score
+    try:
+        coherehnce_score_response = evaluator.coherence_score(request)
+        if isinstance(coherehnce_score_response, RunError):
+            raise Exception(coherehnce_score_response.error)
+
+    except Exception as e:
+        error_string = f"Error calling coherence_score job with message: {e}"
+        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, error_string)
+        raise RuntimeError(error_string)
+
+    coherence_score = coherehnce_score_response.coherence_score
 
     if (
         eval_score is None
@@ -210,7 +222,8 @@ def _evaluate_model(
                 "latency_score": latency_score,
                 "vibe_score": vibe_score,
                 "total_score": total_score,
-                "status": "COMPLETED",
+                "coherence_score": coherence_score,
+                "status": StatusEnum.COMPLETED,
                 "notes": "",
             }
         )
@@ -218,7 +231,7 @@ def _evaluate_model(
     except Exception as e:
         failure_reason = str(e)
         logger.error(f"Updating leaderboard to FAILED: {failure_reason}")
-        supabaser.update_leaderboard_status(request.hash, "FAILED", failure_reason)
+        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_reason)
         raise RuntimeError("Error updating leaderboard: " + failure_reason)
     result = {
         "model_size_score": model_size_score,
@@ -326,7 +339,7 @@ def evaluate_model(
             "vibe_score": -1.0,
             "total_score": -1.0,
             "timestamp": pd.Timestamp.utcnow(),
-            "status": "QUEUED",
+            "status": StatusEnum.QUEUED,
             "coherence_score": -1.0,
             "notes": failure_notes,
         }
@@ -341,14 +354,14 @@ def evaluate_model(
             f"Chat template type not supported: {request.chat_template_type}"
         )
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, "FAILED", failure_notes)
+        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
         return supabaser.get_json_result(request.hash)
     # validate the repo exists
     repo_id = f"{request.repo_namespace}/{request.repo_name}"
     if not repository_exists(repo_id):
         failure_notes = f"Huggingface repo not public: {repo_id}"
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, "FAILED", failure_notes)
+        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
         return supabaser.get_json_result(request.hash)
 
     # check repo size of the model to see if it is within the limit
@@ -359,19 +372,19 @@ def evaluate_model(
         if model_repo_size is None:
             failure_notes = "Error checking model repo size. Make sure the model repository exists and is accessible."
             logger.error(failure_notes)
-            supabaser.update_leaderboard_status(request.hash, "FAILED", failure_notes)
+            supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
             return supabaser.get_json_result(request.hash)
 
     except Exception as e:
         failure_notes = f"Error checking model repo size: {e}"
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, "FAILED", failure_notes)
+        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
         return supabaser.get_json_result(request.hash)
 
     if model_repo_size > MAX_REPO_SIZE or model_repo_size < MIN_REPO_SIZE:
         failure_notes = f"Model repo size is not up to requirments: {model_repo_size} bytes. Should be less than {MAX_REPO_SIZE} bytes and greater than {MIN_REPO_SIZE} bytes"
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, "FAILED", failure_notes)
+        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
         return supabaser.get_json_result(request.hash)
 
     # check model size by checking safetensors index
@@ -379,13 +392,13 @@ def evaluate_model(
     if model_size is None:
         failure_notes = "Error getting model size. Make sure the model.index.safetensors.json file exists in the model repository. And it has the metadata->total_size field."
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, "FAILED", failure_notes)
+        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
         return supabaser.get_json_result(request.hash)
 
     if (model_size // 4) > MAX_MODEL_SIZE:
         failure_notes = f"Model size is too large: {model_size} bytes. Should be less than {MAX_MODEL_SIZE} bytes"
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, "FAILED", failure_notes)
+        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
         return supabaser.get_json_result(request.hash)
 
     return supabaser.get_json_result(request.hash)

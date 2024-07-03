@@ -13,7 +13,7 @@ LATENCY_SCORE_WEIGHT = 0.06  # weight of the latency score in the total score
 VIBE_SCORE_WEIGHT = 0.06  # weight of the vibe score in the total score
 MAX_AVG_LATENCY = 10000  # in milliseconds
 
-MAX_MODEL_SIZE = 30 * 1024 * 1024 * 1024  # in bytes
+MAX_MODEL_SIZE = 32 * 1024 * 1024 * 1024  # in bytes
 MIN_REPO_SIZE = 10 * 1024 * 1024  # in bytes
 MAX_REPO_SIZE = 80 * 1024 * 1024 * 1024  #  in bytes
 SAMPLE_SIZE = 1024  # number of samples to evaluate the model from the dataset
@@ -27,7 +27,24 @@ MAX_SEQ_LEN_VIBE_SCORE = 2048  # maximum sequence length that should be allowed 
 BATCH_SIZE_VIBE_SCORE = 4  # batch size for vibe score calculation
 SAMPLE_SIZE_VIBE_SCORE = 128  # number of samples to evaluate the model from the dataset for vibe score calculation
 
+VLLM_GPU_MEMORY = 0.4
+
 SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
+
+COHERENCE_SAMPLE_SIZE = 16
+COHERENCE_MAX_TOKENS = 1024
+COHERENCE_NUM_EVALS = 64
+COHERENCE_EVAL_MODEL = 'gpt-4o'
+
+PIPPA_FILENAME = "pippa_deduped.jsonl"
+PROMPTS_1_FILENAME = "opus-writing-prompts-1-sharegpt.jsonl"
+PROMPTS_2_FILENAME = "opus-writing-prompts-2-sharegpt.jsonl"
+
+DATASET_DIR = "./datasets"
+
+
+def full_path(filename: str) -> str:
+    return f"{DATASET_DIR}/{filename}"
 
 
 class EvaluateModelRequest(BaseModel):
