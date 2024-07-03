@@ -46,6 +46,7 @@ class SupabaseState:
                         "latency_score": response.data[0]["latency_score"],
                         "vibe_score": response.data[0]["vibe_score"],
                         "total_score": response.data[0]["total_score"],
+                        "coherence_score": response.data[0]["coherence_score"],
                     },
                     "status": response.data[0]["status"],
                 }

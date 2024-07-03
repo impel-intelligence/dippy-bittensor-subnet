@@ -7,7 +7,14 @@ import sys
 import gc
 import traceback
 import huggingface_hub
-from model_evaluation.common import EvaluateModelRequest
+
+from scoring.common import (
+    EvaluateModelRequest,
+    PIPPA_FILENAME,
+    full_path,
+    PROMPTS_1_FILENAME,
+    PROMPTS_2_FILENAME,
+)
 
 app = typer.Typer()
 
@@ -17,7 +24,7 @@ def _dl_dataset():
     if not os.path.exists("./datasets"):
         os.makedirs("./datasets")
     # download the file pippa_deduped.jsonl from huggingface
-    if not os.path.exists("./datasets/pippa_deduped.jsonl"):
+    if not os.path.exists(full_path(PIPPA_FILENAME)):
         huggingface_hub.hf_hub_download(
             repo_id="PygmalionAI/PIPPA",
             filename="pippa_deduped.jsonl",
@@ -25,13 +32,20 @@ def _dl_dataset():
             local_dir="datasets",
         )
     # download the file pippa_deduped.jsonl from huggingface
-    # if not os.path.exists("./datasets/pippa_deduped.jsonl"):
-    #     huggingface_hub.hf_hub_download(
-    #         repo_id="PygmalionAI/PIPPA",
-    #         filename="pippa_deduped.jsonl",
-    #         repo_type="dataset",
-    #         local_dir="data",
-    #     )
+    if not os.path.exists(full_path(PROMPTS_1_FILENAME)):
+        huggingface_hub.hf_hub_download(
+            repo_id="Gryphe/Opus-WritingPrompts",
+            filename=PROMPTS_1_FILENAME,
+            repo_type="dataset",
+            local_dir="datasets",
+        )
+    if not os.path.exists(full_path(PROMPTS_2_FILENAME)):
+        huggingface_hub.hf_hub_download(
+            repo_id="Gryphe/Opus-WritingPrompts",
+            filename=PROMPTS_2_FILENAME,
+            repo_type="dataset",
+            local_dir="datasets",
+        )
 
 
 def write_to_json(data: dict, filepath: str = "/tmp/output.json"):
@@ -44,9 +58,9 @@ def _run(
     request: EvaluateModelRequest,
     run_type: str,
 ):
-    from model_evaluation.eval_score import get_eval_score
-    from model_evaluation.coherence_score import get_coherence_score
-    from model_evaluation.vibe_score import get_vibe_match_score
+    from scoring.eval_score import get_eval_score
+    from scoring.coherence_score import get_coherence_score
+    from scoring.vibe_score import get_vibe_match_score
 
     typer.echo(f"Evaluating with parameters: {request}")
     result = {"completed": False}
@@ -134,3 +148,4 @@ if __name__ == "__main__":
     app()
     gc.collect()
     torch.cuda.empty_cache()
+    torch.distributed.destroy_process_group()

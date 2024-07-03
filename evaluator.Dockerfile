@@ -26,7 +26,7 @@ COPY requirements.eval.txt .
 
 RUN uv pip install --system -r requirements.eval.txt --no-build-isolation
 
-COPY model_evaluation ./model_evaluation
+COPY scoring ./scoring
 COPY utilities ./utilities
 COPY template ./template
 COPY model ./model
@@ -37,6 +37,6 @@ COPY README.md .
 COPY setup.py .
 RUN uv pip install -e .
 
-COPY model_evaluation/entrypoint.py .
+COPY scoring/entrypoint.py .
 
 ENTRYPOINT ["python", "entrypoint.py"]

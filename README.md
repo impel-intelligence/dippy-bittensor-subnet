@@ -83,7 +83,7 @@ As a miner, you're responsible for leveraging all methods available at your disp
 
 We outline the following criteria for Phase 1:
 
-- Models should be 7B-13B in size
+- Models should be 7B-13B parameters. Current maximum model size is 32GB. 
 - We don't support quantized models at the moment...coming soon!
 - Models MUST be Safetensors Format! Check upload_models.py for how the model upload precheck works.
 - Please test the model by loading model using transformers.AutoModelForCausalLM.from_pretrained
