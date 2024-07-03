@@ -1,7 +1,7 @@
 dippy_validation_api/data
 dippy_validation_api/log
 dippy_validation_api/logs
-model_evaluation/data
+scoring/data
 *.egg-info/
 model-store/
 datasets/
