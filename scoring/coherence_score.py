@@ -29,7 +29,8 @@ from scoring.common import (
     COHERENCE_SAMPLE_SIZE,
     COHERENCE_MAX_TOKENS,
     COHERENCE_EVAL_MODEL,
-    COHERENCE_NUM_EVALS, VLLM_GPU_MEMORY,
+    COHERENCE_NUM_EVALS,
+    VLLM_GPU_MEMORY,
 )
 from scoring.dataset import PromptDataset, PippaDataset
 
@@ -40,9 +41,11 @@ coherence_dataset = PromptDataset(
 
 # TODO: Replace with corcel
 from openai import OpenAI
+
 remote_client = OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY"),
 )
+
 
 def coherence_evaluator(generated_text: str):
     evaluation_text = f'''
@@ -72,10 +75,9 @@ def coherence_evaluator(generated_text: str):
             }
         ],
         model=COHERENCE_EVAL_MODEL,
-        )
+    )
     score = int(chat_completion.choices[0].message.content)
     return score
-
 
 
 def get_coherence_score(request: EvaluateModelRequest):
@@ -84,14 +86,10 @@ def get_coherence_score(request: EvaluateModelRequest):
             f"{request.repo_namespace}/{request.repo_name}", revision=request.revision
         )
         # Set chat template params
-        coherence_dataset.set_chat_template_params(
-            chat_template_mappings[request.chat_template_type], input_tokenizer
-        )
+        coherence_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 
         # Unzip the sampled data
-        chat_contexts, _, _ = zip(
-            *coherence_dataset.sample_dataset(SAMPLE_SIZE_VIBE_SCORE)
-        )
+        chat_contexts, _, _ = zip(*coherence_dataset.sample_dataset(SAMPLE_SIZE_VIBE_SCORE))
 
         model_name = f"{request.repo_namespace}/{request.repo_name}"
         cscore = calculate_coherence_score(
@@ -105,13 +103,7 @@ def get_coherence_score(request: EvaluateModelRequest):
         raise e
 
 
-def calculate_coherence_score(
-        model_name,
-        revision,
-        chat_contexts,
-        tokenizer,
-        verbose=False
-) -> int:
+def calculate_coherence_score(model_name, revision, chat_contexts, tokenizer, verbose=False) -> int:
     # instantiate a vllm model as it is faster and more memory efficient for text generation
     model = LLM(
         model_name,
@@ -125,12 +117,11 @@ def calculate_coherence_score(
     generated_samples = []
     # loop through the context in batches
     for i in range(0, len(chat_contexts), COHERENCE_SAMPLE_SIZE):
-
         sampling_params = SamplingParams(
             temperature=0.0,
             max_tokens=COHERENCE_MAX_TOKENS,
         )
-        prompts = chat_contexts[i: i + COHERENCE_SAMPLE_SIZE]
+        prompts = chat_contexts[i : i + COHERENCE_SAMPLE_SIZE]
         outputs = model.generate(
             prompts=prompts,
             sampling_params=sampling_params,

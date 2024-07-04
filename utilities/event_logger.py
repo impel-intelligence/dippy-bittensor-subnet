@@ -63,14 +63,8 @@ class EventLogger:
 def example():
     try:
         json_logger = EventLogger()
-        json_logger.info(
-            "This is an info message", extra={"user": "admin", "status": "active"}
-        )
-        json_logger.error(
-            "This is an error essage", extra={"user": "guest", "error_code": 500}
-        )
-        json_logger.debug(
-            "This is a debug message", extra={"user": "developer", "debug_mode": "on"}
-        )
+        json_logger.info("This is an info message", extra={"user": "admin", "status": "active"})
+        json_logger.error("This is an error essage", extra={"user": "guest", "error_code": 500})
+        json_logger.debug("This is a debug message", extra={"user": "developer", "debug_mode": "on"})
     except PermissionError as e:
         print(f"Failed to initialize logger: {e}")

@@ -89,14 +89,10 @@ class HuggingFaceModelStore(RemoteModelStore):
         except:
             token = None
         api = HfApi(token=token)
-        model_info = api.model_info(
-            repo_id=repo_id, revision=model_id.commit, timeout=10, files_metadata=True
-        )
+        model_info = api.model_info(repo_id=repo_id, revision=model_id.commit, timeout=10, files_metadata=True)
         size = sum(repo_file.size for repo_file in model_info.siblings)
         if size > MAX_HUGGING_FACE_BYTES:
-            raise ValueError(
-                f"Hugging Face repo over maximum size limit. Size {size}. Limit {MAX_HUGGING_FACE_BYTES}."
-            )
+            raise ValueError(f"Hugging Face repo over maximum size limit. Size {size}. Limit {MAX_HUGGING_FACE_BYTES}.")
 
         api.hf_hub_download(
             repo_id=repo_id,

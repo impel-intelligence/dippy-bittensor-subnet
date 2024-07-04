@@ -16,25 +16,17 @@ class ModelId(BaseModel):
     """Uniquely identifies a trained model"""
 
     MAX_REPO_ID_LENGTH: ClassVar[int] = (
-        MAX_METADATA_BYTES
-        - GIT_COMMIT_LENGTH
-        - SHA256_BASE_64_LENGTH
-        - MAX_COMPETITION_ID_LENGTH
-        - 4  # separators
+        MAX_METADATA_BYTES - GIT_COMMIT_LENGTH - SHA256_BASE_64_LENGTH - MAX_COMPETITION_ID_LENGTH - 4  # separators
     )
 
-    namespace: str = Field(
-        description="Namespace where the model can be found. ex. Hugging Face username/org."
-    )
+    namespace: str = Field(description="Namespace where the model can be found. ex. Hugging Face username/org.")
     name: str = Field(description="Name of the model.")
 
     chat_template: str = Field(description="Chat template for the model.")
 
     # When handling a model locally the commit and hash are not necessary.
     # Commit must be filled when trying to download from a remote store.
-    commit: Optional[str] = Field(
-        description="Commit of the model. May be empty if not yet committed."
-    )
+    commit: Optional[str] = Field(description="Commit of the model. May be empty if not yet committed.")
     # Hash is filled automatically when uploading to or downloading from a remote store.
     hash: Optional[str] = Field(description="Hash of the trained model.")
     # Identifier for competition
@@ -54,9 +46,7 @@ class ModelId(BaseModel):
             chat_template=tokens[2] if tokens[2] != "None" else None,
             commit=tokens[3] if tokens[3] != "None" else None,
             hash=tokens[4] if tokens[4] != "None" else None,
-            competition_id=(
-                tokens[5] if len(tokens) >= 6 and tokens[5] != "None" else None
-            ),
+            competition_id=(tokens[5] if len(tokens) >= 6 and tokens[5] != "None" else None),
         )
 
 
@@ -72,6 +62,4 @@ class Model(BaseModel):
 
 class ModelMetadata(BaseModel):
     id: ModelId = Field(description="Identifier for this trained model.")
-    block: PositiveInt = Field(
-        description="Block on which this model was claimed on the chain."
-    )
+    block: PositiveInt = Field(description="Block on which this model was claimed on the chain.")

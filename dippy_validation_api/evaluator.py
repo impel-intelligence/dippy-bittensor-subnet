@@ -28,6 +28,7 @@ class RunError(BaseModel):
 class VibeScore(BaseModel):
     vibe_score: float
 
+
 class CoherenceScore(BaseModel):
     coherence_score: int
 
@@ -56,9 +57,7 @@ class Evaluator:
             #     "mode": "ro",
             # },
         }
-        self.device_requests = [
-            docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])
-        ]
+        self.device_requests = [docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])]
         self.env = {
             "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY"),
         }
@@ -125,9 +124,7 @@ class Evaluator:
                 container.remove()
             return {"error": e}
 
-    def eval_score(
-        self, request: EvaluateModelRequest
-    ) -> Union[EvaluationScore, RunError]:
+    def eval_score(self, request: EvaluateModelRequest) -> Union[EvaluationScore, RunError]:
         try:
             eval_result = self.run_docker_container(
                 job_type="eval",
@@ -146,9 +143,7 @@ class Evaluator:
         except Exception as e:
             return RunError(error=str(e))
 
-    def coherence_score(
-        self, request: EvaluateModelRequest
-    ) -> Union[CoherenceScore,RunError]:
+    def coherence_score(self, request: EvaluateModelRequest) -> Union[CoherenceScore, RunError]:
         try:
             coherence_result = self.run_docker_container(
                 job_type="coherence",
@@ -190,16 +185,10 @@ def entry():
     import argparse
 
     parser = argparse.ArgumentParser(description="Run a single evaluation instance")
-    parser.add_argument(
-        "--image", type=str, default="grader:latest", help="image to use"
-    )
-    parser.add_argument(
-        "--repo_namespace", type=str, required=True, help="Repository namespace"
-    )
+    parser.add_argument("--image", type=str, default="grader:latest", help="image to use")
+    parser.add_argument("--repo_namespace", type=str, required=True, help="Repository namespace")
     parser.add_argument("--repo_name", type=str, required=True, help="Repository name")
-    parser.add_argument(
-        "--chat_template_type", type=str, required=True, help="Chat template type"
-    )
+    parser.add_argument("--chat_template_type", type=str, required=True, help="Chat template type")
     parser.add_argument("--hash", type=str, required=True, help="Unique hash value")
 
     args = parser.parse_args()

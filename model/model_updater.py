@@ -45,9 +45,7 @@ class ModelUpdater:
         metadata = await self._get_metadata(hotkey)
 
         if not metadata:
-            bt.logging.trace(
-                f"No valid metadata found on the chain for hotkey {hotkey}"
-            )
+            bt.logging.trace(f"No valid metadata found on the chain for hotkey {hotkey}")
             return False
 
         if self.min_block and metadata.block < self.min_block:
@@ -62,15 +60,11 @@ class ModelUpdater:
 
         parameters = ModelUpdater.get_competition_parameters(metadata.id.competition_id)
         if not parameters:
-            bt.logging.trace(
-                f"No competition parameters found for {metadata.id.competition_id}"
-            )
+            bt.logging.trace(f"No competition parameters found for {metadata.id.competition_id}")
             return False
 
         # Check what model id the model tracker currently has for this hotkey.
-        tracker_model_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(
-            hotkey
-        )
+        tracker_model_metadata = self.model_tracker.get_model_metadata_for_miner_hotkey(hotkey)
         if metadata == tracker_model_metadata:
             return False
         bt.logging.warning(f"Syncing model for hotkey {hotkey}")

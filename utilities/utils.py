@@ -23,9 +23,7 @@ def assert_registered(wallet: bt.wallet, metagraph: bt.metagraph) -> int:
             f"You are not registered. \nUse: \n`btcli s register --netuid {metagraph.netuid}` to register via burn \n or btcli s pow_register --netuid {metagraph.netuid} to register with a proof of work"
         )
     uid = metagraph.hotkeys.index(wallet.hotkey.ss58_address)
-    bt.logging.success(
-        f"You are registered with address: {wallet.hotkey.ss58_address} and uid: {uid}"
-    )
+    bt.logging.success(f"You are registered with address: {wallet.hotkey.ss58_address} and uid: {uid}")
 
     return uid
 
@@ -41,15 +39,11 @@ def validate_hf_repo_id(repo_id: str) -> Tuple[str, str]:
         raise ValueError("Hugging Face repo id cannot be empty.")
 
     if not 3 < len(repo_id) <= ModelId.MAX_REPO_ID_LENGTH:
-        raise ValueError(
-            f"Hugging Face repo id must be between 3 and {ModelId.MAX_REPO_ID_LENGTH} characters."
-        )
+        raise ValueError(f"Hugging Face repo id must be between 3 and {ModelId.MAX_REPO_ID_LENGTH} characters.")
 
     parts = repo_id.split("/")
     if len(parts) != 2:
-        raise ValueError(
-            "Hugging Face repo id must be in the format <org or user name>/<repo_name>."
-        )
+        raise ValueError("Hugging Face repo id must be in the format <org or user name>/<repo_name>.")
 
     return parts[0], parts[1]
 

@@ -18,13 +18,12 @@ from scoring.common import (
     EvaluateModelRequest,
     chat_template_mappings,
     PIPPA_FILENAME,
-    full_path, VLLM_GPU_MEMORY,
+    full_path,
+    VLLM_GPU_MEMORY,
 )
 
 
-def calculate_vibe_match_score(
-    model_name, revision, contexts, last_user_messages, expected_outputs, verbose=False
-):
+def calculate_vibe_match_score(model_name, revision, contexts, last_user_messages, expected_outputs, verbose=False):
     # instantiate a vllm model as it is faster and more memory efficient for text generation
     model = LLM(
         model_name,
@@ -38,12 +37,7 @@ def calculate_vibe_match_score(
     decoded_messages = []
     # loop through the context in batches
     for i in range(0, len(contexts), BATCH_SIZE_VIBE_SCORE):
-        max_user_message_len = max(
-            [
-                len(message)
-                for message in last_user_messages[i : i + BATCH_SIZE_VIBE_SCORE]
-            ]
-        )
+        max_user_message_len = max([len(message) for message in last_user_messages[i : i + BATCH_SIZE_VIBE_SCORE]])
 
         sampling_params = SamplingParams(
             temperature=0.0,
@@ -70,9 +64,7 @@ def calculate_vibe_match_score(
             0
             if last_user_message_len == 0
             else torch.exp(
-                -torch.tensor(length_difference)
-                * LENGTH_DIFF_PENALTY_STEEPNESS
-                / last_user_message_len
+                -torch.tensor(length_difference) * LENGTH_DIFF_PENALTY_STEEPNESS / last_user_message_len
             ).item()
         )
         vibe_scores.append(decoded_len_score)
@@ -114,9 +106,7 @@ def get_vibe_match_score(request: EvaluateModelRequest):
             max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
         )
         # Set chat template params
-        vibe_score_dataset.set_chat_template_params(
-            chat_template_mappings[request.chat_template_type], input_tokenizer
-        )
+        vibe_score_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 
         # Unzip the sampled data
         vibe_contexts, vibe_target_texts, vibe_last_user_messages = zip(

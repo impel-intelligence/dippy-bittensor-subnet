@@ -51,9 +51,7 @@ def eval_score(
     batch_size = BATCH_SIZE
     model.eval()
     with torch.no_grad():
-        for i in tqdm.tqdm(
-            range(0, len(contexts), batch_size), desc="Evaluating batches"
-        ):
+        for i in tqdm.tqdm(range(0, len(contexts), batch_size), desc="Evaluating batches"):
             # Tokenize the inputs and labels
 
             # Pad the inputs and expected outputs to the same length in such a way that the
@@ -80,20 +78,14 @@ def eval_score(
             )  # this will put padding to the left and truncate the input if it is too long
 
             # concatenate the inputs and targets and their attention masks using torch.cat
-            input_ids = torch.cat(
-                (inputs["input_ids"], targets["input_ids"]), dim=1
-            ).to("cuda")
-            attention_mask = torch.cat(
-                (inputs["attention_mask"], targets["attention_mask"]), dim=1
-            ).to("cuda")
+            input_ids = torch.cat((inputs["input_ids"], targets["input_ids"]), dim=1).to("cuda")
+            attention_mask = torch.cat((inputs["attention_mask"], targets["attention_mask"]), dim=1).to("cuda")
 
             if input_ids.shape[1] > max_len:
                 print(
                     f"Input sequence length is greater than the maximum length the model can handle: {input_ids.shape[1]}"
                 )
-                raise ValueError(
-                    "Input sequence length is greater than the maximum length the model can handle"
-                )
+                raise ValueError("Input sequence length is greater than the maximum length the model can handle")
 
             # get the mask that only give us the output ids
             targets_ids_mask = torch.cat(
@@ -146,9 +138,7 @@ def eval_score(
 
             # get the top k logits and mask out the rest
             top_k_logits, top_k_indices = outputs.logits.topk(VOCAB_TRUNCATION, dim=-1)
-            outputs.logits = torch.full_like(outputs.logits, float("-inf")).scatter(
-                -1, top_k_indices, top_k_logits
-            )
+            outputs.logits = torch.full_like(outputs.logits, float("-inf")).scatter(-1, top_k_indices, top_k_logits)
 
             if debug:
                 # print the input tokens and top 10 predicted tokens
@@ -157,12 +147,8 @@ def eval_score(
                     if targets_ids_mask[0][j].item() == 1:
                         actual_id = input_ids[0][j].item()
                         actual_token = output_tokenizer.decode([actual_id])
-                        top_10_predicted_ids = (
-                            outputs.logits[0][j].topk(10).indices.tolist()
-                        )
-                        top_10_predicted_tokens = [
-                            output_tokenizer.decode([id]) for id in top_10_predicted_ids
-                        ]
+                        top_10_predicted_ids = outputs.logits[0][j].topk(10).indices.tolist()
+                        top_10_predicted_tokens = [output_tokenizer.decode([id]) for id in top_10_predicted_ids]
                         print(
                             f"Actual token: {actual_token}",
                             f" -> top 10 pred tokens: {top_10_predicted_tokens}",
@@ -176,14 +162,10 @@ def eval_score(
 
             # Get the top PROB_TOP_K indices and zero out all other probabilities
             top_prob_indices = torch.topk(probabilities, PROB_TOP_K, dim=-1).indices
-            mask = torch.zeros_like(probabilities, dtype=torch.bool).scatter_(
-                -1, top_prob_indices, True
-            )
+            mask = torch.zeros_like(probabilities, dtype=torch.bool).scatter_(-1, top_prob_indices, True)
             probabilities[~mask] = 1e-9
             # Get the probabilities assigned by the model to the target tokens
-            token_probabilities = probabilities.gather(
-                -1, input_ids.unsqueeze(-1)
-            ).squeeze(-1)
+            token_probabilities = probabilities.gather(-1, input_ids.unsqueeze(-1)).squeeze(-1)
 
             # Mask out non target tokens
             token_probabilities = token_probabilities * targets_ids_mask
@@ -192,30 +174,16 @@ def eval_score(
             token_count = targets_ids_mask.sum().cpu().item()
             # 1-gram
             one_gram_probabilities = token_probabilities
-            n_gram_prob = (
-                one_gram_probabilities.sum().cpu().item() / token_count
-            ) * 0.25
+            n_gram_prob = (one_gram_probabilities.sum().cpu().item() / token_count) * 0.25
             # 2-gram
-            two_gram_probabilities = (
-                one_gram_probabilities[:, 1:] * one_gram_probabilities[:, :-1]
-            )
-            n_gram_prob += (
-                two_gram_probabilities.sum().cpu().item() / token_count
-            ) * 0.25
+            two_gram_probabilities = one_gram_probabilities[:, 1:] * one_gram_probabilities[:, :-1]
+            n_gram_prob += (two_gram_probabilities.sum().cpu().item() / token_count) * 0.25
             # 3-gram
-            three_gram_probabilities = (
-                two_gram_probabilities[:, 1:] * one_gram_probabilities[:, :-2]
-            )
-            n_gram_prob += (
-                three_gram_probabilities.sum().cpu().item() / token_count
-            ) * 0.25
+            three_gram_probabilities = two_gram_probabilities[:, 1:] * one_gram_probabilities[:, :-2]
+            n_gram_prob += (three_gram_probabilities.sum().cpu().item() / token_count) * 0.25
             # 4-gram
-            four_gram_probabilities = (
-                three_gram_probabilities[:, 1:] * one_gram_probabilities[:, :-3]
-            )
-            n_gram_prob += (
-                four_gram_probabilities.sum().cpu().item() / token_count
-            ) * 0.25
+            four_gram_probabilities = three_gram_probabilities[:, 1:] * one_gram_probabilities[:, :-3]
+            n_gram_prob += (four_gram_probabilities.sum().cpu().item() / token_count) * 0.25
 
             total_prob += n_gram_prob
             count += 1
@@ -260,9 +228,7 @@ def _prepare_dummy_inputs(model, device="cuda"):
         dtype=torch.int64,
         device=device,
     )
-    attention_mask = torch.ones_like(
-        input_ids, requires_grad=False, dtype=torch.int64, device=device
-    )
+    attention_mask = torch.ones_like(input_ids, requires_grad=False, dtype=torch.int64, device=device)
     return input_ids, attention_mask
 
 
@@ -284,9 +250,7 @@ def warmup_model(model):
             # Waits for everything to finish running
             torch.cuda.synchronize()
 
-            latency = start_time.elapsed_time(
-                end_time
-            )  # Measure latency in milliseconds
+            latency = start_time.elapsed_time(end_time)  # Measure latency in milliseconds
             if torch.isnan(outputs.logits).any():
                 raise ValueError("NaN values detected in the logits tensor")
 
@@ -377,13 +341,9 @@ def get_eval_score(request: EvaluateModelRequest):
             force_download=True,
         )
         if input_tokenizer.pad_token is None:
-            input_tokenizer.pad_token = (
-                input_tokenizer.eos_token
-            )  # add a pad token if not present
+            input_tokenizer.pad_token = input_tokenizer.eos_token  # add a pad token if not present
             input_tokenizer.pad_token_id = input_tokenizer.eos_token_id
-            output_tokenizer.pad_token = (
-                output_tokenizer.eos_token
-            )  # add a pad token if not present
+            output_tokenizer.pad_token = output_tokenizer.eos_token  # add a pad token if not present
             output_tokenizer.pad_token_id = output_tokenizer.eos_token_id
 
         print("Tokenizer downloaded successfully")
@@ -434,9 +394,7 @@ def get_eval_score(request: EvaluateModelRequest):
         max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LENGTH - 200,
     )
     # set the chat template params
-    dataset.set_chat_template_params(
-        chat_template_mappings[request.chat_template_type], input_tokenizer
-    )
+    dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 
     print("Sampling dataset")
     try:

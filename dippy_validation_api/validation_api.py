@@ -19,8 +19,12 @@ from dippy_validation_api.persistence import SupabaseState
 from model.scores import StatusEnum
 from utilities.validation_utils import (
     regenerate_hash,
-    check_model_repo_size,
+)
+from utilities.repo_details import (
     get_model_size,
+check_model_repo_details,
+ModelRepo,
+
 )
 from utilities.event_logger import EventLogger
 from scoring.common import EvaluateModelRequest
@@ -31,9 +35,7 @@ load_dotenv()
 # Constants
 MAX_GENERATION_LEEWAY = 0.5  # should be between 0 and 1. This is the percentage of tokens that the model can generate more than the last user message
 MAX_GENERATION_LENGTH = 200  # maximum number of tokens that the model can generate
-LENGTH_DIFF_PENALTY_STEEPNESS = (
-    2  # the steepness of the exponential decay of the length difference penalty
-)
+LENGTH_DIFF_PENALTY_STEEPNESS = 2  # the steepness of the exponential decay of the length difference penalty
 QUALITATIVE_SCORE_WEIGHT = 0.82  # weight of the qualitative score in the total score
 MODEL_SIZE_SCORE_WEIGHT = 0.06  # weight of the model size score in the total score
 LATENCY_SCORE_WEIGHT = 0.06  # weight of the latency score in the total score
@@ -48,7 +50,9 @@ BATCH_SIZE = 4  # batch size for evaluation
 VOCAB_TRUNCATION = 1000  # truncate the vocab to top n tokens
 PROB_TOP_K = 10  # the correct token should be in the top n tokens, else a score of 0 is given to that token
 # TODO: this will truncate the sequence to MAX_SEQ_LEN tokens. This is a temporary fix to make the evaluation faster.
-MAX_SEQ_LEN = 4096  # maximum sequence length that should be allowed because eval gets really slow with longer sequences than this
+MAX_SEQ_LEN = (
+    4096  # maximum sequence length that should be allowed because eval gets really slow with longer sequences than this
+)
 
 MAX_SEQ_LEN_VIBE_SCORE = 2048  # maximum sequence length that should be allowed for vibe score calculation because it is slow with longer sequences than this
 BATCH_SIZE_VIBE_SCORE = 4  # batch size for vibe score calculation
@@ -103,17 +107,13 @@ def start_staggered_queues(num_queues: int, stagger_seconds: int):
 def _model_evaluation_step():
     request = get_next_model_to_eval()
     if request is None:  # Sentinel value to exit the process
-        logger.info(
-            "No more models to evaluate. Sleep for 15 seconds before checking again."
-        )
+        logger.info("No more models to evaluate. Sleep for 15 seconds before checking again.")
         return
     logger.info(f"Model evaluation queued: {request}")
     try:
         result = _evaluate_model(request)
         logger.info(f"Model evaluation completed: {result}")
-        app.state.event_logger.info(
-            "model_eval_queue_complete", result=result, request=request
-        )
+        app.state.event_logger.info("model_eval_queue_complete", result=result, request=request)
     except Exception as e:
         logger.error(f"Error during model evaluation: {e}")
         app.state.event_logger.info("model_eval_queue_error", error=e)
@@ -197,12 +197,7 @@ def _evaluate_model(
 
     coherence_score = coherehnce_score_response.coherence_score
 
-    if (
-        eval_score is None
-        or latency_score is None
-        or model_size_score is None
-        or vibe_score is None
-    ):
+    if eval_score is None or latency_score is None or model_size_score is None or vibe_score is None:
         raise HTTPException(
             status_code=500,
             detail="Error calculating scores, one or more scores are None",
@@ -316,9 +311,7 @@ def evaluate_model(
         request.chat_template_type,
         request.competition_id,
     ):
-        raise HTTPException(
-            status_code=400, detail="Hash does not match the model details"
-        )
+        raise HTTPException(status_code=400, detail="Hash does not match the model details")
 
     # check if the model already exists in the leaderboard
     # This needs to be a virtually atomic operation
@@ -341,6 +334,7 @@ def evaluate_model(
             "timestamp": pd.Timestamp.utcnow(),
             "status": StatusEnum.QUEUED,
             "coherence_score": -1.0,
+            "block": request.block,
             "notes": failure_notes,
         }
 
@@ -350,9 +344,7 @@ def evaluate_model(
 
     # validate the request
     if request.chat_template_type not in chat_template_mappings:
-        failure_notes = (
-            f"Chat template type not supported: {request.chat_template_type}"
-        )
+        failure_notes = f"Chat template type not supported: {request.chat_template_type}"
         logger.error(failure_notes)
         supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
         return supabaser.get_json_result(request.hash)
@@ -366,10 +358,11 @@ def evaluate_model(
 
     # check repo size of the model to see if it is within the limit
     try:
-        model_repo_size = check_model_repo_size(
-            request.hash, request.repo_namespace, request.repo_name
-        )
-        if model_repo_size is None:
+        model_repo_details = check_model_repo_details(
+            request.hash,
+            request.repo_namespace,
+            request.repo_name)
+        if model_repo_details is None:
             failure_notes = "Error checking model repo size. Make sure the model repository exists and is accessible."
             logger.error(failure_notes)
             supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
@@ -380,7 +373,8 @@ def evaluate_model(
         logger.error(failure_notes)
         supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
         return supabaser.get_json_result(request.hash)
-
+    model_repo_size = model_repo_details.repo_size
+    supabaser.update_model_hash(request.hash, model_repo_details.model_hash)
     if model_repo_size > MAX_REPO_SIZE or model_repo_size < MIN_REPO_SIZE:
         failure_notes = f"Model repo size is not up to requirments: {model_repo_size} bytes. Should be less than {MAX_REPO_SIZE} bytes and greater than {MIN_REPO_SIZE} bytes"
         logger.error(failure_notes)
@@ -421,12 +415,8 @@ def start():
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the server")
-    parser.add_argument(
-        "--main-api-port", type=int, default=8000, help="Port for the main API"
-    )
-    parser.add_argument(
-        "--save-remote", action="store_true", default=False, help="Enable remote saving"
-    )
+    parser.add_argument("--main-api-port", type=int, default=8000, help="Port for the main API")
+    parser.add_argument("--save-remote", action="store_true", default=False, help="Enable remote saving")
     parser.add_argument(
         "--queues",
         type=int,

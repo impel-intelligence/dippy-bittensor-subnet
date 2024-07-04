@@ -45,16 +45,8 @@ async def ping_uids(dendrite, metagraph, uids, timeout=3):
             deserialize=False,
             timeout=timeout,
         )
-        successful_uids = [
-            uid
-            for uid, response in zip(uids, responses)
-            if response.dendrite.status_code == 200
-        ]
-        failed_uids = [
-            uid
-            for uid, response in zip(uids, responses)
-            if response.dendrite.status_code != 200
-        ]
+        successful_uids = [uid for uid, response in zip(uids, responses) if response.dendrite.status_code == 200]
+        failed_uids = [uid for uid, response in zip(uids, responses) if response.dendrite.status_code != 200]
     except Exception as e:
         bt.logging.error(f"Dendrite ping failed: {e}")
         successful_uids = []
@@ -78,18 +70,12 @@ async def get_query_api_nodes(dendrite, metagraph, n=0.1, timeout=3):
         list: A list of UIDs representing the available API nodes.
     """
     bt.logging.debug(f"Fetching available API nodes for subnet {metagraph.netuid}")
-    vtrust_uids = [
-        uid.item() for uid in metagraph.uids if metagraph.validator_trust[uid] > 0
-    ]
+    vtrust_uids = [uid.item() for uid in metagraph.uids if metagraph.validator_trust[uid] > 0]
     top_uids = torch.where(metagraph.S > torch.quantile(metagraph.S, 1 - n))
     top_uids = top_uids[0].tolist()
     init_query_uids = set(top_uids).intersection(set(vtrust_uids))
-    query_uids, _ = await ping_uids(
-        dendrite, metagraph, init_query_uids, timeout=timeout
-    )
-    bt.logging.debug(
-        f"Available API node UIDs for subnet {metagraph.netuid}: {query_uids}"
-    )
+    query_uids, _ = await ping_uids(dendrite, metagraph, init_query_uids, timeout=timeout)
+    bt.logging.debug(f"Available API node UIDs for subnet {metagraph.netuid}: {query_uids}")
     if len(query_uids) > 3:
         query_uids = random.sample(query_uids, 3)
     return query_uids
@@ -117,7 +103,5 @@ async def get_query_api_axons(wallet, metagraph=None, n=0.1, timeout=3, uids=Non
     if uids is not None:
         query_uids = [uids] if isinstance(uids, int) else uids
     else:
-        query_uids = await get_query_api_nodes(
-            dendrite, metagraph, n=n, timeout=timeout
-        )
+        query_uids = await get_query_api_nodes(dendrite, metagraph, n=n, timeout=timeout)
     return [metagraph.axons[uid] for uid in query_uids]

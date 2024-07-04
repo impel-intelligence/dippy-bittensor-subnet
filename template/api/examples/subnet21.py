@@ -50,9 +50,7 @@ class StoreUserAPI(SubnetsAPI):
         encoding="utf-8",
     ) -> StoreUser:
         data = bytes(data, encoding) if isinstance(data, str) else data
-        encrypted_data, encryption_payload = (
-            encrypt_data(data, self.wallet) if encrypt else (data, "{}")
-        )
+        encrypted_data, encryption_payload = encrypt_data(data, self.wallet) if encrypt else (data, "{}")
         expected_cid = generate_cid_string(encrypted_data)
         encoded_data = base64.b64encode(encrypted_data)
 
@@ -74,22 +72,16 @@ class StoreUserAPI(SubnetsAPI):
                 continue
 
             stored_cid = (
-                response.data_hash.decode("utf-8")
-                if isinstance(response.data_hash, bytes)
-                else response.data_hash
+                response.data_hash.decode("utf-8") if isinstance(response.data_hash, bytes) else response.data_hash
             )
             bt.logging.debug("received data CID: {}".format(stored_cid))
             success = True
             break
 
         if success:
-            bt.logging.info(
-                f"Stored data on the Bittensor network with CID {stored_cid}"
-            )
+            bt.logging.info(f"Stored data on the Bittensor network with CID {stored_cid}")
         else:
-            bt.logging.error(
-                f"Failed to store data. Response failure codes & messages {failure_modes}"
-            )
+            bt.logging.error(f"Failed to store data. Response failure codes & messages {failure_modes}")
             stored_cid = ""
 
         return stored_cid
