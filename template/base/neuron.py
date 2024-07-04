@@ -142,9 +142,7 @@ class BaseNeuron(ABC):
         """
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
         """
-        return (
-            self.block - self.metagraph.last_update[self.uid]
-        ) > self.config.neuron.epoch_length
+        return (self.block - self.metagraph.last_update[self.uid]) > self.config.neuron.epoch_length
 
     def should_set_weights(self) -> bool:
         # Don't set weights on initialization.

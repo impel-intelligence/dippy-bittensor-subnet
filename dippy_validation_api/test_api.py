@@ -15,9 +15,7 @@ supabase_key = os.environ["SUPABASE_KEY"]
 try:
     supabase_client = create_client(supabase_url, supabase_key)
 except Exception as e:
-    print(
-        f"Failed to create Supabase client: {e}. Leaderboard will only be saved locally."
-    )
+    print(f"Failed to create Supabase client: {e}. Leaderboard will only be saved locally.")
     supabase_client = None
 
 
@@ -46,9 +44,7 @@ def test_evaluate_model():
     print("Request payload:", request_payload)
 
     # Send a POST request to the evaluate_model endpoint
-    response = requests.post(
-        "http://localhost:8000/evaluate_model", json=request_payload
-    )
+    response = requests.post("http://localhost:8000/evaluate_model", json=request_payload)
     # Check that the response status code is 200 (OK)
     if response.status_code != 200:
         print(response.text)

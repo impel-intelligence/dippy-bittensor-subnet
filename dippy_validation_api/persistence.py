@@ -33,11 +33,24 @@ class SupabaseState:
             self.logger.error(f"Error updating leaderboard status for {hash}: {e}")
             return None
 
-    def get_json_result(self, hash):
+    def update_model_hash(self, hash: str, model_hash: str):
         try:
             response = (
-                self.client.table("leaderboard").select("*").eq("hash", hash).execute()
+                self.client.table("leaderboard")
+                .upsert(
+                    {"hash": hash, "model_hash": model_hash},
+                    returning="minimal",
+                )
+                .execute()
             )
+            return response
+        except Exception as e:
+            self.logger.error(f"Error updating leaderboard status for {hash}: {e}")
+            return None
+
+    def get_json_result(self, hash):
+        try:
+            response = self.client.table("leaderboard").select("*").eq("hash", hash).execute()
             if len(response.data) > 0:
                 result = {
                     "score": {
@@ -47,6 +60,11 @@ class SupabaseState:
                         "vibe_score": response.data[0]["vibe_score"],
                         "total_score": response.data[0]["total_score"],
                         "coherence_score": response.data[0]["coherence_score"],
+
+                    },
+                    "details": {
+                        "block": response.data[0]["block"],
+                        "model_hash": response.data[0]["model_hash"],
                     },
                     "status": response.data[0]["status"],
                 }
@@ -58,12 +76,7 @@ class SupabaseState:
 
     def remove_record(self, hash: str):
         try:
-            status = (
-                self.client.table("leaderboard")
-                .delete(returning="minimal")
-                .eq("hash", hash)
-                .execute()
-            )
+            status = self.client.table("leaderboard").delete(returning="minimal").eq("hash", hash).execute()
             return status
         except Exception as e:
             self.logger.error(f"could not delete record {str(e)}")

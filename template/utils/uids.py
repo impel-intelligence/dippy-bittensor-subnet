@@ -4,9 +4,7 @@ import bittensor as bt
 from typing import List
 
 
-def check_uid_availability(
-    metagraph: "bt.metagraph.Metagraph", uid: int, vpermit_tao_limit: int
-) -> bool:
+def check_uid_availability(metagraph: "bt.metagraph.Metagraph", uid: int, vpermit_tao_limit: int) -> bool:
     """Check if uid is available. The UID should be available if it is serving and has less than vpermit_tao_limit stake
     Args:
         metagraph (:obj: bt.metagraph.Metagraph): Metagraph object
@@ -40,9 +38,7 @@ def get_random_uids(self, k: int, exclude: List[int] = None) -> torch.LongTensor
     avail_uids = []
 
     for uid in range(self.metagraph.n.item()):
-        uid_is_available = check_uid_availability(
-            self.metagraph, uid, self.config.neuron.vpermit_tao_limit
-        )
+        uid_is_available = check_uid_availability(self.metagraph, uid, self.config.neuron.vpermit_tao_limit)
         uid_is_not_excluded = exclude is None or uid not in exclude
 
         if uid_is_available:

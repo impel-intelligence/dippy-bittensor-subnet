@@ -71,9 +71,7 @@ def start_validator_process(pm2_name: str, args: List[str]) -> subprocess.Popen:
 
 def stop_validator_process(process: subprocess.Popen) -> None:
     """Stop the validator process"""
-    subprocess.run(
-        ("pm2", "delete", process.pm2_name), cwd=constants.ROOT_DIR, check=True
-    )
+    subprocess.run(("pm2", "delete", process.pm2_name), cwd=constants.ROOT_DIR, check=True)
 
 
 def pull_latest_version() -> None:
@@ -87,9 +85,7 @@ def pull_latest_version() -> None:
     to be used as-is.
     """
     try:
-        subprocess.run(
-            split("git pull --rebase --autostash"), check=True, cwd=constants.ROOT_DIR
-        )
+        subprocess.run(split("git pull --rebase --autostash"), check=True, cwd=constants.ROOT_DIR)
     except subprocess.CalledProcessError as exc:
         log.error("Failed to pull, reverting: %s", exc)
         subprocess.run(split("git rebase --abort"), check=True, cwd=constants.ROOT_DIR)
@@ -161,9 +157,7 @@ if __name__ == "__main__":
         epilog="Example usage: python start_validator.py --pm2_name 'sn11vali' --wallet_name 'wallet1' --wallet_hotkey 'key123'",
     )
 
-    parser.add_argument(
-        "--pm2_name", default="sn11vali", help="Name of the PM2 process."
-    )
+    parser.add_argument("--pm2_name", default="sn11vali", help="Name of the PM2 process.")
 
     flags, extra_args = parser.parse_known_args()
 

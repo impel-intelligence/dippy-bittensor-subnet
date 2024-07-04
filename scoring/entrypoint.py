@@ -79,9 +79,7 @@ def _run(
             exc_value,
             exc_traceback,
         ) = sys.exc_info()  # Capture exception information
-        traceback_details = traceback.format_exception(
-            exc_type, exc_value, exc_traceback
-        )
+        traceback_details = traceback.format_exception(exc_type, exc_value, exc_traceback)
         result["error"] = f'{"".join(traceback_details)} {str(e)}'
     write_to_json(result, f"/tmp/{run_type}_output.json")
 

@@ -103,12 +103,7 @@ class MockDendrite(bt.dendrite):
                 else:
                     return s
 
-            return await asyncio.gather(
-                *(
-                    single_axon_response(i, target_axon)
-                    for i, target_axon in enumerate(axons)
-                )
-            )
+            return await asyncio.gather(*(single_axon_response(i, target_axon) for i, target_axon in enumerate(axons)))
 
         return await query_all_axons(streaming)
 

@@ -34,7 +34,7 @@ from model.scores import StatusEnum
 from neurons.validator import get_model_score, LocalMetadata
 import os
 
-l = LocalMetadata(commit="x",btversion="x")
+l = LocalMetadata(commit="x", btversion="x")
 
 class ModelQueue:
     @staticmethod
@@ -46,9 +46,7 @@ class ModelQueue:
             default="cuda",
             help="Device name.",
         )
-        parser.add_argument(
-            "--netuid", type=str, default=constants.SUBNET_UID, help="The subnet UID."
-        )
+        parser.add_argument("--netuid", type=str, default=constants.SUBNET_UID, help="The subnet UID.")
         parser.add_argument(
             "--use-local-validation-api",
             action="store_true",
@@ -94,21 +92,21 @@ class ModelQueue:
     def load_latest_metagraph(self):
         metagraph = self.subtensor.metagraph(self.netuid)
         all_uids = metagraph.uids.tolist()
+
         queued = 0
         failed = 0
         completed = 0
         for uid in all_uids:
             try:
                 hotkey = metagraph.hotkeys[uid]
-                metadata = bt.extrinsics.serving.get_metadata(
-                    self.subtensor, self.netuid, hotkey
-                )
+                metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.netuid, hotkey)
                 if metadata is None:
                     continue
                 commitment = metadata["info"]["fields"][0]
                 hex_data = commitment[list(commitment.keys())[0]][2:]
                 chain_str = bytes.fromhex(hex_data).decode()
                 model_id = ModelId.from_compressed_str(chain_str)
+                block = metadata["block"]
 
                 result = get_model_score(
                     namespace=model_id.namespace,
@@ -135,8 +133,6 @@ class ModelQueue:
                 bt.logging.error(e)
                 continue
         bt.logging.info(f"queued {queued} failed {failed} completed {completed}")
-
-
 
 
 if __name__ == "__main__":

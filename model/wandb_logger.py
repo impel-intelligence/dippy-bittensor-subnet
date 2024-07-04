@@ -55,9 +55,7 @@ def safe_init(name, wallet, metagraph, config):
                     config_dict["gpu_mem"][i] += props.total_memory
                     config_dict["processor_count"][i] += props.multi_processor_count
             except Exception as e:
-                bt.logging.error(
-                    f"Failed to retrieve or process CUDA device properties: {e}"
-                )
+                bt.logging.error(f"Failed to retrieve or process CUDA device properties: {e}")
                 config_dict["gpu_count"] = 0
                 config_dict["gpu_mem"] = []
                 config_dict["processor_count"] = []

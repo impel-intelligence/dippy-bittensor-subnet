@@ -42,9 +42,7 @@ class Miner(BaseMinerNeuron):
 
         # TODO(developer): Anything specific to your use case you can do here
 
-    async def forward(
-        self, synapse: template.protocol.Dummy
-    ) -> template.protocol.Dummy:
+    async def forward(self, synapse: template.protocol.Dummy) -> template.protocol.Dummy:
         """
         Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
         This method should be replaced with actual logic relevant to the miner's purpose.
@@ -62,9 +60,7 @@ class Miner(BaseMinerNeuron):
         synapse.dummy_output = synapse.dummy_input * 2
         return synapse
 
-    async def blacklist(
-        self, synapse: template.protocol.Dummy
-    ) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: template.protocol.Dummy) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
@@ -96,27 +92,18 @@ class Miner(BaseMinerNeuron):
         """
         # TODO(developer): Define how miners should blacklist requests.
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        if (
-            not self.config.blacklist.allow_non_registered
-            and synapse.dendrite.hotkey not in self.metagraph.hotkeys
-        ):
+        if not self.config.blacklist.allow_non_registered and synapse.dendrite.hotkey not in self.metagraph.hotkeys:
             # Ignore requests from un-registered entities.
-            bt.logging.trace(
-                f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}"
-            )
+            bt.logging.trace(f"Blacklisting un-registered hotkey {synapse.dendrite.hotkey}")
             return True, "Unrecognized hotkey"
 
         if self.config.blacklist.force_validator_permit:
             # If the config is set to force validator permit, then we should only allow requests from validators.
             if not self.metagraph.validator_permit[uid]:
-                bt.logging.warning(
-                    f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}"
-                )
+                bt.logging.warning(f"Blacklisting a request from non-validator hotkey {synapse.dendrite.hotkey}")
                 return True, "Non-validator hotkey"
 
-        bt.logging.trace(
-            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
-        )
+        bt.logging.trace(f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}")
         return False, "Hotkey recognized!"
 
     async def priority(self, synapse: template.protocol.Dummy) -> float:
@@ -140,15 +127,9 @@ class Miner(BaseMinerNeuron):
         - A higher stake results in a higher priority value.
         """
         # TODO(developer): Define how miners should prioritize requests.
-        caller_uid = self.metagraph.hotkeys.index(
-            synapse.dendrite.hotkey
-        )  # Get the caller index.
-        prirority = float(
-            self.metagraph.S[caller_uid]
-        )  # Return the stake as the priority.
-        bt.logging.trace(
-            f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority
-        )
+        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)  # Get the caller index.
+        prirority = float(self.metagraph.S[caller_uid])  # Return the stake as the priority.
+        bt.logging.trace(f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority)
         return prirority
 
 

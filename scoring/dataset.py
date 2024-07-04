@@ -26,9 +26,7 @@ class PippaDataset(Dataset):
         """
         Convert pippa dataset to a format that can be used downstream.
         """
-        encoding = tiktoken.encoding_for_model(
-            "gpt-3.5-turbo"
-        )  # to get approx token count
+        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")  # to get approx token count
         converted_dataset = []
         for data_point in data:
             # construct the system prompt using the bot_description and bot_greeting
@@ -54,9 +52,7 @@ The themes of the conversation are: {data_point['categories']}."""
 
             # get index of the last message from the chatbot
             last_message_index = 0
-            input_len_so_far = len(
-                encoding.encode(messages[0]["content"] + messages[1]["content"])
-            )
+            input_len_so_far = len(encoding.encode(messages[0]["content"] + messages[1]["content"]))
 
             if input_len_so_far > max_input_len:
                 # skip this data point
@@ -71,20 +67,14 @@ The themes of the conversation are: {data_point['categories']}."""
                     last_message_index = i
 
             last_user_message_index = 0
-            for i, message in enumerate(
-                data_point["conversation"][:last_message_index]
-            ):
+            for i, message in enumerate(data_point["conversation"][:last_message_index]):
                 if message["is_human"]:
                     messages.append({"role": "user", "content": message["message"]})
                     last_user_message_index = i
                 else:
-                    messages.append(
-                        {"role": "assistant", "content": f"{message['message']}"}
-                    )
+                    messages.append({"role": "assistant", "content": f"{message['message']}"})
 
-            character_response = data_point["conversation"][last_message_index][
-                "message"
-            ]
+            character_response = data_point["conversation"][last_message_index]["message"]
             last_user_message = messages[last_user_message_index]["content"]
 
             converted_dataset.append(
@@ -102,14 +92,10 @@ The themes of the conversation are: {data_point['categories']}."""
 
     def __getitem__(self, idx):
         if self._chat_template is None:
-            raise ValueError(
-                "Chat template is not set. Please set the chat template before generating chat."
-            )
+            raise ValueError("Chat template is not set. Please set the chat template before generating chat.")
 
         if self._tokenizer is None:
-            raise ValueError(
-                "Tokenizer is not set. Please set the tokenizer before generating chat."
-            )
+            raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
 
         chat_input = self._chat_template.render(
             bos_token=self._tokenizer.bos_token,
@@ -126,9 +112,9 @@ The themes of the conversation are: {data_point['categories']}."""
             chat_input = f"{self._tokenizer.bos_token}{chat_input}"
 
         return (
-            chat_input, # context
-            f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}", # target text
-            self.dataset[idx]["last_user_message"], # last user message
+            chat_input,  # context
+            f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}",  # target text
+            self.dataset[idx]["last_user_message"],  # last user message
         )
 
     def sample_dataset(self, n: int):
@@ -168,32 +154,31 @@ class PromptDataset(Dataset):
                 # Always only 3 messages
                 conversations = entry["conversations"]
                 messages = [
-                {"role":"system", "content": conversations[0]["value"]},
+                    {"role": "system", "content": conversations[0]["value"]},
                 ]
                 prompt_content = f'{conversations[1]["value"]} \n Please limit to (200-300) words.'
-                messages.append({"role":"user","content":prompt_content},)
+                messages.append(
+                    {"role": "user", "content": prompt_content},
+                )
                 output = conversations[2]["value"]
-                converted_dataset.append({
-                    "messages": messages,
-                    "output": output,
-                })
+                converted_dataset.append(
+                    {
+                        "messages": messages,
+                        "output": output,
+                    }
+                )
 
         return converted_dataset
-
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, idx):
         if self._chat_template is None:
-            raise ValueError(
-                "Chat template is not set. Please set the chat template before generating chat."
-            )
+            raise ValueError("Chat template is not set. Please set the chat template before generating chat.")
 
         if self._tokenizer is None:
-            raise ValueError(
-                "Tokenizer is not set. Please set the tokenizer before generating chat."
-            )
+            raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
         chat_input = self._chat_template.render(
             bos_token=self._tokenizer.bos_token,
             eos_token=self._tokenizer.eos_token,
@@ -208,9 +193,9 @@ class PromptDataset(Dataset):
         if not chat_input.startswith(self._tokenizer.bos_token):
             chat_input = f"{self._tokenizer.bos_token}{chat_input}"
         return (
-            chat_input, # context
-            self.dataset[idx]["messages"], # full message history
-            self.dataset[idx]["output"], # prompt output for comparison
+            chat_input,  # context
+            self.dataset[idx]["messages"],  # full message history
+            self.dataset[idx]["output"],  # prompt output for comparison
         )
 
     def sample_dataset(self, n: int):

@@ -37,9 +37,7 @@ class DiskModelStore(LocalModelStore):
 
         return model.id
 
-    def retrieve_model(
-        self, hotkey: str, model_id: ModelId, model_parameters: CompetitionParameters
-    ) -> Model:
+    def retrieve_model(self, hotkey: str, model_id: ModelId, model_parameters: CompetitionParameters) -> Model:
         """Retrieves a trained model locally."""
 
         # get the path to where the model should be stored
@@ -61,9 +59,7 @@ class DiskModelStore(LocalModelStore):
         # Create a set of valid model paths up to where we expect to see the actual files.
         valid_model_paths = set()
         for hotkey, model_id in valid_models_by_hotkey.items():
-            valid_model_paths.add(
-                utils.get_local_model_snapshot_dir(self.base_dir, hotkey, model_id)
-            )
+            valid_model_paths.add(utils.get_local_model_snapshot_dir(self.base_dir, hotkey, model_id))
 
         # For each hotkey path on disk using listdir to go one level deep.
         miners_dir = Path(utils.get_local_miners_dir(self.base_dir))
@@ -75,55 +71,37 @@ class DiskModelStore(LocalModelStore):
 
             # If it is not in valid_hotkeys and out of grace period remove it.
             if hotkey not in valid_models_by_hotkey:
-                deleted_hotkey = utils.remove_dir_out_of_grace(
-                    hotkey_path, grace_period_seconds
-                )
+                deleted_hotkey = utils.remove_dir_out_of_grace(hotkey_path, grace_period_seconds)
                 if deleted_hotkey:
-                    bt.logging.trace(
-                        f"Removed directory for unreferenced hotkey: {hotkey}."
-                    )
+                    bt.logging.trace(f"Removed directory for unreferenced hotkey: {hotkey}.")
             else:
                 # Check all the models--namespace--name subfolder paths.
                 hotkey_dir = Path(hotkey_path)
-                model_subfolder_paths = [
-                    str(d) for d in hotkey_dir.iterdir() if d.is_dir()
-                ]
+                model_subfolder_paths = [str(d) for d in hotkey_dir.iterdir() if d.is_dir()]
 
                 # Check all the snapshots subfolder paths
                 for model_path in model_subfolder_paths:
                     model_dir = Path(model_path)
-                    snapshot_subfolder_paths = [
-                        str(d) for d in model_dir.iterdir() if d.is_dir()
-                    ]
+                    snapshot_subfolder_paths = [str(d) for d in model_dir.iterdir() if d.is_dir()]
 
                     # Check all the commit paths.
                     for snapshot_path in snapshot_subfolder_paths:
                         snapshot_dir = Path(snapshot_path)
-                        commit_subfolder_paths = [
-                            str(d) for d in snapshot_dir.iterdir() if d.is_dir()
-                        ]
+                        commit_subfolder_paths = [str(d) for d in snapshot_dir.iterdir() if d.is_dir()]
 
                         # Reached the end. Check all the actual commit subfolders for the files.
                         for commit_path in commit_subfolder_paths:
                             if commit_path not in valid_model_paths:
-                                deleted_model = utils.remove_dir_out_of_grace(
-                                    commit_path, grace_period_seconds
-                                )
+                                deleted_model = utils.remove_dir_out_of_grace(commit_path, grace_period_seconds)
                                 if deleted_model:
-                                    bt.logging.trace(
-                                        f"Removing directory for unreferenced model at: {commit_path}."
-                                    )
+                                    bt.logging.trace(f"Removing directory for unreferenced model at: {commit_path}.")
                             else:
                                 last_touched = model_touched_by_hotkey.get(hotkey)
                                 if last_touched is not None:
-                                    deleted_model = (
-                                        utils.remove_dir_out_of_grace_by_datetime(
-                                            commit_path,
-                                            grace_period_seconds,
-                                            last_touched,
-                                        )
+                                    deleted_model = utils.remove_dir_out_of_grace_by_datetime(
+                                        commit_path,
+                                        grace_period_seconds,
+                                        last_touched,
                                     )
                                     if deleted_model:
-                                        bt.logging.trace(
-                                            f"Removing directory for stale model at: {commit_path}."
-                                        )
+                                        bt.logging.trace(f"Removing directory for stale model at: {commit_path}.")

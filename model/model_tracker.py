@@ -52,9 +52,7 @@ class ModelTracker:
         with self.lock:
             return copy.deepcopy(self.miner_hotkey_to_model_metadata_dict)
 
-    def get_model_metadata_for_miner_hotkey(
-        self, hotkey: str
-    ) -> Optional[ModelMetadata]:
+    def get_model_metadata_for_miner_hotkey(self, hotkey: str) -> Optional[ModelMetadata]:
         """Returns the model metadata for a given hotkey if any."""
 
         with self.lock:
@@ -62,9 +60,7 @@ class ModelTracker:
                 return self.miner_hotkey_to_model_metadata_dict[hotkey]
             return None
 
-    def take_model_metadata_for_miner_hotkey(
-        self, hotkey: str
-    ) -> Optional[ModelMetadata]:
+    def take_model_metadata_for_miner_hotkey(self, hotkey: str) -> Optional[ModelMetadata]:
         """Returns the model metadata for a given hotkey if any. Also, marks it as in use to prevent race conditions."""
 
         with self.lock:
@@ -78,9 +74,7 @@ class ModelTracker:
         with self.lock:
             self.model_metadata_in_use.clear()
 
-    def release_model_metadata_for_miner_hotkey(
-        self, hotkey: str, metadata: ModelMetadata
-    ):
+    def release_model_metadata_for_miner_hotkey(self, hotkey: str, metadata: ModelMetadata):
         with self.lock:
             pair = (hotkey, metadata.id.hash)
             if pair not in self.model_metadata_in_use:
@@ -105,16 +99,12 @@ class ModelTracker:
             existing_hotkeys = set(self.miner_hotkey_to_model_metadata_dict.keys())
             for hotkey in existing_hotkeys - incoming_hotkeys:
                 del self.miner_hotkey_to_model_metadata_dict[hotkey]
-                bt.logging.trace(
-                    f"Removed outdated hotkey metadata: {hotkey} from ModelTracker"
-                )
+                bt.logging.trace(f"Removed outdated hotkey metadata: {hotkey} from ModelTracker")
 
             existing_hotkeys = set(self.miner_hotkey_to_last_touched_dict.keys())
             for hotkey in existing_hotkeys - incoming_hotkeys:
                 del self.miner_hotkey_to_last_touched_dict[hotkey]
-                bt.logging.trace(
-                    f"Removed outdated hotkey timestamp: {hotkey} from ModelTracker"
-                )
+                bt.logging.trace(f"Removed outdated hotkey timestamp: {hotkey} from ModelTracker")
 
     def get_and_clear_old_models(self) -> list[tuple[str, ModelMetadata]]:
         with self.lock:

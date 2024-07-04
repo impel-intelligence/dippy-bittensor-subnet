@@ -65,17 +65,11 @@ def get_config():
         default=constants.ORIGINAL_COMPETITION_ID,
         help="competition to mine for (use --list-competitions to get all competitions)",
     )
-    parser.add_argument(
-        "--list_competitions", action="store_true", help="Print out all competitions"
-    )
+    parser.add_argument("--list_competitions", action="store_true", help="Print out all competitions")
 
-    parser.add_argument(
-        "--model_commit_id", type=str, help="The commit id of the model to upload"
-    )
+    parser.add_argument("--model_commit_id", type=str, help="The commit id of the model to upload")
 
-    parser.add_argument(
-        "--skip_model_upload", action="store_true", help="Skip model upload"
-    )
+    parser.add_argument("--skip_model_upload", action="store_true", help="Skip model upload")
 
     # Include wallet and logging arguments from bittensor
     bt.wallet.add_args(parser)
@@ -90,9 +84,7 @@ def get_config():
 def regenerate_hash(namespace, name, chat_template, competition_id):
     s = " ".join([namespace, name, chat_template, competition_id])
     hash_output = hashlib.sha256(s.encode("utf-8")).hexdigest()
-    return int(
-        hash_output[:16], 16
-    )  # Returns a 64-bit integer from the first 16 hexadecimal characters
+    return int(hash_output[:16], 16)  # Returns a 64-bit integer from the first 16 hexadecimal characters
 
 
 def check_model_dir(model_dir):
@@ -103,21 +95,15 @@ def check_model_dir(model_dir):
     ls_dir = os.listdir(model_dir)
     # check if at least 1 *.safetensors file exists
     if not any(file.endswith(".safetensors") for file in ls_dir):
-        raise FileNotFoundError(
-            f"No *.safetensors file found in model directory {model_dir}."
-        )
+        raise FileNotFoundError(f"No *.safetensors file found in model directory {model_dir}.")
 
     # check if tokenizer.json exists
     if not any(file.endswith("tokenizer.json") for file in ls_dir):
-        raise FileNotFoundError(
-            f"No tokenizer.json file found in model directory {model_dir}."
-        )
+        raise FileNotFoundError(f"No tokenizer.json file found in model directory {model_dir}.")
 
     # check if config.json exists
     if not any(file.endswith("config.json") for file in ls_dir):
-        raise FileNotFoundError(
-            f"No config.json file found in model directory {model_dir}."
-        )
+        raise FileNotFoundError(f"No config.json file found in model directory {model_dir}.")
 
     # # check if generation_config.json exists
     # if not any(file.endswith("generation_config.json") for file in ls_dir):
@@ -127,15 +113,11 @@ def check_model_dir(model_dir):
 
     # check if special_tokens_map.json exists
     if not any(file.endswith("special_tokens_map.json") for file in ls_dir):
-        raise FileNotFoundError(
-            f"No special_tokens_map.json file found in model directory {model_dir}."
-        )
+        raise FileNotFoundError(f"No special_tokens_map.json file found in model directory {model_dir}.")
 
     # check if model.safetensors.index.json exists
     if not any(file.endswith("model.safetensors.index.json") for file in ls_dir):
-        raise FileNotFoundError(
-            f"No model.safetensors.index.json file found in model directory {model_dir}."
-        )
+        raise FileNotFoundError(f"No model.safetensors.index.json file found in model directory {model_dir}.")
 
     # check if this file contains metadata.total_size
     # with open(os.path.join(model_dir, "model.safetensors.index.json"), "r") as f:
@@ -161,9 +143,7 @@ async def main(config: bt.config):
     # Get current model parameters
     parameters = ModelUpdater.get_competition_parameters(config.competition_id)
     if parameters is None:
-        raise RuntimeError(
-            f"Could not get competition parameters for block {config.competition_id}"
-        )
+        raise RuntimeError(f"Could not get competition parameters for block {config.competition_id}")
 
     repo_namespace, repo_name = utils.validate_hf_repo_id(config.hf_repo_id)
     model_id = ModelId(
@@ -172,11 +152,7 @@ async def main(config: bt.config):
         chat_template=config.chat_template,
         competition_id=config.competition_id,
         commit=config.model_commit_id,
-        hash=str(
-            regenerate_hash(
-                repo_namespace, repo_name, config.chat_template, config.competition_id
-            )
-        ),
+        hash=str(regenerate_hash(repo_namespace, repo_name, config.chat_template, config.competition_id)),
     )
 
     if not config.skip_model_upload:
@@ -196,9 +172,7 @@ async def main(config: bt.config):
         # get the latest commit id of hf repo
         model_id_with_commit = model_id
         if config.model_commit_id is None or config.model_commit_id == "":
-            raise ValueError(
-                "model_commit_id should not be set when skip_model_upload is set to True"
-            )
+            raise ValueError("model_commit_id should not be set when skip_model_upload is set to True")
 
         model_id_with_commit.commit = config.model_commit_id
 
@@ -206,11 +180,7 @@ async def main(config: bt.config):
         namespace=repo_namespace,
         name=repo_name,
         chat_template=config.chat_template,
-        hash=str(
-            regenerate_hash(
-                repo_namespace, repo_name, config.chat_template, config.competition_id
-            )
-        ),
+        hash=str(regenerate_hash(repo_namespace, repo_name, config.chat_template, config.competition_id)),
         commit=model_id_with_commit.commit,
         competition_id=config.competition_id,
     )
@@ -219,9 +189,7 @@ async def main(config: bt.config):
         f"Model uploaded to Hugging Face with commit {model_id_with_hash.commit} and hash {model_id_with_hash.hash}"
     )
 
-    model_metadata_store = ChainModelMetadataStore(
-        subtensor=subtensor, wallet=wallet, subnet_uid=config.netuid
-    )
+    model_metadata_store = ChainModelMetadataStore(subtensor=subtensor, wallet=wallet, subnet_uid=config.netuid)
 
     # We can only commit to the chain every n minutes, so run this in a loop, until successful.
     while True:
@@ -231,9 +199,7 @@ async def main(config: bt.config):
                 private=False,
                 token=os.getenv("HF_ACCESS_TOKEN"),
             )
-            await model_metadata_store.store_model_metadata(
-                wallet.hotkey.ss58_address, model_id_with_hash
-            )
+            await model_metadata_store.store_model_metadata(wallet.hotkey.ss58_address, model_id_with_hash)
             bt.logging.success("Committed model to the chain.")
             break
         except Exception as e:
