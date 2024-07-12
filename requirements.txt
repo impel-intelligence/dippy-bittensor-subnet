@@ -11,3 +11,5 @@ tiktoken
 threadpoolctl
 wandb
 loguru
+scipy
+numpy
