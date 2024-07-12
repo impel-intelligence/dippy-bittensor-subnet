@@ -1,9 +1,10 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dippy"
+version = "0.1.0"  # Static version number
 description = "Dippy Subnet - LLM Competition"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -17,19 +18,17 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.10",
 ]
-dynamic = ["version", "dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/impel-intelligence/dippy-bittensor-subnet"
 
-[tool.setuptools.dynamic]
-version = {attr = "template.__version__"}
-dependencies = {file = ["requirements.txt"]}
-
 [tool.setuptools.packages.find]
-include = ["template*"]  # TODO(developer): Change "template" to your module name
-
-[tool.setuptools_scm]
+where = ["."]
+include = ["scoring*", "common*", "constants*", "utilities*", "template*", "model*"]
+exclude = ["tests*"]
 
 [tool.setuptools]
 include-package-data = true
