@@ -33,6 +33,36 @@ class SupabaseState:
             self.logger.error(f"Error updating leaderboard status for {hash}: {e}")
             return None
 
+    def update_minerboard_status(self,
+                                 minerhash: str,
+                                 uid: int,
+                                 hotkey: str,
+                                 block: int,
+                                 ):
+        try:
+            response = (
+                self.client.table("minerboard")
+                .upsert(
+                    {"hash": minerhash, "uid": uid, "hotkey": hotkey, "block": block},
+                    returning="minimal",
+                )
+                .execute()
+            )
+            return response
+        except Exception as e:
+            self.logger.error(f"Error updating leaderboard status for {hash}: {e}")
+            return None
+
+    def minerboard_fetch(self):
+        try:
+            response = (
+                self.client.table("minerboard").select("*, leaderboard(*)").execute()
+            )
+            return response.data
+        except Exception as e:
+            self.logger.error(f"Error updating minerboard : {e}")
+            return None
+
     def update_model_hash(self, hash: str, model_hash: str):
         try:
             response = (
@@ -60,6 +90,7 @@ class SupabaseState:
                         "vibe_score": response.data[0]["vibe_score"],
                         "total_score": response.data[0]["total_score"],
                         "coherence_score": response.data[0]["coherence_score"],
+                        "creativity_score": response.data[0]["creativity_score"],
 
                     },
                     "details": {
@@ -98,7 +129,7 @@ class SupabaseState:
             .select("*")
             .eq("status", "COMPLETED")
             .order("total_score", desc=True)
-            .limit(200)
+            .limit(10)
             .execute()
         )
         return response.data
@@ -110,7 +141,7 @@ class SupabaseState:
                 .select("*")
                 .eq("status", "COMPLETED")
                 .order("total_score", desc=True)
-                .limit(100)
+                .limit(10)
                 .execute()
             )
             leaderboard = pd.DataFrame(response.data)

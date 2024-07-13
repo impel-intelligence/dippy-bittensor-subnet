@@ -3,6 +3,7 @@ import os
 from typing import Any
 import tqdm
 import torch
+import math
 import huggingface_hub
 from transformers import AutoTokenizer, BitsAndBytesConfig, AutoModelForCausalLM
 from accelerate.utils import release_memory
@@ -18,20 +19,21 @@ from scoring.common import (
     VOCAB_TRUNCATION,
     MAX_SEQ_LEN,
     BATCH_SIZE,
+    CREATIVITY_SCALE_FACTOR,
     EvaluateModelRequest,
 )
-
+max_entropy = math.log(VOCAB_TRUNCATION)
 from scoring.common import chat_template_mappings
 from scoring.dataset import PippaDataset
 
 
 def eval_score(
-    model: Any,
-    sampled_data: list[tuple],
-    input_tokenizer: AutoTokenizer,
-    output_tokenizer: AutoTokenizer,
-    request: EvaluateModelRequest,
-    debug: bool = False,
+        model: Any,
+        sampled_data: list[tuple],
+        input_tokenizer: AutoTokenizer,
+        output_tokenizer: AutoTokenizer,
+        request: EvaluateModelRequest,
+        debug: bool = False,
 ):
     """
     Evaluate the model on a dummy task
@@ -45,6 +47,7 @@ def eval_score(
     # unzip the sampled data
     contexts, target_texts, _ = zip(*sampled_data)
     total_prob = 0
+    total_entropy = 0
     count = 0
 
     # now we want to calculate the average probability of the target tokens that model assigns.
@@ -60,16 +63,17 @@ def eval_score(
             # example: [pad, pad, context, context, target, target, pad, pad]
 
             targets = output_tokenizer(
-                target_texts[i : i + batch_size],
+                target_texts[i: i + batch_size],
                 return_tensors="pt",
                 padding="max_length",
                 truncation=True,
                 max_length=MAX_GENERATION_LENGTH,
-                add_special_tokens=False,  # we don't want to add special tokens to the target as it continues from the context and already contains eos token.
+                add_special_tokens=False,
+                # we don't want to add special tokens to the target as it continues from the context and already contains eos token.
             )  # this will put padding to the right and truncate if necessary
 
             inputs = input_tokenizer(
-                contexts[i : i + batch_size],
+                contexts[i: i + batch_size],
                 return_tensors="pt",
                 padding="max_length",
                 truncation=True,
@@ -153,9 +157,21 @@ def eval_score(
                             f"Actual token: {actual_token}",
                             f" -> top 10 pred tokens: {top_10_predicted_tokens}",
                         )
+            # entropy = -(probabilities * torch.log(probabilities + 1e-9)).sum(dim=-1)
 
             # normalize the logits to get probabilities
             probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1).cuda()
+            entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-9), dim=-1)
+
+            batch_entropy = (entropy * targets_ids_mask).sum() / targets_ids_mask.sum()
+            normalized = batch_entropy.item() / max_entropy
+            scaled_entropy = 1 - math.exp(-CREATIVITY_SCALE_FACTOR * normalized)
+            total_entropy += scaled_entropy
+
+            # get the average entropy per batch per token distribution
+            # entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-9), dim=-1)
+            # batch_entropy = (entropy * targets_ids_mask).sum() / targets_ids_mask.sum()
+            # total_entropy += batch_entropy.item()
 
             if torch.isnan(probabilities).any():
                 raise ValueError("NaN values detected in the probabilities tensor")
@@ -207,15 +223,20 @@ def eval_score(
                 top_k_indices,
                 inputs,
                 targets,
+                batch_entropy,
             )
             gc.collect()
             torch.cuda.empty_cache()
 
     average_prob = total_prob / count
+    average_entropy = total_entropy / count
     print(f"Average probability of target tokens: {average_prob}")
     cleanup(model, True, request)
 
-    return average_prob
+    return {
+        "average_prob": average_prob,
+        "average_entropy": average_entropy,
+    }
 
 
 def _prepare_dummy_inputs(model, device="cuda"):
@@ -407,14 +428,17 @@ def get_eval_score(request: EvaluateModelRequest):
     # Part 2: Evaluate the model
     print("Evaluating model")
     try:
-        evaluation_score = eval_score(
+        evaluation_results = eval_score(
             model,
             sampled_data,
             input_tokenizer=input_tokenizer,
             output_tokenizer=output_tokenizer,
             request=request,
         )
+        evaluation_score = evaluation_results["average_prob"]
+        entropy_score = evaluation_results["average_entropy"]
         print("Model evaluation score: ", evaluation_score)
+        print("Model entropy (creativity) score: ", entropy_score)
     except Exception as e:
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
@@ -424,4 +448,5 @@ def get_eval_score(request: EvaluateModelRequest):
         "eval_score": evaluation_score,
         "latency_score": latency_score,
         "model_size_score": model_size_score,
+        "creativity_score": entropy_score
     }

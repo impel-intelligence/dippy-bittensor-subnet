@@ -10,6 +10,7 @@ MODEL_SIZE_SCORE_WEIGHT = 0.06  # weight of the model size score in the total sc
 LATENCY_SCORE_WEIGHT = 0.06  # weight of the latency score in the total score
 VIBE_SCORE_WEIGHT = 0.06  # weight of the vibe score in the total score
 MAX_AVG_LATENCY = 10000  # in milliseconds
+CREATIVITY_SCALE_FACTOR = 5
 
 MAX_MODEL_SIZE = 32 * 1024 * 1024 * 1024  # in bytes
 MIN_REPO_SIZE = 10 * 1024 * 1024  # in bytes

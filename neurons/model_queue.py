@@ -30,11 +30,53 @@ import constants
 import traceback
 import bittensor as bt
 
-from model.scores import StatusEnum
-from neurons.validator import get_model_score, LocalMetadata
+from model.scores import StatusEnum, Scores
+from neurons.validator import LocalMetadata
 import os
 
+from utilities.event_logger import EventLogger
+
 l = LocalMetadata(commit="x", btversion="x")
+
+def push_minerboard(
+    hash: str,
+    uid: int,
+    hotkey: str,
+    block: int,
+    config,
+    local_metadata: LocalMetadata,
+    retryWithRemote: bool = False,
+) -> None:
+    if config.use_local_validation_api and not retryWithRemote:
+        validation_endpoint = f"http://localhost:{config.local_validation_api_port}/minerboard_update"
+    else:
+        validation_endpoint = f"{constants.VALIDATION_SERVER}/minerboard_update"
+
+    # Construct the payload with the model name and chat template type
+    payload = {
+        "hash": hash,
+        "uid": uid,
+        "hotkey": hotkey,
+        "block": block,
+    }
+
+    headers = {
+        "Git-Commit": str(local_metadata.commit),
+        "Bittensor-Version": str(local_metadata.btversion),
+        "UID": str(local_metadata.uid),
+        "Hotkey": str(local_metadata.hotkey),
+        "Coldkey": str(local_metadata.coldkey),
+    }
+    if os.environ.get("ADMIN_KEY", None) not in [None, ""]:
+        payload["admin_key"] = os.environ["ADMIN_KEY"]
+
+    # Make the POST request to the validation endpoint
+    try:
+        response = requests.post(validation_endpoint, json=payload, headers=headers)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+    except Exception as e:
+        print(e)
+
 
 class ModelQueue:
     @staticmethod
@@ -59,8 +101,9 @@ class ModelQueue:
             help="Port for local validation api",
         )
 
+        bt.logging.off()
+
         bt.subtensor.add_args(parser)
-        bt.logging.add_args(parser)
         bt.wallet.add_args(parser)
         bt.axon.add_args(parser)
         config = bt.config(parser)
@@ -68,26 +111,37 @@ class ModelQueue:
 
     def __init__(self):
         self.config = ModelQueue.config()
-        bt.logging(config=self.config)
         self.netuid = self.config.netuid or 11
 
-        bt.logging.info(f"Starting model queue with config: {self.config}")
+
 
         # === Bittensor objects ====
         self.subtensor = bt.subtensor(config=self.config)
         self.metagraph: bt.metagraph = self.subtensor.metagraph(self.config.netuid)
+        logfilepath = "/tmp/modelq/{time:UNIX}.log"
+        self.logger = EventLogger(
+                                  filepath=logfilepath,
+                                  level="INFO",
+                                  stderr=True,
+                                  )
+        self.logger.info(f"Starting model queue with config: {self.config}")
 
-    # Every hour
+
+    # Every x minutes
     def forever(self):
         while True:
             now = dt.datetime.now()
-            # Calculate the next 15-minute mark
-            minutes_until_next_15 = 15 - (now.minute % 15)
-            next_15_minute_mark = now + dt.timedelta(minutes=minutes_until_next_15)
-            next_15_minute_mark = next_15_minute_mark.replace(second=0, microsecond=0)
-            sleep_time = (next_15_minute_mark - now).total_seconds()
+            # Calculate the next 20-minute mark
+            minutes_until_next_epoch = 20 - (now.minute % 20)
+            next_epoch_minute_mark = now + dt.timedelta(minutes=minutes_until_next_epoch)
+            next_epoch_minute_mark = next_epoch_minute_mark.replace(second=0, microsecond=0)
+            sleep_time = (next_epoch_minute_mark - now).total_seconds()
+            self.logger.info(f"sleeping for {sleep_time}")
             time.sleep(sleep_time)
-            self.load_latest_metagraph()
+            try:
+                self.load_latest_metagraph()
+            except Exception as e:
+                self.logger.error(f"failed to queue {e}")
 
     def load_latest_metagraph(self):
         metagraph = self.subtensor.metagraph(self.netuid)
@@ -108,31 +162,89 @@ class ModelQueue:
                 model_id = ModelId.from_compressed_str(chain_str)
                 block = metadata["block"]
 
-                result = get_model_score(
+                result = self.check_model_score(
                     namespace=model_id.namespace,
                     name=model_id.name,
                     hash=model_id.hash,
                     template=model_id.chat_template,
+                    uid=uid,
+                    hotkey=hotkey,
+                    block=block,
                     config=self.config,
+                    retryWithRemote=True,
+                )
+                stats = f"uid: {uid} hotkey : {hotkey} model_metadata : {model_id} \n result: {result}"
+                if result.status == StatusEnum.QUEUED:
+                    self.logger.info(f"QUEUED : {stats}")
+                    queued += 1
+                if result.status == StatusEnum.FAILED:
+                    self.logger.info(f"FAILED : {stats}")
+                    failed += 1
+                if result.status == StatusEnum.COMPLETED:
+                    self.logger.info(f"COMPLETED : {stats}")
+                    completed += 1
+
+                push_minerboard(
+                    hash=model_id.hash,
+                    uid=uid,
+                    hotkey=hotkey,
+                    block=block,
                     local_metadata=l,
+                    config=self.config,
                     retryWithRemote=True,
                 )
 
-                if result.status == StatusEnum.QUEUED:
-                    stats = f"uid: {uid} hotkey : {hotkey} model_metadata : {model_id} \n result: {result}"
-                    bt.logging.info(f"QUEUED : {stats}")
-                    queued += 1
-                if result.status == StatusEnum.FAILED:
-                    stats = f"uid: {uid} hotkey : {hotkey} model_metadata : {model_id} \n result: {result}"
-                    bt.logging.info(f"FAILED : {stats}")
-                    failed += 1
-                if result.status == StatusEnum.COMPLETED:
-                    completed += 1
-
             except Exception as e:
-                bt.logging.error(e)
+                self.logger.error(e)
                 continue
-        bt.logging.info(f"queued {queued} failed {failed} completed {completed}")
+        self.logger.info(f"queued {queued} failed {failed} completed {completed}")
+
+
+    def check_model_score(
+            self,
+        namespace,
+        name,
+        hash,
+        template,
+        uid,
+        hotkey,
+        block,
+        config,
+        retryWithRemote: bool = False,
+    ) -> Scores:
+        # Status:
+        # QUEUED, RUNNING, FAILED, COMPLETED
+        # return (score, status)
+        if config.use_local_validation_api and not retryWithRemote:
+            validation_endpoint = f"http://localhost:{config.local_validation_api_port}/evaluate_model"
+        else:
+            validation_endpoint = f"{constants.VALIDATION_SERVER}/evaluate_model"
+
+        # Construct the payload with the model name and chat template type
+        payload = {
+            "repo_namespace": namespace,
+            "repo_name": name,
+            "hash": hash,
+            "chat_template_type": template,
+        }
+        score_data = Scores()
+
+        if os.environ.get("ADMIN_KEY", None) not in [None, ""]:
+            payload["admin_key"] = os.environ["ADMIN_KEY"]
+
+        # Make the POST request to the validation endpoint
+        try:
+            response = requests.post(validation_endpoint, json=payload)
+            response.raise_for_status()  # Raise an exception for HTTP errors
+            # Parse the response JSON
+            result = response.json()
+            status = StatusEnum.from_string(result["status"])
+            score_data.status = status
+        except Exception as e:
+            self.logger.error(e)
+            self.logger.error(f"Failed to get score and status for {namespace}/{name}")
+            score_data.status = StatusEnum.FAILED
+        return score_data
 
 
 if __name__ == "__main__":

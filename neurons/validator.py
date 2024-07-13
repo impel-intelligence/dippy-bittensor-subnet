@@ -51,7 +51,7 @@ import multiprocessing
 from rich.table import Table
 from rich.console import Console
 
-from utilities.compete import alt_iswin
+from utilities.compete import iswin
 from utilities.event_logger import EventLogger
 from utilities.miner_iterator import MinerIterator
 from utilities import utils
@@ -72,24 +72,6 @@ from bittensor.extrinsics.set_weights import set_weights_extrinsic
 from scipy import optimize, stats
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-COHERENCE_BLOCKHEIGHT = 3408878
-
-def iswin(score_i, score_j, block_i, block_j):
-    """
-    Determines the winner between two models based on the epsilon adjusted loss.
-
-    Parameters:
-        loss_i (float): Loss of uid i on batch
-        loss_j (float): Loss of uid j on batch.
-        block_i (int): Block of uid i.
-        block_j (int): Block of uid j.
-    Returns:
-        bool: True if loss i is better, False otherwise.
-    """
-    # Adjust score based on timestamp and pretrain epsilon
-    score_i = (1 - constants.timestamp_epsilon) * score_i if block_i > block_j else score_i
-    score_j = (1 - constants.timestamp_epsilon) * score_j if block_j > block_i else score_j
-    return score_i > score_j
 
 
 def compute_wins(
@@ -155,7 +137,7 @@ def alt_compute_wins(
             block_j = uid_to_block[uid_j]
             score_i = scores_per_uid[uid_i]
             score_j = scores_per_uid[uid_j]
-            wins[uid_i] += 1 if alt_iswin(score_i, score_j, block_i, block_j) else 0
+            wins[uid_i] += 1 if iswin(score_i, score_j, block_i, block_j) else 0
             total_matches += 1
         # Calculate win rate for uid i
         win_rate[uid_i] = wins[uid_i] / total_matches if total_matches > 0 else 0
@@ -607,6 +589,8 @@ class Validator:
         return new_weights
 
     async def try_set_weights(self, ttl: int):
+        if self.config.dont_set_weights or self.config.offline:
+            return
         async def _try_set_weights():
             try:
                 metagraph = self.subtensor.metagraph(self.config.netuid)
@@ -669,14 +653,16 @@ class Validator:
         self.miner_iterator.set_miner_uids(self.metagraph.uids.tolist())
         return True
 
-    async def try_run_step(self, ttl: int):
+    async def try_run_step(self, ttl: int) -> Optional[bool]:
         async def _try_run_step():
-            await self.run_step()
+            success = await self.run_step()
+            return success
 
         try:
             bt.logging.warning("Running step.")
-            await asyncio.wait_for(_try_run_step(), ttl)
+            step_success = await asyncio.wait_for(_try_run_step(), ttl)
             bt.logging.warning("Finished running step.")
+            return step_success
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to run step after {ttl} seconds")
 
@@ -752,9 +738,7 @@ class Validator:
                                 bt.logging.info(f"_score_data for {model_i_metadata} is {_score_data}")
                                 if _score_data.status == StatusEnum.COMPLETED:
                                     score = _score_data.total_score
-                                    # Set hardcoded score switchover to coherence.
-                                    # if _score_data.coherence_score < 1 and model_i_metadata.block > COHERENCE_BLOCKHEIGHT:
-                                    #     score = score * _score_data.coherence_score
+
                                     break
                                 elif _score_data.status == StatusEnum.FAILED:
                                     score = 0
@@ -799,7 +783,7 @@ class Validator:
         # Update self.metagraph
         synced = await self.try_sync_metagraph(ttl=60)
         if not synced:
-            return
+            return False
         competition_parameters = constants.COMPETITION_SCHEDULE[self.global_step % len(constants.COMPETITION_SCHEDULE)]
         telemetry_report(self.local_metadata)
 
@@ -821,7 +805,7 @@ class Validator:
                 time.sleep(300)
             else:
                 bt.logging.debug(f"No uids to eval for competition {competition_parameters.competition_id}.")
-            return
+            return False
 
         # Keep track of which block this uid last updated their model.
         # Default to an infinite block if we can't retrieve the metadata for the miner.
@@ -883,14 +867,14 @@ class Validator:
         model_weights = torch.tensor([win_rate[uid] for uid in uids], dtype=torch.float32)
         step_weights = torch.softmax(model_weights / constants.temperature, dim=0)
 
-        alt_uids = copy.deepcopy(uids)
-        alt_scores_per_uid = copy.deepcopy(scores_per_uid)
-        alt_uid_to_block = copy.deepcopy(uid_to_block)
-        # Compute wins and win rates per uid.
-        alt_wins, alt_win_rate = alt_compute_wins(alt_uids, alt_scores_per_uid, alt_uid_to_block)
-        # Compute softmaxed weights based on win rate.
-        alt_model_weights = torch.tensor([alt_win_rate[uid] for uid in uids], dtype=torch.float32)
-        alt_step_weights = torch.softmax(alt_model_weights / constants.temperature, dim=0)
+        # alt_uids = copy.deepcopy(uids)
+        # alt_scores_per_uid = copy.deepcopy(scores_per_uid)
+        # alt_uid_to_block = copy.deepcopy(uid_to_block)
+        # # Compute wins and win rates per uid.
+        # alt_wins, alt_win_rate = alt_compute_wins(alt_uids, alt_scores_per_uid, alt_uid_to_block)
+        # # Compute softmaxed weights based on win rate.
+        # alt_model_weights = torch.tensor([alt_win_rate[uid] for uid in uids], dtype=torch.float32)
+        # alt_step_weights = torch.softmax(alt_model_weights / constants.temperature, dim=0)
 
         # Update weights based on moving average.
         new_weights = torch.zeros_like(self.metagraph.S)
@@ -911,20 +895,20 @@ class Validator:
         self.weights = self.weights.nan_to_num(0.0)
 
         # Alt weights
-        new_alt_weights = torch.zeros_like(self.metagraph.S)
-        for i, uid_i in enumerate(uids):
-            new_alt_weights[uid_i] = alt_step_weights[i]
-        if new_alt_weights.shape[0] < self.alt_weights.shape[0]:
-            self.alt_weights = self.alt_weights[: new_alt_weights.shape[0]]
-        elif new_alt_weights.shape[0] > self.alt_weights.shape[0]:
-            self.alt_weights = torch.cat(
-                [
-                    self.alt_weights,
-                    torch.zeros(new_alt_weights.shape[0] - self.alt_weights.shape[0]),
-                ]
-            )
-        self.alt_weights = constants.alpha * self.alt_weights + (1 - constants.alpha) * new_alt_weights
-        self.alt_weights = self.alt_weights.nan_to_num(0.0)
+        # new_alt_weights = torch.zeros_like(self.metagraph.S)
+        # for i, uid_i in enumerate(uids):
+        #     new_alt_weights[uid_i] = alt_step_weights[i]
+        # if new_alt_weights.shape[0] < self.alt_weights.shape[0]:
+        #     self.alt_weights = self.alt_weights[: new_alt_weights.shape[0]]
+        # elif new_alt_weights.shape[0] > self.alt_weights.shape[0]:
+        #     self.alt_weights = torch.cat(
+        #         [
+        #             self.alt_weights,
+        #             torch.zeros(new_alt_weights.shape[0] - self.alt_weights.shape[0]),
+        #         ]
+        #     )
+        # self.alt_weights = constants.alpha * self.alt_weights + (1 - constants.alpha) * new_alt_weights
+        # self.alt_weights = self.alt_weights.nan_to_num(0.0)
 
         # Filter based on win rate removing all by the sample_min best models for evaluation.
         self.uids_to_eval[competition_parameters.competition_id] = set(
@@ -948,6 +932,7 @@ class Validator:
 
         # Increment the number of completed run steps by 1
         self.run_step_count += 1
+        return True
 
     def log_step(
         self,
@@ -1021,28 +1006,65 @@ class Validator:
         wandb_logger.safe_log({"miner_scores/scored_per_uid": scores_per_uid})
         self._event_log("log_scores", scores=scores_per_uid, step=self.epoch_step)
 
+    # async def run(self):
+    #     while True:
+    #         try:
+    #             # Run every
+    #             if self.metagraph.block.item() % self.config.blocks_per_epoch == 0:
+    #                 success = await self.try_run_step(ttl=60 * 20)
+    #                 bt.logging.debug(
+    #                     f"{self.metagraph.block.item() - self.last_epoch} / {self.config.blocks_per_epoch} blocks until next epoch."
+    #                 )
+    #                 self.global_step += 1
+    #                 if success:
+    #                     await self.try_set_weights(ttl=120)
+    #             self.last_epoch = self.metagraph.block.item()
+    #             self.epoch_step += 1
+    #             time.sleep(20)
+    #             await self.try_sync_metagraph(ttl=120)
+    #
+    #
+    #         except KeyboardInterrupt:
+    #             bt.logging.info("KeyboardInterrupt caught")
+    #             exit()
+    #
+    #         except Exception as e:
+    #             bt.logging.error(f"Error in validator loop \n {e} \n {traceback.format_exc()}")
+
     async def run(self):
         while True:
             try:
-                while self.metagraph.block.item() - self.last_epoch < self.config.blocks_per_epoch:
-                    await self.try_run_step(ttl=60 * 20)
-                    bt.logging.debug(
-                        f"{self.metagraph.block.item() - self.last_epoch} / {self.config.blocks_per_epoch} blocks until next epoch."
-                    )
-                    self.global_step += 1
+                current_time = dt.datetime.utcnow()
+                minutes = current_time.minute
 
-                if not self.config.dont_set_weights and not self.config.offline:
-                    await self.try_set_weights(ttl=120)
-                self.last_epoch = self.metagraph.block.item()
-                self.epoch_step += 1
+                # Check if we're at a 20-minute mark
+                if minutes % 20 == 0:
+                    bt.logging.debug(f"Running step at {current_time.strftime('%H:%M')}")
+                    success = await self.try_run_step(ttl=60 * 20)
+                    self.global_step += 1
+                    if success:
+                        await self.try_set_weights(ttl=120)
+                    await self.try_sync_metagraph(ttl=120)
+
+                    # Wait for 1 minute to avoid running multiple times within the same minute
+                    await asyncio.sleep(60)
+                else:
+                    # Calculate minutes until next 20-minute mark
+                    minutes_until_next = 20 - (minutes % 20)
+                    next_run = (current_time + dt.timedelta(minutes=minutes_until_next))
+                    bt.logging.debug(
+                        f"Waiting {minutes_until_next} minutes until next run at {next_run.strftime('%H:%M')}")
+
+                    # Wait until the next minute before checking again
+                    await asyncio.sleep(60)
 
             except KeyboardInterrupt:
                 bt.logging.info("KeyboardInterrupt caught")
                 exit()
-
             except Exception as e:
                 bt.logging.error(f"Error in validator loop \n {e} \n {traceback.format_exc()}")
-
+                # Add a small delay before retrying in case of continuous errors
+                await asyncio.sleep(5)
 
 def telemetry_report(local_metadata: LocalMetadata):
     telemetry_endpoint = f"{constants.VALIDATION_SERVER}/telemetry_report"
