@@ -3,7 +3,7 @@ import time
 import os
 import multiprocessing
 import logging
-from typing import List
+from typing import List, Optional
 
 import uvicorn
 
@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Header, Response
 from huggingface_hub import HfApi, HfFolder
 from huggingface_hub.hf_api import HfApi, RepositoryNotFoundError
 from dotenv import load_dotenv
+from pydantic import BaseModel
 
 from dippy_validation_api.evaluator import Evaluator, RunError
 from dippy_validation_api.persistence import SupabaseState
@@ -164,6 +165,7 @@ def _evaluate_model(
     eval_score = eval_score_result.eval_score
     latency_score = eval_score_result.latency_score
     model_size_score = eval_score_result.eval_model_size_score
+    creativity_score = eval_score_result.creativity_score
 
     update_row_supabase(
         {
@@ -171,6 +173,7 @@ def _evaluate_model(
             "model_size_score": model_size_score,
             "qualitative_score": eval_score,
             "latency_score": latency_score,
+            "creativity_score": creativity_score,
             "notes": "Now computing vibe and coherence score",
         }
     )
@@ -186,16 +189,16 @@ def _evaluate_model(
 
     vibe_score = vibe_score_response.vibe_score
     try:
-        coherehnce_score_response = evaluator.coherence_score(request)
-        if isinstance(coherehnce_score_response, RunError):
-            raise Exception(coherehnce_score_response.error)
+        coherence_score_response = evaluator.coherence_score(request)
+        if isinstance(coherence_score_response, RunError):
+            raise Exception(coherence_score_response.error)
 
     except Exception as e:
         error_string = f"Error calling coherence_score job with message: {e}"
         supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, error_string)
         raise RuntimeError(error_string)
 
-    coherence_score = coherehnce_score_response.coherence_score
+    coherence_score = coherence_score_response.coherence_score
 
     if eval_score is None or latency_score is None or model_size_score is None or vibe_score is None:
         raise HTTPException(
@@ -246,9 +249,6 @@ def update_supabase_leaderboard_status(
     return supabaser.update_leaderboard_status(hash, status, notes)
 
 
-def get_json_result(hash):
-    return supabaser.get_json_result(hash)
-
 
 def repository_exists(repo_id):
     try:
@@ -281,6 +281,41 @@ def telemetry_report(
     if app.state.event_logger_enabled:
         app.state.event_logger.info("telemetry_request", extra=request_details)
     return Response(status_code=200)
+
+
+class MinerboardRequest(BaseModel):
+    uid: int
+    hotkey: str
+    hash: str
+    block: int
+    admin_key: Optional[str] = "admin_key"
+
+@app.post("/minerboard_update")
+def minerboard_update(
+    request: MinerboardRequest,
+):
+    if request.admin_key != admin_key:
+        return Response(status_code=403)
+
+    supabaser.update_minerboard_status(
+        minerhash=request.hash,
+        uid=request.uid,
+        hotkey=request.hotkey,
+        block=request.block,
+    )
+
+    return Response(status_code=200)
+
+@app.get("/minerboard")
+def get_minerboard():
+    entries = supabaser.minerboard_fetch()
+    if len(entries) < 1:
+        return []
+    results = []
+    for entry in entries:
+        flattened_entry = {**entry.pop('leaderboard'), **entry}
+        results.append(flattened_entry)
+    return results
 
 
 @app.post("/evaluate_model")
@@ -328,12 +363,13 @@ def evaluate_model(
             "chat_template_type": request.chat_template_type,
             "model_size_score": -1.0,
             "qualitative_score": -1.0,
+            "creativity_score": -1.0,
             "latency_score": -1.0,
             "vibe_score": -1.0,
             "total_score": -1.0,
             "timestamp": pd.Timestamp.utcnow(),
             "status": StatusEnum.QUEUED,
-            "coherence_score": -1.0,
+            "coherence_score": 0,
             "block": request.block,
             "notes": failure_notes,
         }

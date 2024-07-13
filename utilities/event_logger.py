@@ -26,13 +26,17 @@ class EventLogger:
 
         # Configure loguru logger for JSON output and file rotation
         format = "{time} | {level} | {message}"
+        console_format = (
+            "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+            "<level>{level: <8}</level> | "
+            "<cyan>{message}</cyan> | {extra} "
+        )
         self.logger.remove()  # Remove default configuration
         if stderr:
             self.logger.add(
                 sys.stderr,
-                format=format,
+                format=console_format,
                 level=level,
-                serialize=True,  # For JSON output in console
             )
         self.logger.add(
             filepath,

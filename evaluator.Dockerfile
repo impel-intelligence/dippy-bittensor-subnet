@@ -22,9 +22,9 @@ RUN pip install uv
 WORKDIR /app
 #
 ## Copy the requirements file into the container
-COPY requirements.eval.txt .
+COPY requirements.eval.txt requirements.txt
 
-RUN uv pip install --system -r requirements.eval.txt --no-build-isolation
+RUN uv pip install --system -r requirements.txt --no-build-isolation
 
 COPY scoring ./scoring
 COPY utilities ./utilities
@@ -32,9 +32,9 @@ COPY template ./template
 COPY model ./model
 COPY constants ./constants
 # Required for self installing module
-COPY requirements.eval.txt requirements.txt
 COPY README.md .
-COPY setup.py .
+COPY pyproject.toml .
+COPY .git .git
 RUN uv pip install -e .
 
 COPY scoring/entrypoint.py .

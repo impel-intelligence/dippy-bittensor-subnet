@@ -36,7 +36,7 @@ COMPETITION_SCHEDULE: List[CompetitionParameters] = [
         competition_id="d1",
     ),
     # CompetitionParameters(
-    #     reward_percentage=0.5,
+    #     reward_percentage=0.9,
     #     competition_id="d2",
     # ),
 ]
