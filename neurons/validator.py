@@ -454,6 +454,7 @@ class Validator:
         )
         # eventlog_path = "/tmp/sn11_event_logs/event_{time}.log"
         eventlog_path = "/dev/null"
+        self.use_event_logger = False
         if os.getenv("SN11_LOG_PATH") is not None:
             eventlog_path = os.getenv("SN11_LOG_PATH")
         try:
