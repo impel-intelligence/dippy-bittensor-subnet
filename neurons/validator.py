@@ -408,7 +408,9 @@ class Validator:
         # Touch all models, starting a timer for them to be deleted if not used
         self.model_tracker.touch_all_miner_models()
 
-        validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
+        validator_uid = 0
+        if not self.config.offline:
+            validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
 
         # Set up local metadata for stats collection
         self.local_metadata = LocalMetadata(
@@ -1031,14 +1033,18 @@ class Validator:
     #         except Exception as e:
     #             bt.logging.error(f"Error in validator loop \n {e} \n {traceback.format_exc()}")
 
+
+
     async def run(self):
+        self.override = True
         while True:
             try:
                 current_time = dt.datetime.utcnow()
                 minutes = current_time.minute
 
                 # Check if we're at a 20-minute mark
-                if minutes % 20 == 0:
+                if minutes % 20 == 0 or self.override:
+                    time.sleep(120)
                     bt.logging.debug(f"Running step at {current_time.strftime('%H:%M')}")
                     success = await self.try_run_step(ttl=60 * 20)
                     self.global_step += 1

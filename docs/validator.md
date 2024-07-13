@@ -3,7 +3,7 @@
 ## Prerequisites
 - Docker
 - Existing validator prerequisites (python, `wandb`)
-- 
+- Access tokens for following services below
 
 ## Environment Setup
 ```shell
@@ -13,6 +13,7 @@ ADMIN_KEY=<your_admin_access_key>
 HF_ACCESS_TOKEN=<your_huggingface_access_token>
 HF_USER=<your_huggingface_username>
 DIPPY_KEY=<your_dippy_bot_access_key>
+OPENAI_API_KEY=<your_openai_api_key>
 ```
 
 ## Steps

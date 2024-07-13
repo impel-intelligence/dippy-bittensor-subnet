@@ -67,7 +67,7 @@ class SupabaseState:
         try:
             response = (
                 self.client.table("leaderboard")
-                .upsert(
+                .update(
                     {"hash": hash, "model_hash": model_hash},
                     returning="minimal",
                 )
