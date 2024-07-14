@@ -118,7 +118,6 @@ def upgrade_packages() -> None:
         log.error("Failed to upgrade packages, proceeding anyway. %s", exc)
 
 
-
 def main(pm2_name: str, args: List[str]) -> None:
     """
     Run the validator process and automatically update it when a new version is released.

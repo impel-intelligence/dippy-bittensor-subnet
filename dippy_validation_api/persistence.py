@@ -33,12 +33,13 @@ class SupabaseState:
             self.logger.error(f"Error updating leaderboard status for {hash}: {e}")
             return None
 
-    def update_minerboard_status(self,
-                                 minerhash: str,
-                                 uid: int,
-                                 hotkey: str,
-                                 block: int,
-                                 ):
+    def update_minerboard_status(
+        self,
+        minerhash: str,
+        uid: int,
+        hotkey: str,
+        block: int,
+    ):
         try:
             response = (
                 self.client.table("minerboard")
@@ -55,9 +56,7 @@ class SupabaseState:
 
     def minerboard_fetch(self):
         try:
-            response = (
-                self.client.table("minerboard").select("*, leaderboard(*)").execute()
-            )
+            response = self.client.table("minerboard").select("*, leaderboard(*)").execute()
             return response.data
         except Exception as e:
             self.logger.error(f"Error updating minerboard : {e}")
@@ -91,10 +90,8 @@ class SupabaseState:
                         "total_score": response.data[0]["total_score"],
                         "coherence_score": response.data[0]["coherence_score"],
                         "creativity_score": response.data[0]["creativity_score"],
-
                     },
                     "details": {
-                        "block": response.data[0]["block"],
                         "model_hash": response.data[0]["model_hash"],
                     },
                     "status": response.data[0]["status"],

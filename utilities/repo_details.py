@@ -165,4 +165,3 @@ class SafetensorsModel:
 
     def id(self) -> str:
         return self.full_hash
-

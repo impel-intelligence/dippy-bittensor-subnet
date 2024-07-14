@@ -26,7 +26,6 @@ def calculate_penalty(block_one: int, block_two: int) -> float:
     return penalty
 
 
-
 def iswin(score_i, score_j, block_i, block_j):
     """
     Determines the winner between two models based on the epsilon adjusted loss.

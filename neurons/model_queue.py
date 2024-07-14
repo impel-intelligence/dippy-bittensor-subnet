@@ -38,6 +38,7 @@ from utilities.event_logger import EventLogger
 
 l = LocalMetadata(commit="x", btversion="x")
 
+
 def push_minerboard(
     hash: str,
     uid: int,
@@ -113,19 +114,16 @@ class ModelQueue:
         self.config = ModelQueue.config()
         self.netuid = self.config.netuid or 11
 
-
-
         # === Bittensor objects ====
         self.subtensor = bt.subtensor(config=self.config)
         self.metagraph: bt.metagraph = self.subtensor.metagraph(self.config.netuid)
         logfilepath = "/tmp/modelq/{time:UNIX}.log"
         self.logger = EventLogger(
-                                  filepath=logfilepath,
-                                  level="INFO",
-                                  stderr=True,
-                                  )
+            filepath=logfilepath,
+            level="INFO",
+            stderr=True,
+        )
         self.logger.info(f"Starting model queue with config: {self.config}")
-
 
     # Every x minutes
     def forever(self):
@@ -199,9 +197,8 @@ class ModelQueue:
                 continue
         self.logger.info(f"queued {queued} failed {failed} completed {completed}")
 
-
     def check_model_score(
-            self,
+        self,
         namespace,
         name,
         hash,
