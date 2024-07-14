@@ -5,10 +5,6 @@ from pydantic import BaseModel
 MAX_GENERATION_LEEWAY = 0.5  # should be between 0 and 1. This is the percentage of tokens that the model can generate more than the last user message
 MAX_GENERATION_LENGTH = 200  # maximum number of tokens that the model can generate
 LENGTH_DIFF_PENALTY_STEEPNESS = 2  # the steepness of the exponential decay of the length difference penalty
-QUALITATIVE_SCORE_WEIGHT = 0.82  # weight of the qualitative score in the total score
-MODEL_SIZE_SCORE_WEIGHT = 0.06  # weight of the model size score in the total score
-LATENCY_SCORE_WEIGHT = 0.06  # weight of the latency score in the total score
-VIBE_SCORE_WEIGHT = 0.06  # weight of the vibe score in the total score
 MAX_AVG_LATENCY = 10000  # in milliseconds
 CREATIVITY_SCALE_FACTOR = 5
 

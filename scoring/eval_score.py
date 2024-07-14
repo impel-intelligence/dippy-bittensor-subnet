@@ -22,18 +22,19 @@ from scoring.common import (
     CREATIVITY_SCALE_FACTOR,
     EvaluateModelRequest,
 )
+
 max_entropy = math.log(VOCAB_TRUNCATION)
 from scoring.common import chat_template_mappings
 from scoring.dataset import PippaDataset
 
 
 def eval_score(
-        model: Any,
-        sampled_data: list[tuple],
-        input_tokenizer: AutoTokenizer,
-        output_tokenizer: AutoTokenizer,
-        request: EvaluateModelRequest,
-        debug: bool = False,
+    model: Any,
+    sampled_data: list[tuple],
+    input_tokenizer: AutoTokenizer,
+    output_tokenizer: AutoTokenizer,
+    request: EvaluateModelRequest,
+    debug: bool = False,
 ):
     """
     Evaluate the model on a dummy task
@@ -63,7 +64,7 @@ def eval_score(
             # example: [pad, pad, context, context, target, target, pad, pad]
 
             targets = output_tokenizer(
-                target_texts[i: i + batch_size],
+                target_texts[i : i + batch_size],
                 return_tensors="pt",
                 padding="max_length",
                 truncation=True,
@@ -73,7 +74,7 @@ def eval_score(
             )  # this will put padding to the right and truncate if necessary
 
             inputs = input_tokenizer(
-                contexts[i: i + batch_size],
+                contexts[i : i + batch_size],
                 return_tensors="pt",
                 padding="max_length",
                 truncation=True,
@@ -448,5 +449,5 @@ def get_eval_score(request: EvaluateModelRequest):
         "eval_score": evaluation_score,
         "latency_score": latency_score,
         "model_size_score": model_size_score,
-        "creativity_score": entropy_score
+        "creativity_score": entropy_score,
     }

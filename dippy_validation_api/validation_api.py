@@ -17,15 +17,14 @@ from pydantic import BaseModel
 
 from dippy_validation_api.evaluator import Evaluator, RunError
 from dippy_validation_api.persistence import SupabaseState
-from model.scores import StatusEnum
+from model.scores import StatusEnum, Scores
 from utilities.validation_utils import (
     regenerate_hash,
 )
 from utilities.repo_details import (
     get_model_size,
-check_model_repo_details,
-ModelRepo,
-
+    check_model_repo_details,
+    ModelRepo,
 )
 from utilities.event_logger import EventLogger
 from scoring.common import EvaluateModelRequest
@@ -37,10 +36,6 @@ load_dotenv()
 MAX_GENERATION_LEEWAY = 0.5  # should be between 0 and 1. This is the percentage of tokens that the model can generate more than the last user message
 MAX_GENERATION_LENGTH = 200  # maximum number of tokens that the model can generate
 LENGTH_DIFF_PENALTY_STEEPNESS = 2  # the steepness of the exponential decay of the length difference penalty
-QUALITATIVE_SCORE_WEIGHT = 0.82  # weight of the qualitative score in the total score
-MODEL_SIZE_SCORE_WEIGHT = 0.06  # weight of the model size score in the total score
-LATENCY_SCORE_WEIGHT = 0.06  # weight of the latency score in the total score
-VIBE_SCORE_WEIGHT = 0.06  # weight of the vibe score in the total score
 MAX_AVG_LATENCY = 10000  # in milliseconds
 
 MAX_MODEL_SIZE = 32 * 1024 * 1024 * 1024  # in bytes
@@ -206,10 +201,17 @@ def _evaluate_model(
             detail="Error calculating scores, one or more scores are None",
         )
 
-    total_score = model_size_score * MODEL_SIZE_SCORE_WEIGHT
-    total_score += eval_score * QUALITATIVE_SCORE_WEIGHT
-    total_score += latency_score * LATENCY_SCORE_WEIGHT
-    total_score += vibe_score * VIBE_SCORE_WEIGHT
+    full_score_data = Scores()
+    full_score_data.qualitative_score = eval_score
+    full_score_data.model_size_score = model_size_score
+    full_score_data.coherence_score = coherence_score
+    full_score_data.creativity_score = creativity_score
+    full_score_data.vibe_score = vibe_score
+    full_score_data.latency_score = latency_score
+
+    total_score = full_score_data.classic_score()
+    # Enable after introducing new
+    # total_score = full_score_data.new_total_score()
 
     try:
         update_row_supabase(
@@ -247,7 +249,6 @@ def update_supabase_leaderboard_status(
     notes="",
 ):
     return supabaser.update_leaderboard_status(hash, status, notes)
-
 
 
 def repository_exists(repo_id):
@@ -290,6 +291,7 @@ class MinerboardRequest(BaseModel):
     block: int
     admin_key: Optional[str] = "admin_key"
 
+
 @app.post("/minerboard_update")
 def minerboard_update(
     request: MinerboardRequest,
@@ -306,6 +308,7 @@ def minerboard_update(
 
     return Response(status_code=200)
 
+
 @app.get("/minerboard")
 def get_minerboard():
     entries = supabaser.minerboard_fetch()
@@ -313,7 +316,7 @@ def get_minerboard():
         return []
     results = []
     for entry in entries:
-        flattened_entry = {**entry.pop('leaderboard'), **entry}
+        flattened_entry = {**entry.pop("leaderboard"), **entry}
         results.append(flattened_entry)
     return results
 
@@ -370,7 +373,6 @@ def evaluate_model(
             "timestamp": pd.Timestamp.utcnow(),
             "status": StatusEnum.QUEUED,
             "coherence_score": 0,
-            "block": request.block,
             "notes": failure_notes,
         }
 
@@ -394,10 +396,7 @@ def evaluate_model(
 
     # check repo size of the model to see if it is within the limit
     try:
-        model_repo_details = check_model_repo_details(
-            request.hash,
-            request.repo_namespace,
-            request.repo_name)
+        model_repo_details = check_model_repo_details(request.hash, request.repo_namespace, request.repo_name)
         if model_repo_details is None:
             failure_notes = "Error checking model repo size. Make sure the model repository exists and is accessible."
             logger.error(failure_notes)

@@ -25,7 +25,14 @@ python dippy_validation_api/evaluator.py --image grader:latest \
 --repo_namespace <your-repo-namespace> --repo_name <your-repo-name> \
 --chat_template_type <your-chat-template-type> --hash <your-hash>
 ```
+## Comparing validation results
 
+It is possible to run the same steps of code as a validator could to get a better scope of weights and scores.
+To do so, ensure that you have installed all the dependencies for a validator and run the following from the root repository:
+```shell
+python neurons/validator.py --wallet.name <your-wallet> --wallet.hotkey <your-hotkey> --offline --immediate
+```
+This command will run the validation run step immediately. Note that this will run indefinitely and in rapid succession
 ## Datasets Used
 https://huggingface.co/datasets/Gryphe/Opus-WritingPrompts
 https://huggingface.co/datasets/PygmalionAI/PIPPA
