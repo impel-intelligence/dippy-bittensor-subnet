@@ -22,7 +22,7 @@ class SupabaseState:
         try:
             response = (
                 self.client.table("leaderboard")
-                .upsert(
+                .update(
                     {"hash": hash, "status": status, "notes": notes},
                     returning="minimal",
                 )
@@ -142,14 +142,8 @@ class SupabaseState:
                 .execute()
             )
             leaderboard = pd.DataFrame(response.data)
-            leaderboard = leaderboard.fillna(value=-1)
+            leaderboard = leaderboard.fillna(value=0)
             leaderboard = leaderboard.sort_values(by="total_score", ascending=False)
-            # # filter out entries older than two weeks
-            # two_weeks_ago = datetime.now() - timedelta(weeks=2)
-            # # Convert the 'timestamp' column to datetime format. If parsing errors occur, 'coerce' will replace problematic inputs with NaT (Not a Time)
-            # leaderboard['timestamp'] = pd.to_datetime(leaderboard['timestamp'], errors='coerce', utc=True)
-            # leaderboard = leaderboard[(leaderboard['timestamp'].dt.tz_convert(None) > two_weeks_ago) | (leaderboard.index < 1000)]
-            # leaderboard = leaderboard.sort_values(by='total_score', ascending=False)
             return leaderboard.to_dict(orient="records")
         except Exception as e:
             self.logger.error(f"Error fetching leaderboard from Supabase: {e}")

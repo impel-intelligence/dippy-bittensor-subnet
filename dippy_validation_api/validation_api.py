@@ -137,7 +137,7 @@ def _evaluate_model(
     """
     Evaluate a model based on the model size and the quality of the model.
     """
-    update_supabase_leaderboard_status(
+    supabaser.update_leaderboard_status(
         request.hash,
         "RUNNING",
         "Model evaluation in progress",
@@ -150,7 +150,7 @@ def _evaluate_model(
             raise Exception(eval_score_result.error)
     except Exception as e:
         error_string = f"Error calling eval_score job with message: {e}"
-        update_supabase_leaderboard_status(
+        supabaser.update_leaderboard_status(
             request.hash,
             StatusEnum.FAILED,
             error_string,
@@ -364,12 +364,12 @@ def evaluate_model(
             "repo_namespace": request.repo_namespace,
             "repo_name": request.repo_name,
             "chat_template_type": request.chat_template_type,
-            "model_size_score": -1.0,
-            "qualitative_score": -1.0,
-            "creativity_score": -1.0,
-            "latency_score": -1.0,
-            "vibe_score": -1.0,
-            "total_score": -1.0,
+            "model_size_score": 0,
+            "qualitative_score": 0,
+            "creativity_score": 0,
+            "latency_score": 0,
+            "vibe_score": 0,
+            "total_score": 0,
             "timestamp": pd.Timestamp.utcnow(),
             "status": StatusEnum.QUEUED,
             "coherence_score": 0,
@@ -411,7 +411,7 @@ def evaluate_model(
     model_repo_size = model_repo_details.repo_size
     supabaser.update_model_hash(request.hash, model_repo_details.model_hash)
     if model_repo_size > MAX_REPO_SIZE or model_repo_size < MIN_REPO_SIZE:
-        failure_notes = f"Model repo size is not up to requirments: {model_repo_size} bytes. Should be less than {MAX_REPO_SIZE} bytes and greater than {MIN_REPO_SIZE} bytes"
+        failure_notes = f"Model repo size is not up to requirements: {model_repo_size} bytes. Should be less than {MAX_REPO_SIZE} bytes and greater than {MIN_REPO_SIZE} bytes"
         logger.error(failure_notes)
         supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
         return supabaser.get_json_result(request.hash)
@@ -461,7 +461,7 @@ def start():
     args = parser.parse_args()
     num_queues = args.queues
     MAIN_API_PORT = args.main_api_port
-
+    app.state.event_logger_enabled = False
     try:
         event_logger = EventLogger()
         app.state.event_logger = event_logger
