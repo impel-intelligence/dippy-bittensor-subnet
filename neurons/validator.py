@@ -400,12 +400,13 @@ class Validator:
 
         async def _try_set_weights():
             try:
+                # Fetch latest metagraph
                 metagraph = self.subtensor.metagraph(self.config.netuid)
                 consensus = metagraph.C.cpu().numpy()
-                adjusted_weights = self.adjust_for_vtrust(self.weights.cpu().numpy(), consensus)
+                cpu_weights = self.weights.cpu().numpy()
+                adjusted_weights = self.adjust_for_vtrust(cpu_weights, consensus)
                 self.weights = torch.tensor(adjusted_weights, dtype=torch.float32)
                 self.weights.nan_to_num(0.0)
-                self.alt_weights.nan_to_num(0.0)
                 self.subtensor.set_weights(
                     netuid=self.config.netuid,
                     wallet=self.wallet,
@@ -417,8 +418,6 @@ class Validator:
                 weights_report = {"weights": {}}
                 for uid, score in enumerate(self.weights):
                     weights_report["weights"][uid] = score
-                for uid, score in enumerate(self.alt_weights):
-                    weights_report["alt_weights"][uid] = score
                 wandb_logger.safe_log(weights_report)
                 self._event_log("set_weights_complete", weights=weights_report)
             except Exception as e:
