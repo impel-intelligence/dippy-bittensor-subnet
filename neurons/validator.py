@@ -38,13 +38,8 @@ from shlex import split
 
 import constants
 from model.data import ModelMetadata, ModelId
-from model.model_tracker import ModelTracker
-from model.model_updater import ModelUpdater
+
 from model.scores import Scores, StatusEnum
-from model.storage.chain.chain_model_metadata_store import ChainModelMetadataStore
-from model.storage.disk.disk_model_store import DiskModelStore
-from model.storage.disk.utils import get_hf_download_path
-from model.storage.hugging_face.hugging_face_model_store import HuggingFaceModelStore
 from model import wandb_logger
 import traceback
 import threading
@@ -54,14 +49,9 @@ from rich.console import Console
 
 from utilities.compete import iswin
 from utilities.event_logger import EventLogger
-from utilities.miner_iterator import MinerIterator
 from utilities import utils
 from utilities.miner_registry import MinerEntry
-from utilities.perf_monitor import PerfMonitor
 
-import math
-import torch
-import typing
 import constants
 import traceback
 import bittensor as bt
@@ -74,8 +64,7 @@ from scipy import optimize, stats
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # Estimated ~July 15
-SWITCHOVER_BLOCK = 3395155
-# SWITCHOVER_BLOCK = 0
+SWITCHOVER_BLOCK = 3388360
 
 
 def compute_wins(
@@ -88,8 +77,7 @@ def compute_wins(
     and then calculates the win rate for each miner.
 
     Parameters:
-        miner_registry (Dict[int, MinerEntry]): A dictionary with miner IDs as keys and MinerEntry objects as values.
-            The MinerEntry object is expected to contain necessary attributes such as losses or scores needed for comparison.
+        miner_registry (Dict[int, MinerEntry]): A dictionary with miner UIDs as keys and MinerEntry objects as values.
 
     Returns:
         Tuple[Dict[int, int], Dict[int, float]]: A tuple containing two dictionaries:
@@ -112,6 +100,8 @@ def compute_wins(
             total_matches += 1
         # Calculate win rate for uid i
         win_rate[uid_i] = wins[uid_i] / total_matches if total_matches > 0 else 0
+        if miner_registry[uid_i].invalid:
+            win_rate[uid_i] = 0
 
     return wins, win_rate
 
@@ -140,8 +130,8 @@ def local_metadata() -> LocalMetadata:
         commit = result.stdout.decode().strip()
         assert len(commit) == 40, f"Invalid commit hash: {commit}"
         commit_hash = commit[:8]
-    except:
-        commit_hash = "unkown"
+    except Exception as e:
+        commit_hash = "unknown"
 
     bittensor_version = version("bittensor")
     return LocalMetadata(
@@ -167,12 +157,6 @@ class Validator:
             help="Number of blocks to wait before setting weights.",
         )
         parser.add_argument(
-            "--sample_min",
-            type=int,
-            default=15,
-            help="Number of uids to eval each step.",
-        )
-        parser.add_argument(
             "--dont_set_weights",
             action="store_true",
             help="Validator does not set weights on the chain.",
@@ -187,11 +171,6 @@ class Validator:
             action="store_true",
             help="Triggers run step immediately. NOT RECOMMENDED FOR PRODUCTION",
         )
-        parser.add_argument(
-            "--model_dir",
-            default=os.path.join(constants.ROOT_DIR, "model-store/"),
-            help="Where to store downloaded models",
-        )
         parser.add_argument("--netuid", type=str, default=constants.SUBNET_UID, help="The subnet UID.")
         parser.add_argument(
             "--genesis",
@@ -203,18 +182,6 @@ class Validator:
             type=str,
             default="bfloat16",
             help="datatype to load model in, either bfloat16 or float16",
-        )
-        parser.add_argument(
-            "--clean_period_minutes",
-            type=int,
-            default=1,
-            help="How often to delete unused models",
-        )
-        parser.add_argument(
-            "--update_delay_minutes",
-            type=int,
-            default=5,
-            help="Period between checking for new models from each UID",
         )
         parser.add_argument(
             "--do_sample",
@@ -299,7 +266,6 @@ class Validator:
         # Sync to consensus
         if not self.config.genesis:
             self.weights.copy_(self.metagraph.C)
-            self.alt_weights.copy_(self.metagraph.C)
 
         validator_uid = 0
         if not self.config.offline:
@@ -352,7 +318,8 @@ class Validator:
             self.event_logger.info(msg, **kwargs)
         return
 
-    def adjust_for_vtrust(self, weights: np.ndarray, consensus: np.ndarray, vtrust_min: float = 0.5):
+    @staticmethod
+    def adjust_for_vtrust(weights: np.ndarray, consensus: np.ndarray, vtrust_min: float = 0.5):
         """
         Interpolate between the current weight and the normalized consensus weights so that the
         vtrust does not fall below vturst_min, assuming the consensus does not change.
@@ -529,16 +496,15 @@ class Validator:
                 model_data = self.fetch_model_data(hotkey)
                 if model_data is None:
                     invalid_uids.append(uid)
+                    bt.logging.info(f"skip {uid} no model_data")
                     continue
                 # Skip model submitted after run step has begun
                 if model_data.block > cutoff_block:
                     invalid_uids.append(uid)
+                    bt.logging.info(f"skip {uid} submitted on {model_data.block} after {cutoff_block}")
                     continue
                 miner_registry[uid].block = model_data.block
                 miner_registry[uid].model_id = model_data.model_id
-                # _score_data = Scores()
-                # _score_data.status = StatusEnum.COMPLETED
-                # _score_data.qualitative_score = random.random()
 
                 _score_data = _get_model_score(
                     miner_registry[uid].model_id,
@@ -557,6 +523,7 @@ class Validator:
                 )
                 if _score_data.status == StatusEnum.QUEUED or _score_data.status == StatusEnum.RUNNING:
                     invalid_uids.append(uid)
+                    bt.logging.info(f"skip {uid} status is {_score_data.status}")
                     continue
                 if _score_data.status == StatusEnum.COMPLETED:
                     # switchover to new scoring mechanism after ~July 15
@@ -576,22 +543,22 @@ class Validator:
         bt.logging.info(
             f"all_uids : {len(miner_registry)} invalid uids: {len(invalid_uids)} cutoff_block : {cutoff_block}"
         )
-        # Remove uids that do not have a proper score
+        # Mark uids that do not have a proper score
         for uid in invalid_uids:
-            miner_registry.pop(uid, None)
+            miner_registry[uid].invalid = True
 
         # Compute wins and win rates per uid.
         wins, win_rate = compute_wins(miner_registry)
-        uids = sorted(miner_registry.keys())
+        sorted_uids = sorted(miner_registry.keys())
 
         # Compute softmaxed weights based on win rate.
-        model_weights = torch.tensor([win_rate[uid] for uid in uids], dtype=torch.float32)
+        model_weights = torch.tensor([win_rate[uid] for uid in sorted_uids], dtype=torch.float32)
         step_weights = torch.softmax(model_weights / constants.temperature, dim=0)
 
         # Update weights based on moving average.
         self.weights = torch.zeros_like(self.metagraph.S)
         new_weights = torch.zeros_like(self.metagraph.S)
-        for i, uid_i in enumerate(uids):
+        for i, uid_i in enumerate(sorted_uids):
             new_weights[uid_i] = step_weights[i]
         new_weights *= 1 / new_weights.sum()
         if new_weights.shape[0] < self.weights.shape[0]:
@@ -623,15 +590,15 @@ class Validator:
         wins,
         win_rate,
     ):
-        uids = miner_registry.keys()
+        sorted_uids = sorted(miner_registry.keys())
         # Build step log
         step_log = {
             "timestamp": time.time(),
-            "uids": uids,
+            "uids": sorted_uids,
             "uid_data": {},
             "step": self.epoch_step,
         }
-        for i, uid in enumerate(uids):
+        for i, uid in enumerate(sorted_uids):
             step_log["uid_data"][str(uid)] = {
                 "uid": uid,
                 "block": miner_registry[uid].block,
@@ -647,7 +614,7 @@ class Validator:
         table.add_column("win_total", style="magenta")
         table.add_column("weights", style="magenta")
         table.add_column("block", style="magenta")
-        for uid in uids:
+        for uid in sorted_uids:
             try:
                 table.add_row(
                     str(uid),
@@ -675,7 +642,7 @@ class Validator:
         # Sink step log.
         bt.logging.debug(f"Step results: {step_log}")
         scores_per_uid = {}
-        for uid in miner_registry.keys():
+        for uid in sorted_uids:
             scores_per_uid[uid] = miner_registry[uid].total_score
         wandb_logger.safe_log({"miner_scores/scored_per_uid": scores_per_uid})
         self._event_log("log_scores", scores=scores_per_uid, step=self.epoch_step)
