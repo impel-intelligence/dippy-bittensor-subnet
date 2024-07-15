@@ -208,10 +208,8 @@ def _evaluate_model(
     full_score_data.creativity_score = creativity_score
     full_score_data.vibe_score = vibe_score
     full_score_data.latency_score = latency_score
-
-    total_score = full_score_data.classic_score()
     # Enable after introducing new
-    # total_score = full_score_data.new_total_score()
+    total_score = full_score_data.new_total_score()
 
     try:
         update_row_supabase(
@@ -340,7 +338,6 @@ def evaluate_model(
     # log incoming request details
     if app.state.event_logger_enabled:
         app.state.event_logger.info("incoming_evaluate_request", extra=request_details)
-
     # verify hash
     if int(request.hash) != regenerate_hash(
         request.repo_namespace,
@@ -349,6 +346,7 @@ def evaluate_model(
         request.competition_id,
     ):
         raise HTTPException(status_code=400, detail="Hash does not match the model details")
+
     return supabaser.get_json_result(request.hash)
 
 

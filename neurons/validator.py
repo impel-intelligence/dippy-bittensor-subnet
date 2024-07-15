@@ -63,8 +63,6 @@ from bittensor.extrinsics.set_weights import set_weights_extrinsic
 from scipy import optimize, stats
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-# Estimated ~July 15
-SWITCHOVER_BLOCK = 3388360
 
 
 def compute_wins(
@@ -526,11 +524,7 @@ class Validator:
                     bt.logging.info(f"skip {uid} status is {_score_data.status}")
                     continue
                 if _score_data.status == StatusEnum.COMPLETED:
-                    # switchover to new scoring mechanism after ~July 15
-                    if cutoff_block < SWITCHOVER_BLOCK:
-                        miner_registry[uid].total_score = _score_data.classic_score()
-                    else:
-                        miner_registry[uid].total_score = _score_data.new_total_score()
+                    miner_registry[uid].total_score = _score_data.new_total_score()
                 elif _score_data.status == StatusEnum.FAILED:
                     miner_registry[uid].total_score = 0
             except Exception as e:
@@ -655,7 +649,7 @@ class Validator:
 
                 # Check if we're at a 20-minute mark
                 if minutes % 20 == 0 or self.config.immediate:
-                    bt.logging.debug(f"Running step at {current_time.strftime('%H:%M')}")
+                    bt.logging.info(f"Running step at {current_time.strftime('%H:%M')}")
                     success = await self.try_run_step(ttl=60 * 20)
                     self.global_step += 1
                     if success:
@@ -669,7 +663,7 @@ class Validator:
                     # Calculate minutes until next 20-minute mark
                     minutes_until_next = 20 - (minutes % 20)
                     next_run = current_time + dt.timedelta(minutes=minutes_until_next)
-                    bt.logging.debug(
+                    bt.logging.info(
                         f"Waiting {minutes_until_next} minutes until next run at {next_run.strftime('%H:%M')}"
                     )
 

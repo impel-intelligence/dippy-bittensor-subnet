@@ -57,7 +57,7 @@ class Scores(BaseModel):
             return self
         self.model_size_score = response.get("model_size_score", 0)
         self.creativity_score = response.get("creativity_score", 0)
-        self.qualitative_score = response.get("latency_score", 0)
+        self.qualitative_score = response.get("qualitative_score", 0)
         self.vibe_score = response.get("vibe_score", 0)
         self.coherence_score = response.get("coherence_score", 0)
         self.latency_score = response.get("latency_score", 0)

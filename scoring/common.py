@@ -49,7 +49,6 @@ class EvaluateModelRequest(BaseModel):
     repo_name: str
     chat_template_type: str
     hash: str
-    block: int = -1
     revision: Optional[str] = "main"
     competition_id: Optional[str] = "d1"
     admin_key: Optional[str] = "admin_key"
