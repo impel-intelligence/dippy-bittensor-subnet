@@ -337,7 +337,6 @@ def evaluate_model(
         "hotkey": hotkey,
         "coldkey": coldkey,
     }
-
     # log incoming request details
     if app.state.event_logger_enabled:
         app.state.event_logger.info("incoming_evaluate_request", extra=request_details)
@@ -350,49 +349,72 @@ def evaluate_model(
         request.competition_id,
     ):
         raise HTTPException(status_code=400, detail="Hash does not match the model details")
+    return supabaser.get_json_result(request.hash)
 
+
+def update_failure(new_entry, failure_notes):
+    # noop if already marked failed
+    if new_entry["status"] == StatusEnum.FAILED:
+        return new_entry
+    new_entry["status"] = StatusEnum.FAILED
+    new_entry["notes"] = failure_notes
+    return new_entry
+
+
+@app.post("/check_model")
+def check_model(
+    request: EvaluateModelRequest,
+):
+    # verify hash
+    if int(request.hash) != regenerate_hash(
+        request.repo_namespace,
+        request.repo_name,
+        request.chat_template_type,
+        request.competition_id,
+    ):
+        raise HTTPException(status_code=400, detail="Hash does not match the model details")
+    if request.admin_key != admin_key:
+        raise HTTPException(status_code=403, detail="invalid key")
     # check if the model already exists in the leaderboard
     # This needs to be a virtually atomic operation
     current_status = supabaser.get_json_result(request.hash)
 
-    if current_status is None and request.admin_key == admin_key:
-        logger.error("QUEUING NEW MODEL")
-        failure_notes = ""
-        # add the model to leaderboard with status QUEUED
-        new_entry_dict = {
-            "hash": request.hash,
-            "repo_namespace": request.repo_namespace,
-            "repo_name": request.repo_name,
-            "chat_template_type": request.chat_template_type,
-            "model_size_score": 0,
-            "qualitative_score": 0,
-            "creativity_score": 0,
-            "latency_score": 0,
-            "vibe_score": 0,
-            "total_score": 0,
-            "timestamp": pd.Timestamp.utcnow(),
-            "status": StatusEnum.QUEUED,
-            "coherence_score": 0,
-            "notes": failure_notes,
-        }
+    if current_status is not None:
+        return current_status
+    logger.error("QUEUING NEW MODEL")
+    failure_notes = ""
+    # add the model to leaderboard with status QUEUED
+    new_entry_dict = {
+        "hash": request.hash,
+        "repo_namespace": request.repo_namespace,
+        "repo_name": request.repo_name,
+        "chat_template_type": request.chat_template_type,
+        "model_size_score": 0,
+        "qualitative_score": 0,
+        "creativity_score": 0,
+        "latency_score": 0,
+        "vibe_score": 0,
+        "total_score": 0,
+        "timestamp": pd.Timestamp.utcnow(),
+        "status": StatusEnum.QUEUED,
+        "coherence_score": 0,
+        "notes": failure_notes,
+    }
 
-        logger.info("QUEUING: " + str(new_entry_dict))
-
-        update_row_supabase(new_entry_dict)
+    logger.info("QUEUING: " + str(new_entry_dict))
 
     # validate the request
     if request.chat_template_type not in chat_template_mappings:
         failure_notes = f"Chat template type not supported: {request.chat_template_type}"
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
-        return supabaser.get_json_result(request.hash)
+        new_entry_dict = update_failure(new_entry_dict, failure_notes)
+
     # validate the repo exists
     repo_id = f"{request.repo_namespace}/{request.repo_name}"
     if not repository_exists(repo_id):
         failure_notes = f"Huggingface repo not public: {repo_id}"
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
-        return supabaser.get_json_result(request.hash)
+        new_entry_dict = update_failure(new_entry_dict, failure_notes)
 
     # check repo size of the model to see if it is within the limit
     try:
@@ -400,35 +422,30 @@ def evaluate_model(
         if model_repo_details is None:
             failure_notes = "Error checking model repo size. Make sure the model repository exists and is accessible."
             logger.error(failure_notes)
-            supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
-            return supabaser.get_json_result(request.hash)
-
+            new_entry_dict = update_failure(new_entry_dict, failure_notes)
+        model_repo_size = model_repo_details.repo_size
+        new_entry_dict["model_hash"] = model_repo_details.model_hash
+        if model_repo_size > MAX_REPO_SIZE or model_repo_size < MIN_REPO_SIZE:
+            failure_notes = f"Model repo size is not up to requirements: {model_repo_size} bytes. Should be less than {MAX_REPO_SIZE} bytes and greater than {MIN_REPO_SIZE} bytes"
+            logger.error(failure_notes)
+            new_entry_dict = update_failure(new_entry_dict, failure_notes)
     except Exception as e:
         failure_notes = f"Error checking model repo size: {e}"
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
-        return supabaser.get_json_result(request.hash)
-    model_repo_size = model_repo_details.repo_size
-    supabaser.update_model_hash(request.hash, model_repo_details.model_hash)
-    if model_repo_size > MAX_REPO_SIZE or model_repo_size < MIN_REPO_SIZE:
-        failure_notes = f"Model repo size is not up to requirements: {model_repo_size} bytes. Should be less than {MAX_REPO_SIZE} bytes and greater than {MIN_REPO_SIZE} bytes"
-        logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
-        return supabaser.get_json_result(request.hash)
+        new_entry_dict = update_failure(new_entry_dict, failure_notes)
 
     # check model size by checking safetensors index
     model_size = get_model_size(request.repo_namespace, request.repo_name)
     if model_size is None:
         failure_notes = "Error getting model size. Make sure the model.index.safetensors.json file exists in the model repository. And it has the metadata->total_size field."
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
-        return supabaser.get_json_result(request.hash)
+        new_entry_dict = update_failure(new_entry_dict, failure_notes)
 
     if (model_size // 4) > MAX_MODEL_SIZE:
         failure_notes = f"Model size is too large: {model_size} bytes. Should be less than {MAX_MODEL_SIZE} bytes"
         logger.error(failure_notes)
-        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_notes)
-        return supabaser.get_json_result(request.hash)
+        new_entry_dict = update_failure(new_entry_dict, failure_notes)
+    update_row_supabase(new_entry_dict)
 
     return supabaser.get_json_result(request.hash)
 

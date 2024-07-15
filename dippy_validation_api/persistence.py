@@ -62,21 +62,6 @@ class SupabaseState:
             self.logger.error(f"Error updating minerboard : {e}")
             return None
 
-    def update_model_hash(self, hash: str, model_hash: str):
-        try:
-            response = (
-                self.client.table("leaderboard")
-                .update(
-                    {"hash": hash, "model_hash": model_hash},
-                    returning="minimal",
-                )
-                .execute()
-            )
-            return response
-        except Exception as e:
-            self.logger.error(f"Error updating leaderboard status for {hash}: {e}")
-            return None
-
     def get_json_result(self, hash):
         try:
             response = self.client.table("leaderboard").select("*").eq("hash", hash).execute()

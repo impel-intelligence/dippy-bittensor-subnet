@@ -5,7 +5,7 @@ import os, sys
 class EventLogger:
     def __init__(
         self,
-        filepath="/tmp/valapi_event_logs/validator_api_{time}.log",
+        filepath="/tmp/valapi_event_logs/validator_api_{time:UNIX}.log",
         level="INFO",
         stderr=False,
     ):

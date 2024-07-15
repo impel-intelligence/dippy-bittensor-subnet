@@ -129,8 +129,8 @@ class ModelQueue:
     def forever(self):
         while True:
             now = dt.datetime.now()
-            # Calculate the next 20-minute mark
-            minutes_until_next_epoch = 20 - (now.minute % 20)
+            # Calculate the next 5 minute mark
+            minutes_until_next_epoch = 5 - (now.minute % 5)
             next_epoch_minute_mark = now + dt.timedelta(minutes=minutes_until_next_epoch)
             next_epoch_minute_mark = next_epoch_minute_mark.replace(second=0, microsecond=0)
             sleep_time = (next_epoch_minute_mark - now).total_seconds()
@@ -147,12 +147,14 @@ class ModelQueue:
 
         queued = 0
         failed = 0
+        no_metadata = 0
         completed = 0
         for uid in all_uids:
             try:
                 hotkey = metagraph.hotkeys[uid]
                 metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.netuid, hotkey)
                 if metadata is None:
+                    no_metadata += 1
                     continue
                 commitment = metadata["info"]["fields"][0]
                 hex_data = commitment[list(commitment.keys())[0]][2:]
@@ -165,9 +167,6 @@ class ModelQueue:
                     name=model_id.name,
                     hash=model_id.hash,
                     template=model_id.chat_template,
-                    uid=uid,
-                    hotkey=hotkey,
-                    block=block,
                     config=self.config,
                     retryWithRemote=True,
                 )
@@ -195,7 +194,7 @@ class ModelQueue:
             except Exception as e:
                 self.logger.error(e)
                 continue
-        self.logger.info(f"queued {queued} failed {failed} completed {completed}")
+        self.logger.info(f"no_metadata {no_metadata} queued {queued} failed {failed} completed {completed}")
 
     def check_model_score(
         self,
@@ -203,9 +202,6 @@ class ModelQueue:
         name,
         hash,
         template,
-        uid,
-        hotkey,
-        block,
         config,
         retryWithRemote: bool = False,
     ) -> Scores:
@@ -213,9 +209,9 @@ class ModelQueue:
         # QUEUED, RUNNING, FAILED, COMPLETED
         # return (score, status)
         if config.use_local_validation_api and not retryWithRemote:
-            validation_endpoint = f"http://localhost:{config.local_validation_api_port}/evaluate_model"
+            validation_endpoint = f"http://localhost:{config.local_validation_api_port}/check_model"
         else:
-            validation_endpoint = f"{constants.VALIDATION_SERVER}/evaluate_model"
+            validation_endpoint = f"{constants.VALIDATION_SERVER}/check_model"
 
         # Construct the payload with the model name and chat template type
         payload = {
