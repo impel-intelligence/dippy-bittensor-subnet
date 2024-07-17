@@ -75,7 +75,7 @@ echo "DIPPY_KEY: $DIPPY_KEY"
 
 # Start the validation_api
 echo "Starting validation_api..."
-./../$VENV_NAME/bin/python3 validation_api.py --queues 1 --main-api-port $VALIDATION_API_PORT >> "logs/validation_api.log" 2>&1 &
-echo $! > logs/validation_api.pid
+./../$VENV_NAME/bin/python3 validation_api.py --queues 1 --main-api-port $VALIDATION_API_PORT >> "api_logs/validation_api.log" 2>&1 &
+echo $! > api_logs/validation_api.pid
 
 echo "All APIs are running in the background"

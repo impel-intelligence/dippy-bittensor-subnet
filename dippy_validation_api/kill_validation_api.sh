@@ -34,10 +34,10 @@ kill_child_processes() {
 
 echo "Stopping validation_api..."
 
-kill_process_group $(cat logs/validation_api.pid)
+kill_process_group $(cat api_logs/validation_api.pid)
 
-kill $(cat logs/validation_api.pid)
-rm -f logs/validation_api.pid
+kill $(cat api_logs/validation_api.pid)
+rm -f api_logs/validation_api.pid
 
 
 echo "All APIs and their subprocesses have been stopped and PID files removed."
