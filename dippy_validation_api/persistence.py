@@ -199,7 +199,7 @@ class SupabaseState:
 
 def debug():
     supabaser = SupabaseState()
-    x = supabaser.last_uploaded_model("5Gx9RiUqz5wxaDR6aAjWYQtsbVrCdN9sWMCnHbiXAXXtqm2a")
+    x = supabaser.last_uploaded_model("x")
     print(x)
     return
 

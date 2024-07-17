@@ -157,7 +157,7 @@ class Evaluator:
             if coherence_result["completed"] is False:
                 raise Exception("completion internal error")
             score = CoherenceScore(
-                coherence_score=coherence_result["coherence_score"],
+                coherence_score=coherence_result["coherence_score'"],
             )
             return score
         except Exception as e:
@@ -234,7 +234,7 @@ def entry():
         scores_data.qualitative_score = eval_result.eval_score
         scores_data.latency_score = eval_result.latency_score
         scores_data.creativity_score = eval_result.creativity_score
-        scores_data.model_size_score = eval_result.eval_model_size_score
+        scores_data.llm_size_score = eval_result.eval_model_size_score
         scores_data.coherence_score = coherence_result.coherence_score
         scores_data.vibe_score = vibe_result.vibe_score
 
@@ -245,7 +245,7 @@ def entry():
             )
             * 0.82
         )
-        final_model_size_score = scores_data.model_size_score * 0.06
+        final_model_size_score = scores_data.llm_size_score * 0.06
         final_latency_score = scores_data.latency_score * 0.06
         final_vibe_score = scores_data.vibe_score * 0.06
 
@@ -256,8 +256,7 @@ def entry():
         print(f"final_eval_score {final_eval_score}")
         print(f"coherence score: {scores_data.coherence_score}")
         print(f"score pre coherence: {total_score}")
-        print(f"classic score: {scores_data.classic_score()}")
-        print(f"new score: {scores_data.new_total_score()}")
+        print(f"total score: {scores_data.calculate_total_score()}")
     except Exception as e:
         print(e)
 

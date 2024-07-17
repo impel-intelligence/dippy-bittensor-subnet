@@ -1,4 +1,6 @@
 wheel
+setuptools
+docker
 packaging
 torch==2.2.1
 tqdm
@@ -9,3 +11,6 @@ supabase
 pandas
 threadpoolctl
 loguru
+typer
+fastapi
+uvicorn

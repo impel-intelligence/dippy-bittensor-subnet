@@ -11,7 +11,7 @@ import pandas as pd
 import torch
 from fastapi import FastAPI, HTTPException, Header, Response
 from huggingface_hub import HfApi, HfFolder
-from huggingface_hub.hf_api import HfApi, RepositoryNotFoundError
+from huggingface_hub.hf_api import HfApi, RepositoryNotFoundError, GatedRepoError
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
@@ -105,14 +105,15 @@ def start_staggered_queues(num_queues: int, stagger_seconds: int):
     return processes
 
 
-def _model_evaluation_step():
+def _model_evaluation_step(duplicate: bool = False):
     request = get_next_model_to_eval()
     if request is None:  # Sentinel value to exit the process
         logger.info("No more models to evaluate. Sleep for 15 seconds before checking again.")
         return
     logger.info(f"Model evaluation queued: {request}")
     try:
-        _duplicate_model(request)
+        if duplicate:
+            _duplicate_model(request)
         result = _evaluate_model(request)
         logger.info(f"Model evaluation completed: {result}")
         app.state.event_logger.info("model_eval_queue_complete", result=result, request=request)
@@ -219,13 +220,13 @@ def _evaluate_model(
 
     full_score_data = Scores()
     full_score_data.qualitative_score = eval_score
-    full_score_data.model_size_score = model_size_score
+    full_score_data.llm_size_score = model_size_score
     full_score_data.coherence_score = coherence_score
     full_score_data.creativity_score = creativity_score
     full_score_data.vibe_score = vibe_score
     full_score_data.latency_score = latency_score
     # Enable after introducing new
-    total_score = full_score_data.new_total_score()
+    total_score = full_score_data.calculate_total_score()
 
     try:
         update_row_supabase(
@@ -262,6 +263,9 @@ def repository_exists(repo_id):
         hf_api.repo_info(repo_id)  # 'username/reponame'
         return True
     except RepositoryNotFoundError:
+        return False
+    except GatedRepoError:
+        # If we get a GatedRepoError, it means the repo exists but is private
         return False
     except Exception as e:
         app.state.event_logger.error("hf_repo_error", error=e)
@@ -415,7 +419,7 @@ def check_model(
         if last_model_status != StatusEnum.FAILED:
             last_block = last_model['block']
             current_block = request.block
-            # eg block 3001 - 2001 = 1000 
+            # eg block 3001 - 2001 = 1000
             if current_block - last_block < BLOCK_RATE_LIMIT:
                 failure_notes = f"""
                 Exceeded rate limit. 
