@@ -23,15 +23,44 @@ class SupabaseState:
             response = (
                 self.client.table("leaderboard")
                 .update(
-                    {"hash": hash, "status": status, "notes": notes},
-                    returning="minimal",
+                    {"status": status, "notes": notes},
                 )
+                .eq("hash", hash)
                 .execute()
             )
             return response
         except Exception as e:
             self.logger.error(f"Error updating leaderboard status for {hash}: {e}")
             return None
+
+    def record_exists_with_model_hash(self, model_hash_value: str) -> bool:
+        if not model_hash_value:  # Check if the provided model_hash_value is empty
+            return False
+
+        # Query the table to check for the existence of the model_hash
+        response = (self.client.table("leaderboard").
+                        select("model_hash").
+                        neq("model_hash", "").
+                        neq("model_hash", None).
+                        eq("model_hash", model_hash_value).
+                        limit(1).execute())
+
+        # Return True if there is at least one record that matches the criteria
+        return len(response.data) > 0
+
+
+    def last_uploaded_model(self, miner_hotkey: str):
+        data = (
+           self.client.table("minerboard").
+           select("*, leaderboard(status)").
+           eq("hotkey", miner_hotkey).
+           execute()
+            )
+        if len(data.data) > 0:
+            return data.data[0]
+        return None
+
+
 
     def update_minerboard_status(
         self,
@@ -167,3 +196,14 @@ class SupabaseState:
         except Exception as e:
             self.logger.error(f"Error fetching next model to evaluate: {e}")
             return None
+
+def debug():
+    supabaser = SupabaseState()
+    x = supabaser.last_uploaded_model("x")
+    print(x)
+    return
+
+
+
+if __name__ == "__main__":
+    debug()

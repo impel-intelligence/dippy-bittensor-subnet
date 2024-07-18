@@ -38,7 +38,7 @@ from shlex import split
 
 import constants
 from model.data import ModelMetadata, ModelId
-
+from huggingface_hub import get_safetensors_metadata
 from model.scores import Scores, StatusEnum
 from model import wandb_logger
 import traceback
@@ -63,7 +63,7 @@ from bittensor.extrinsics.set_weights import set_weights_extrinsic
 from scipy import optimize, stats
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
+PRIVATE_BLOCK_CUTOFF = 3411000
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
@@ -82,6 +82,7 @@ def compute_wins(
             - The first dictionary maps miner IDs to their respective number of wins.
             - The second dictionary maps miner IDs to their win rate, calculated as the number of wins divided by the total comparisons.
     """
+
     uids = miner_registry.keys()
     wins = {uid: 0 for uid in uids}
     win_rate = {uid: 0 for uid in uids}
@@ -243,7 +244,6 @@ class Validator:
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
-        self.dendrite = bt.dendrite(wallet=self.wallet)
         self.metagraph: bt.metagraph = self.subtensor.metagraph(self.config.netuid)
         torch.backends.cudnn.benchmark = True
 
@@ -441,6 +441,7 @@ class Validator:
             bt.logging.error(f"Failed to run step : {e} {traceback.format_exc()}")
             return False
 
+
     def fetch_model_data(self, hotkey: str) -> Optional[MinerEntry]:
         try:
             metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.config.netuid, hotkey)
@@ -501,6 +502,16 @@ class Validator:
                     invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} after {cutoff_block}")
                     continue
+                if model_data.block > PRIVATE_BLOCK_CUTOFF:
+                    try:
+                        safetensors_metadata = get_safetensors_metadata(f"{model_data.model_id.namespace}/{model_data.model_id.name}")
+                        safetensors_size = safetensors_metadata.metadata['total_size']
+                        miner_registry[uid].safetensors_model_size = safetensors_size
+                    except Exception as e:
+                        bt.logging.error(f"could not fetch safetensors info : {e}")
+                        invalid_uids.append(uid)
+                        continue
+
                 miner_registry[uid].block = model_data.block
                 miner_registry[uid].model_id = model_data.model_id
 
@@ -524,22 +535,43 @@ class Validator:
                     bt.logging.info(f"skip {uid} status is {_score_data.status}")
                     continue
                 if _score_data.status == StatusEnum.COMPLETED:
-                    miner_registry[uid].total_score = _score_data.new_total_score()
+                    miner_registry[uid].total_score = _score_data.calculate_total_score()
                 elif _score_data.status == StatusEnum.FAILED:
                     miner_registry[uid].total_score = 0
             except Exception as e:
                 bt.logging.error(f"could not update for {uid}:{hotkey} {e}")
                 invalid_uids.append(uid)
                 continue
-            sleep_time = random.uniform(0.3, 0.9)
-            time.sleep(sleep_time)
 
         bt.logging.info(
             f"all_uids : {len(miner_registry)} invalid uids: {len(invalid_uids)} cutoff_block : {cutoff_block}"
         )
+
+        def update_with_punished_similarity(
+                incumbent: MinerEntry,
+                challenger: MinerEntry
+        ):
+            incumbent_size = incumbent.safetensors_model_size
+            challenger_size = challenger.safetensors_model_size
+            if incumbent_size == challenger_size:
+                incumbent.invalid = True if challenger.block < incumbent.block else False
+                challenger.invalid = True if challenger.block > incumbent.block else False
+            incumbent_score = incumbent.total_score
+            challenger_score = incumbent.total_score
+            # Punish if model is below 0.3% difference
+            # if abs(incumbent_score - challenger_score) < 0.03:
+            #     incumbent.invalid = True if challenger.block < incumbent.block else False
+            #     challenger.invalid = True if challenger.block > incumbent.block else False
+        keys = list(miner_registry.keys())
+        for i in range(len(keys)):
+            for j in range(i + 1, len(keys)):
+                update_with_punished_similarity(miner_registry[keys[i]], miner_registry[keys[j]])
+
         # Mark uids that do not have a proper score
         for uid in invalid_uids:
             miner_registry[uid].invalid = True
+            miner_registry[uid].total_score = 0
+
 
         # Compute wins and win rates per uid.
         wins, win_rate = compute_wins(miner_registry)

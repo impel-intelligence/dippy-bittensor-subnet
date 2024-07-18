@@ -15,6 +15,8 @@ from utilities.validation_utils import parse_size
 SAFETENSORS_FILE = "model.safetensors.index.json"
 env = {}
 env["GIT_LFS_SKIP_SMUDGE"] = "1"
+env['GIT_TERMINAL_PROMPT'] = '0'  # Disable prompts for username/password
+env['GIT_ASKPASS'] = 'echo'  # This ensures that no password prompt is shown
 
 
 @dataclass
@@ -58,10 +60,10 @@ def check_model_repo_details(hash: str, repo_namespace: str, repo_name: str) -> 
     - int: The total size of the model files in bytes
     """
     now = datetime.utcnow().isoformat()
-    repo_dir = f"/tmp/validation_api_models/{hash}/models--{repo_namespace}--{repo_name}/{now}"
 
     max_retries = 3
     for attempt in range(max_retries):
+        repo_dir = f"/tmp/validation_api_models/{hash}/models--{repo_namespace}--{repo_name}/{now}/{attempt}"
         try:
             subprocess.run(
                 [
@@ -72,7 +74,7 @@ def check_model_repo_details(hash: str, repo_namespace: str, repo_name: str) -> 
                 ],
                 check=True,
                 env=env,
-                timeout=15,
+                timeout=600,
             )
             lfs_files_output = subprocess.check_output(
                 ["git", "lfs", "ls-files", "-s"],

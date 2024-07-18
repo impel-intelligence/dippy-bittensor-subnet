@@ -52,6 +52,8 @@ class EvaluateModelRequest(BaseModel):
     revision: Optional[str] = "main"
     competition_id: Optional[str] = "d1"
     admin_key: Optional[str] = "admin_key"
+    hotkey: Optional[str] = ""
+    block: Optional[int] = 0
 
     def to_args(self) -> str:
         return " ".join([self.repo_name, self.repo_namespace, self.chat_template_type, self.hash])

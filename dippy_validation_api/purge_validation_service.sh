@@ -14,7 +14,7 @@ remove_files() {
 }
 
 # Remove files in ./logs
-remove_files "./logs"
+remove_files "./api_logs"
 
 # Remove files in /tmp/valapi_event_logs
 remove_files "/tmp/valapi_event_logs"

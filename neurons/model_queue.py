@@ -167,6 +167,8 @@ class ModelQueue:
                     name=model_id.name,
                     hash=model_id.hash,
                     template=model_id.chat_template,
+                    block=block,
+                    hotkey=hotkey,
                     config=self.config,
                     retryWithRemote=True,
                 )
@@ -202,6 +204,8 @@ class ModelQueue:
         name,
         hash,
         template,
+        block,
+        hotkey,
         config,
         retryWithRemote: bool = False,
     ) -> Scores:
@@ -219,6 +223,8 @@ class ModelQueue:
             "repo_name": name,
             "hash": hash,
             "chat_template_type": template,
+            "block": block,
+            "hotkey": hotkey,
         }
         score_data = Scores()
 

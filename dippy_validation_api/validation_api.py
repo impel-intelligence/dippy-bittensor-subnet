@@ -11,7 +11,7 @@ import pandas as pd
 import torch
 from fastapi import FastAPI, HTTPException, Header, Response
 from huggingface_hub import HfApi, HfFolder
-from huggingface_hub.hf_api import HfApi, RepositoryNotFoundError
+from huggingface_hub.hf_api import HfApi, RepositoryNotFoundError, GatedRepoError
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
@@ -26,9 +26,11 @@ from utilities.repo_details import (
     check_model_repo_details,
     ModelRepo,
 )
+from dippy_validation_api.duplicate import duplicate
 from utilities.event_logger import EventLogger
 from scoring.common import EvaluateModelRequest
 from dotenv import load_dotenv
+from huggingface_hub import HfApi, list_models
 
 load_dotenv()
 
@@ -56,6 +58,8 @@ SAMPLE_SIZE_VIBE_SCORE = 128  # number of samples to evaluate the model from the
 
 SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
+
+BLOCK_RATE_LIMIT = 1800 # Every 1800 blocks = 6 hours
 app = FastAPI()
 evaluator = Evaluator()
 supabaser = SupabaseState()
@@ -63,6 +67,7 @@ supabaser = SupabaseState()
 logger = logging.getLogger("uvicorn")
 
 logging.basicConfig(level=logging.ERROR)
+
 
 app.state.leaderboard_update_time = None
 app.state.leaderboard = None
@@ -100,13 +105,15 @@ def start_staggered_queues(num_queues: int, stagger_seconds: int):
     return processes
 
 
-def _model_evaluation_step():
+def _model_evaluation_step(duplicate: bool = False):
     request = get_next_model_to_eval()
     if request is None:  # Sentinel value to exit the process
         logger.info("No more models to evaluate. Sleep for 15 seconds before checking again.")
         return
     logger.info(f"Model evaluation queued: {request}")
     try:
+        if duplicate:
+            _duplicate_model(request)
         result = _evaluate_model(request)
         logger.info(f"Model evaluation completed: {result}")
         app.state.event_logger.info("model_eval_queue_complete", result=result, request=request)
@@ -129,6 +136,16 @@ def get_next_model_to_eval():
         chat_template_type=response["chat_template_type"],
         hash=response["hash"],
     )
+
+def _duplicate_model(request: EvaluateModelRequest):
+    try:
+        duplicate(request.repo_namespace, request.repo_name)
+    except Exception as e:
+        supabaser.update_leaderboard_status(
+            request.hash,
+            "FAILED",
+            f"model error : {e}",
+        )
 
 
 def _evaluate_model(
@@ -179,7 +196,7 @@ def _evaluate_model(
 
     except Exception as e:
         error_string = f"Error calling vibe_score job with message: {e}"
-        supabaser.update_leaderboard_status(request.hash, "FAILED", error_string)
+        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, error_string)
         raise RuntimeError(error_string)
 
     vibe_score = vibe_score_response.vibe_score
@@ -203,13 +220,13 @@ def _evaluate_model(
 
     full_score_data = Scores()
     full_score_data.qualitative_score = eval_score
-    full_score_data.model_size_score = model_size_score
+    full_score_data.llm_size_score = model_size_score
     full_score_data.coherence_score = coherence_score
     full_score_data.creativity_score = creativity_score
     full_score_data.vibe_score = vibe_score
     full_score_data.latency_score = latency_score
     # Enable after introducing new
-    total_score = full_score_data.new_total_score()
+    total_score = full_score_data.calculate_total_score()
 
     try:
         update_row_supabase(
@@ -241,19 +258,14 @@ def _evaluate_model(
     return result
 
 
-def update_supabase_leaderboard_status(
-    hash,
-    status,
-    notes="",
-):
-    return supabaser.update_leaderboard_status(hash, status, notes)
-
-
 def repository_exists(repo_id):
     try:
         hf_api.repo_info(repo_id)  # 'username/reponame'
         return True
     except RepositoryNotFoundError:
+        return False
+    except GatedRepoError:
+        # If we get a GatedRepoError, it means the repo exists but is private
         return False
     except Exception as e:
         app.state.event_logger.error("hf_repo_error", error=e)
@@ -302,8 +314,7 @@ def minerboard_update(
         uid=request.uid,
         hotkey=request.hotkey,
         block=request.block,
-    )
-
+        )
     return Response(status_code=200)
 
 
@@ -373,6 +384,7 @@ def check_model(
         raise HTTPException(status_code=400, detail="Hash does not match the model details")
     if request.admin_key != admin_key:
         raise HTTPException(status_code=403, detail="invalid key")
+
     # check if the model already exists in the leaderboard
     # This needs to be a virtually atomic operation
     current_status = supabaser.get_json_result(request.hash)
@@ -400,6 +412,21 @@ def check_model(
     }
 
     logger.info("QUEUING: " + str(new_entry_dict))
+
+    last_model = supabaser.last_uploaded_model(request.hotkey)
+    if last_model is not None:
+        last_model_status = StatusEnum.from_string(last_model['leaderboard']['status'])
+        if last_model_status != StatusEnum.FAILED:
+            last_block = last_model['block']
+            current_block = request.block
+            # eg block 3001 - 2001 = 1000
+            if current_block - last_block < BLOCK_RATE_LIMIT:
+                failure_notes = f"""
+                Exceeded rate limit. 
+                Last submitted model was block {last_block}. 
+                Current submission {current_block} which exceeds minimum {BLOCK_RATE_LIMIT}"""
+                logger.error(failure_notes)
+                new_entry_dict = update_failure(new_entry_dict, failure_notes)
 
     # validate the request
     if request.chat_template_type not in chat_template_mappings:
@@ -443,6 +470,12 @@ def check_model(
         failure_notes = f"Model size is too large: {model_size} bytes. Should be less than {MAX_MODEL_SIZE} bytes"
         logger.error(failure_notes)
         new_entry_dict = update_failure(new_entry_dict, failure_notes)
+
+    if new_entry_dict["model_hash"] and supabaser.record_exists_with_model_hash(new_entry_dict["model_hash"]):
+        existing_hash = new_entry_dict["model_hash"]
+        failure_notes = f"model hash {existing_hash} already exists"
+        logger.error(failure_notes)
+        new_entry_dict = update_failure(new_entry_dict, failure_notes)
     update_row_supabase(new_entry_dict)
 
     return supabaser.get_json_result(request.hash)
@@ -458,7 +491,6 @@ def update_row_supabase(row):
 @app.get("/leaderboard")
 def display_leaderboard():
     return supabaser.get_leaderboard()
-
 
 def start():
     # add command line arguments for the ports of the two apis

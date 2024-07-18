@@ -25,7 +25,9 @@ WORKDIR /app
 COPY requirements.eval.txt requirements.txt
 
 RUN uv pip install --system -r requirements.txt --no-build-isolation
-
+# Create empty directory and file for pyproject
+RUN mkdir ./dippy_validation_api
+RUN touch ./dippy_validation_api/__init__.py
 COPY scoring ./scoring
 COPY utilities ./utilities
 COPY template ./template
