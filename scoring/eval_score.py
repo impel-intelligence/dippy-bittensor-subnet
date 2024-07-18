@@ -229,6 +229,7 @@ def eval_score(
             gc.collect()
             torch.cuda.empty_cache()
 
+    # 1 - (0.35 - entropy) ** 2
     average_prob = total_prob / count
     average_entropy = total_entropy / count
     print(f"Average probability of target tokens: {average_prob}")

@@ -157,7 +157,7 @@ class Evaluator:
             if coherence_result["completed"] is False:
                 raise Exception("completion internal error")
             score = CoherenceScore(
-                coherence_score=coherence_result["coherence_score'"],
+                coherence_score=coherence_result["coherence_score"],
             )
             return score
         except Exception as e:
