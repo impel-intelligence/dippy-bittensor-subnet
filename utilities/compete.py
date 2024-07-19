@@ -38,10 +38,7 @@ def iswin(score_i, score_j, block_i, block_j):
     Returns:
         bool: True if loss i is better, False otherwise.
     """
-    # Reward any model that can deliver highest caliber of performance
-    if score_i >= PENALTY_THRESHOLD and score_j >= PENALTY_THRESHOLD:
-        return score_i > score_j
-    penalty = calculate_penalty(block_i, block_j)
+    penalty = MAX_PENALTY
 
     # Adjust score based on timestamp and pretrain epsilon
     score_i = (1 - penalty) * score_i if block_i > block_j else score_i

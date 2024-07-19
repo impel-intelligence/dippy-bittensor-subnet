@@ -63,7 +63,6 @@ from bittensor.extrinsics.set_weights import set_weights_extrinsic
 from scipy import optimize, stats
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-PRIVATE_BLOCK_CUTOFF = 3411000
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
@@ -99,8 +98,8 @@ def compute_wins(
             total_matches += 1
         # Calculate win rate for uid i
         win_rate[uid_i] = wins[uid_i] / total_matches if total_matches > 0 else 0
-        if miner_registry[uid_i].invalid:
-            win_rate[uid_i] = 0
+        if miner_registry[uid_i].invalid or miner_registry[uid_i].total_score == 0:
+            win_rate[uid_i] = float("-inf")
 
     return wins, win_rate
 
@@ -549,27 +548,6 @@ class Validator:
         bt.logging.info(
             f"all_uids : {len(miner_registry)} invalid uids: {len(invalid_uids)} cutoff_block : {cutoff_block}"
         )
-
-        def update_with_punished_similarity(
-                incumbent: MinerEntry,
-                challenger: MinerEntry
-        ):
-            incumbent_size = incumbent.safetensors_model_size
-            challenger_size = challenger.safetensors_model_size
-            if incumbent_size == challenger_size:
-                incumbent.invalid = True if challenger.block < incumbent.block else False
-                challenger.invalid = True if challenger.block > incumbent.block else False
-            incumbent_score = incumbent.total_score
-            challenger_score = incumbent.total_score
-            # Punish if model is below 0.3% difference
-            # if abs(incumbent_score - challenger_score) < 0.03:
-            #     incumbent.invalid = True if challenger.block < incumbent.block else False
-            #     challenger.invalid = True if challenger.block > incumbent.block else False
-        keys = list(miner_registry.keys())
-        for i in range(len(keys)):
-            for j in range(i + 1, len(keys)):
-                update_with_punished_similarity(miner_registry[keys[i]], miner_registry[keys[j]])
-
         # Mark uids that do not have a proper score
         for uid in invalid_uids:
             miner_registry[uid].invalid = True
