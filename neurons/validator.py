@@ -502,15 +502,18 @@ class Validator:
                     invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} after {cutoff_block}")
                     continue
-                if model_data.block > PRIVATE_BLOCK_CUTOFF:
-                    try:
-                        safetensors_metadata = get_safetensors_metadata(f"{model_data.model_id.namespace}/{model_data.model_id.name}")
-                        safetensors_size = safetensors_metadata.metadata['total_size']
-                        miner_registry[uid].safetensors_model_size = safetensors_size
-                    except Exception as e:
-                        bt.logging.error(f"could not fetch safetensors info : {e}")
-                        invalid_uids.append(uid)
-                        continue
+                if model_data.model_id is None:
+                    invalid_uids.append(uid)
+                    bt.logging.info(f"skip {uid} no model_id available")
+                    continue
+                try:
+                    safetensors_metadata = get_safetensors_metadata(f"{model_data.model_id.namespace}/{model_data.model_id.name}")
+                    safetensors_size = safetensors_metadata.metadata['total_size']
+                    miner_registry[uid].safetensors_model_size = safetensors_size
+                except Exception as e:
+                    bt.logging.error(f"could not fetch safetensors info : {e}")
+                    invalid_uids.append(uid)
+                    continue
 
                 miner_registry[uid].block = model_data.block
                 miner_registry[uid].model_id = model_data.model_id
