@@ -40,17 +40,17 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 
 **Phase 1:** 
 - [x] Subnet launch with robust pipeline for roleplay LLM evaluation on public datasets and response length 
-- [ ] New, evolving evaluation datasets curated by community as well as contributed by Dippy's mobile app users
 - [x] Public model leaderboard based on evaluation criteria
+- [x] Introduce Coherence and Creativity as a criteria for live model evaluation
 
 **Phase 2:** 
-- [ ] Multiple TAO themed characters introduced in the app with different personalities (funny, romantic, therapeutic etc)
-- [ ] Top models rotated among characters and evaluated in the app based on user metrics (engagement time, conversation length, retention etc)
-- [ ] Models with the highest score in each personality type are chosen as "expert" models and made publicly available
+- [ ] Publicly release front-end powered by top miner submitted model of the week
+- [ ] Segment model submission into different "expert" categories (funny, romantic, therapeutic etc)
+- [ ] Models with the highest score in each personality type are chosen as "expert" models and made publicly available on the front-end
 
 **Phase 3:** 
 - [ ] New Mixture of Experts model made as a baseline based on the "expert" models chosen from Phase 2
-- [ ] Robust pipeline to evaluate new MOE model submissions against all the characters in the app
+- [ ] Robust pipeline to evaluate new MOE model submissions against live evaluation criteria
 - [ ] Expand the state of the art in roleplay LLMs through continuous iteration and data collection
 
 ## Overview of Miner and Validator Functionality
