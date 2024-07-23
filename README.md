@@ -2,7 +2,7 @@
 
 # Dippy SN11: Creating The World's Best Open-Source Roleplay LLM <!-- omit in toc -->
 
-*Check out the beta version of our [Front-End](http://34.122.94.116:8000/play)! Also, please check our [Launch Tweet](https://twitter.com/angad_ai/status/1788993280002175415) for our vision of creating the world's best open-source roleplay LLM.*
+*Check out the beta version of our [Front-End](https://bittensor.dippy.ai/play)! Also, please check our [Launch Tweet](https://twitter.com/angad_ai/status/1788993280002175415) for our vision of creating the world's best open-source roleplay LLM.*
 
 [![DIPPY](/assests/banner.png)](https://dippy.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
