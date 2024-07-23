@@ -59,7 +59,7 @@ SAMPLE_SIZE_VIBE_SCORE = 128  # number of samples to evaluate the model from the
 SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
 
-BLOCK_RATE_LIMIT = 3600 # Every 3600 blocks = 12 hours
+BLOCK_RATE_LIMIT = 3600  # Every 3600 blocks = 12 hours
 app = FastAPI()
 evaluator = Evaluator()
 supabaser = SupabaseState()
@@ -136,6 +136,7 @@ def get_next_model_to_eval():
         chat_template_type=response["chat_template_type"],
         hash=response["hash"],
     )
+
 
 def _duplicate_model(request: EvaluateModelRequest):
     try:
@@ -314,7 +315,7 @@ def minerboard_update(
         uid=request.uid,
         hotkey=request.hotkey,
         block=request.block,
-        )
+    )
     return Response(status_code=200)
 
 
@@ -415,9 +416,9 @@ def check_model(
 
     last_model = supabaser.last_uploaded_model(request.hotkey)
     if last_model is not None:
-        last_model_status = StatusEnum.from_string(last_model['leaderboard']['status'])
+        last_model_status = StatusEnum.from_string(last_model["leaderboard"]["status"])
         if last_model_status != StatusEnum.FAILED:
-            last_block = last_model['block']
+            last_block = last_model["block"]
             current_block = request.block
             # eg block 3001 - 2001 = 1000
             if current_block - last_block < BLOCK_RATE_LIMIT:
@@ -491,6 +492,7 @@ def update_row_supabase(row):
 @app.get("/leaderboard")
 def display_leaderboard():
     return supabaser.get_leaderboard()
+
 
 def start():
     # add command line arguments for the ports of the two apis

@@ -72,5 +72,3 @@ class Scores(BaseModel):
         total_score += VIBE_SCORE_WEIGHT * self.vibe_score
         total_score = total_score * self.coherence_score
         return total_score
-
-
