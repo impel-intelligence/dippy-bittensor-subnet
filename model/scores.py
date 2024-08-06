@@ -63,12 +63,13 @@ class Scores(BaseModel):
         self.latency_score = response.get("latency_score", 0)
         return self
 
-    def calculate_total_score(self) -> float:
+    def calculate_total_score(self, adjust_coherence: bool = False) -> float:
         q_score = self.adjusted_q_score(self.qualitative_score, self.creativity_score)
         total_score = 0
         total_score += QUALITATIVE_SCORE_WEIGHT * q_score
         total_score += MODEL_SIZE_SCORE_WEIGHT * self.llm_size_score
         total_score += LATENCY_SCORE_WEIGHT * self.latency_score
         total_score += VIBE_SCORE_WEIGHT * self.vibe_score
+        self.coherence_score = 1 if self.coherence_score > 0.9 else 0
         total_score = total_score * self.coherence_score
         return total_score

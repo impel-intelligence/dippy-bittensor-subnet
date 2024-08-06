@@ -497,10 +497,7 @@ from datasets import load_dataset
 
 
 class SyntheticCoherenceDataset(Dataset):
-    def __init__(self, dataset_name="DippyAI/synthetic_dataset_public"):
-        alt_dataset = os.environ.get("COHERENCE_DATASET_NAME", None)
-        if alt_dataset is not None:
-            dataset_name = alt_dataset
+    def __init__(self, dataset_name="DippyAI/dippa_dataset_test0"):
         datass = load_dataset(dataset_name, token=os.environ.get("HF_TOKEN")).get("train", [])
 
         self.dataset = self.process_data(datass)
