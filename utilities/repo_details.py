@@ -15,8 +15,8 @@ from utilities.validation_utils import parse_size
 SAFETENSORS_FILE = "model.safetensors.index.json"
 env = {}
 env["GIT_LFS_SKIP_SMUDGE"] = "1"
-env['GIT_TERMINAL_PROMPT'] = '0'  # Disable prompts for username/password
-env['GIT_ASKPASS'] = 'echo'  # This ensures that no password prompt is shown
+env["GIT_TERMINAL_PROMPT"] = "0"  # Disable prompts for username/password
+env["GIT_ASKPASS"] = "echo"  # This ensures that no password prompt is shown
 
 
 @dataclass

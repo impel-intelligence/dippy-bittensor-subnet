@@ -4,6 +4,7 @@ model-store/
 dependencies_installed
 data/
 datasets/
+evalsets/
 dippy_validation_api/logs/*
 dippy_validation_api/api_logs/*
 *_env

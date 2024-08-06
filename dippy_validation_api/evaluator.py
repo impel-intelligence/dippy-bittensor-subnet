@@ -54,14 +54,21 @@ class Evaluator:
                 "bind": "/app/datasets",
                 "mode": "rw",
             },
-            # f"{DEFAULT_HOME_DIR}/scoring": {
-            #     "bind": "/app/scoring",
-            #     "mode": "ro",
-            # },
         }
+        if trace:
+            self.volume_configuration[f"{DEFAULT_HOME_DIR}/scoring"] = {
+                "bind": "/app/scoring",
+                "mode": "ro",
+            }
+            self.volume_configuration[f"{DEFAULT_HOME_DIR}/evalsets"] = {
+                "bind": "/app/evalsets",
+                "mode": "rw",
+            }
         self.device_requests = [docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])]
         self.env = {
             "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY"),
+            "HF_TOKEN": os.environ.get("HF_TOKEN"),
+            "COHERENCE_DATASET_NAME": os.environ.get("COHERENCE_DATASET_NAME"),
         }
         self.trace = trace
 
@@ -73,7 +80,7 @@ class Evaluator:
         # Configure volume mounting
         volumes = self.volume_configuration
         # Configure GPU support
-        device_requests = [docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])]
+        device_requests = self.device_requests
 
         command = f"{job_type} {request.to_args()}"
         self.logger.debug("command", command=command)
@@ -92,9 +99,6 @@ class Evaluator:
 
         while container.status == "created":
             time.sleep(10)
-            container.reload()
-        while container.status == "running":
-            time.sleep(30)
             container.reload()
         result = container.wait()
         self.logger.debug(f"container_run_complete, {result}")
@@ -225,6 +229,7 @@ def entry():
         if isinstance(vibe_result, RunError):
             raise Exception(vibe_result.error)
         print(f"vibe_result : {vibe_result}")
+        print("coherence start")
         coherence_result = evaler.coherence_score(req)
         if isinstance(coherence_result, RunError):
             raise Exception(coherence_result.error)

@@ -12,8 +12,10 @@ MAX_MODEL_SIZE = 32 * 1024 * 1024 * 1024  # in bytes
 MIN_REPO_SIZE = 10 * 1024 * 1024  # in bytes
 MAX_REPO_SIZE = 80 * 1024 * 1024 * 1024  #  in bytes
 SAMPLE_SIZE = 1024  # number of samples to evaluate the model from the dataset
+EVALUATION_DATASET_SAMPLE_SIZE = 1024  # number of samples to evaluate the model from the dataset
 BATCH_SIZE = 4  # batch size for evaluation
-VOCAB_TRUNCATION = 1000  # truncate the vocab to top n tokens
+# VOCAB_TRUNCATION = 1000  # truncate the vocab to top n tokens
+VOCAB_TRUNCATION = 10  # truncate the vocab to top n tokens
 PROB_TOP_K = 10  # the correct token should be in the top n tokens, else a score of 0 is given to that token
 # TODO: this will truncate the sequence to MAX_SEQ_LEN tokens. This is a temporary fix to make the evaluation faster.
 MAX_SEQ_LEN = (
@@ -23,14 +25,18 @@ MAX_SEQ_LEN = (
 MAX_SEQ_LEN_VIBE_SCORE = 2048  # maximum sequence length that should be allowed for vibe score calculation because it is slow with longer sequences than this
 BATCH_SIZE_VIBE_SCORE = 4  # batch size for vibe score calculation
 SAMPLE_SIZE_VIBE_SCORE = 128  # number of samples to evaluate the model from the dataset for vibe score calculation
+SAMPLE_SIZE_COHERENCE_SCORE = (
+    128  # number of samples to evaluate the model from the dataset for coherence score calculation
+)
 
 VLLM_GPU_MEMORY = 0.4
 
 SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
-COHERENCE_SAMPLE_SIZE = 16
+COHERENCE_BATCH_SIZE = 16
 COHERENCE_MAX_TOKENS = 1024
-COHERENCE_NUM_EVALS = 64
+# COHERENCE_NUM_EVALS = 64
+COHERENCE_NUM_EVALS = 128
 COHERENCE_EVAL_MODEL = "gpt-4o"
 
 PIPPA_FILENAME = "pippa_deduped.jsonl"
@@ -38,6 +44,11 @@ PROMPTS_1_FILENAME = "opus-writing-prompts-1-sharegpt.jsonl"
 PROMPTS_2_FILENAME = "opus-writing-prompts-2-sharegpt.jsonl"
 
 DATASET_DIR = "./datasets"
+
+
+EVAL_WORKING_DIR = "evalsets"
+DIPPA_DATASET_MAX_PARTITIONS = 4
+PIPPA_DATASET_PATH = "datasets/pippa_deduped.jsonl"
 
 
 def full_path(filename: str) -> str:

@@ -12,3 +12,4 @@ loguru
 numpy
 typer
 openai
+datasets

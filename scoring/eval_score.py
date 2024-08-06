@@ -4,18 +4,13 @@ from typing import Any
 import tqdm
 import torch
 import math
-import huggingface_hub
-from transformers import AutoTokenizer, BitsAndBytesConfig, AutoModelForCausalLM
+from transformers import AutoTokenizer
 from accelerate.utils import release_memory
-from accelerate import PartialState
 
 # Import necessary modules and functions from the main API file
 from scoring.common import (
-    MAX_AVG_LATENCY,
     MAX_GENERATION_LENGTH,
-    MAX_MODEL_SIZE,
     PROB_TOP_K,
-    SAMPLE_SIZE,
     VOCAB_TRUNCATION,
     MAX_SEQ_LEN,
     BATCH_SIZE,
@@ -24,13 +19,78 @@ from scoring.common import (
 )
 
 max_entropy = math.log(VOCAB_TRUNCATION)
-from scoring.common import chat_template_mappings
-from scoring.dataset import PippaDataset
+
+
+def cleanup(model, model_downloaded, request: EvaluateModelRequest):
+    """
+    Clean up the model data from memory and disk
+    """
+    # delete the model from memory
+    with torch.no_grad():
+        if model:
+            release_memory(model)
+            model = torch.Tensor([0])  # create a tensor to free up memory
+            del model
+            gc.collect()
+            torch.cuda.empty_cache()
+            try:
+                torch.distributed.destroy_process_group()
+            except:
+                print("No process group to destroy")
+
+
+def _prepare_dummy_inputs(model, device="cuda"):
+    max_model_len = min(model.config.max_position_embeddings, MAX_SEQ_LEN)
+    input_ids = torch.randint(
+        0,
+        model.config.vocab_size,
+        (BATCH_SIZE, max_model_len),
+        requires_grad=False,
+        dtype=torch.int64,
+        device=device,
+    )
+    attention_mask = torch.ones_like(input_ids, requires_grad=False, dtype=torch.int64, device=device)
+    return input_ids, attention_mask
+
+
+def warmup_model(model):
+    """
+    Warm up the model by running it on a dummy input
+    """
+    # run the max sequence length input through the model with batch size BATCH_SIZE
+    model.eval()
+    latencies = []
+    with torch.no_grad():
+        for _ in range(10):
+            start_time = torch.cuda.Event(enable_timing=True)
+            end_time = torch.cuda.Event(enable_timing=True)
+            inputs = _prepare_dummy_inputs(model, device="cuda")
+            start_time.record()
+            outputs = model(*inputs)
+            end_time.record()
+            # Waits for everything to finish running
+            torch.cuda.synchronize()
+
+            latency = start_time.elapsed_time(end_time)  # Measure latency in milliseconds
+            if torch.isnan(outputs.logits).any():
+                raise ValueError("NaN values detected in the logits tensor")
+
+            latencies.append(latency)
+            del outputs, inputs
+            gc.collect()
+            torch.cuda.empty_cache()
+
+        average_latency = sum(latencies) / len(latencies)
+        print(f"Average model inference latency over 10 runs: {average_latency} ms")
+
+    # Test discount latency
+    return average_latency * 0.95
 
 
 def eval_score(
     model: Any,
     sampled_data: list[tuple],
+    pippa_data: list[tuple],
     input_tokenizer: AutoTokenizer,
     output_tokenizer: AutoTokenizer,
     request: EvaluateModelRequest,
@@ -46,10 +106,14 @@ def eval_score(
         raise ValueError("Model does not have a maximum position embedding set")
 
     # unzip the sampled data
-    contexts, target_texts, _ = zip(*sampled_data)
+    sample_contexts, sample_target_texts, _ = zip(*sampled_data)
+    pippa_contexts, pippa_target_texts, _ = zip(*pippa_data)
+
     total_prob = 0
     total_entropy = 0
     count = 0
+    contexts = sample_contexts + pippa_contexts
+    target_texts = sample_target_texts + pippa_target_texts
 
     # now we want to calculate the average probability of the target tokens that model assigns.
     batch_size = BATCH_SIZE
@@ -147,7 +211,7 @@ def eval_score(
 
             if debug:
                 # print the input tokens and top 10 predicted tokens
-                print(f"Input: {input_tokenizer.decode(input_ids[0])}")
+                print(f"Input: {input_tokenizer.decode(input_ids[0], skip_special_tokens=True)}")
                 for j in range(len(input_ids[0])):
                     if targets_ids_mask[0][j].item() == 1:
                         actual_id = input_ids[0][j].item()
@@ -237,217 +301,4 @@ def eval_score(
     return {
         "average_prob": average_prob,
         "average_entropy": average_entropy,
-    }
-
-
-def _prepare_dummy_inputs(model, device="cuda"):
-    max_model_len = min(model.config.max_position_embeddings, MAX_SEQ_LEN)
-    input_ids = torch.randint(
-        0,
-        model.config.vocab_size,
-        (BATCH_SIZE, max_model_len),
-        requires_grad=False,
-        dtype=torch.int64,
-        device=device,
-    )
-    attention_mask = torch.ones_like(input_ids, requires_grad=False, dtype=torch.int64, device=device)
-    return input_ids, attention_mask
-
-
-def warmup_model(model):
-    """
-    Warm up the model by running it on a dummy input
-    """
-    # run the max sequence length input through the model with batch size BATCH_SIZE
-    model.eval()
-    latencies = []
-    with torch.no_grad():
-        for _ in range(10):
-            start_time = torch.cuda.Event(enable_timing=True)
-            end_time = torch.cuda.Event(enable_timing=True)
-            inputs = _prepare_dummy_inputs(model, device="cuda")
-            start_time.record()
-            outputs = model(*inputs)
-            end_time.record()
-            # Waits for everything to finish running
-            torch.cuda.synchronize()
-
-            latency = start_time.elapsed_time(end_time)  # Measure latency in milliseconds
-            if torch.isnan(outputs.logits).any():
-                raise ValueError("NaN values detected in the logits tensor")
-
-            latencies.append(latency)
-            del outputs, inputs
-            gc.collect()
-            torch.cuda.empty_cache()
-
-        average_latency = sum(latencies) / len(latencies)
-        print(f"Average model inference latency over 10 runs: {average_latency} ms")
-
-    # Test discount latency
-    return average_latency * 0.95
-
-
-def cleanup(model, model_downloaded, request: EvaluateModelRequest):
-    """
-    Clean up the model data from memory and disk
-    """
-    # delete the model from memory
-    with torch.no_grad():
-        if model:
-            release_memory(model)
-            model = torch.Tensor([0])  # create a tensor to free up memory
-            del model
-            gc.collect()
-            torch.cuda.empty_cache()
-            try:
-                torch.distributed.destroy_process_group()
-            except:
-                print("No process group to destroy")
-
-
-def get_eval_score(request: EvaluateModelRequest):
-    # Now download the weights
-    print("Downloading model weights")
-    model_downloaded = False
-    failure_reason = ""
-    # make dir data/hash if not exist
-    if not os.path.exists(f"data/{str(request.hash)}"):
-        os.makedirs(f"data/{str(request.hash)}")
-
-    quant_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,  # This does not hurt performance much according to
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
-    try:
-        model = AutoModelForCausalLM.from_pretrained(
-            f"{request.repo_namespace}/{request.repo_name}",
-            revision=request.revision,
-            quantization_config=quant_config,
-            attn_implementation="flash_attention_2",
-            torch_dtype=torch.bfloat16,
-            device_map="auto",
-            # cache_dir=f"data/{str(request.hash)}",
-            # force_download=True
-        )
-
-    except Exception as e:
-        try:
-            print(
-                f"Error loading model in 4 bit quant with flash attention.: {e}. Trying vanilla load. This might cause OOM."
-            )
-            model = AutoModelForCausalLM.from_pretrained(
-                f"{request.repo_namespace}/{request.repo_name}",
-                revision=request.revision,
-                device_map="auto",
-                # cache_dir = f"data/{str(request.hash)}",
-                # force_download=True
-            )
-        except Exception as e:
-            raise Exception(f"Error loading model: {str(e)}")
-
-    model.eval()
-
-    # get the tokenizers
-    print("Downloading tokenizer")
-    try:
-        input_tokenizer = AutoTokenizer.from_pretrained(
-            f"{request.repo_namespace}/{request.repo_name}",
-            padding_side="left",
-            force_download=True,
-        )
-        output_tokenizer = AutoTokenizer.from_pretrained(
-            f"{request.repo_namespace}/{request.repo_name}",
-            padding_side="right",
-            force_download=True,
-        )
-        if input_tokenizer.pad_token is None:
-            input_tokenizer.pad_token = input_tokenizer.eos_token  # add a pad token if not present
-            input_tokenizer.pad_token_id = input_tokenizer.eos_token_id
-            output_tokenizer.pad_token = output_tokenizer.eos_token  # add a pad token if not present
-            output_tokenizer.pad_token_id = output_tokenizer.eos_token_id
-
-        print("Tokenizer downloaded successfully")
-    except Exception as e:
-        failure_reason = str(e)
-        cleanup(model, model_downloaded, request)
-        raise Exception("Error downloading tokenizer: " + failure_reason)
-
-    # warm up the model
-    print("Warming up model")
-    try:
-        avg_latency = warmup_model(model)
-        if not avg_latency:  # either 0 or None
-            raise Exception("Error warming up model")
-
-    except Exception as e:
-        failure_reason = str(e)
-        cleanup(model, model_downloaded, request)
-        raise Exception("Error warming up model: " + failure_reason)
-
-    # get latency score
-    latency_score = 1 - (avg_latency / MAX_AVG_LATENCY)
-    print("Latency score: ", latency_score)
-
-    # get model size score
-    try:
-        print("Model weights downloaded successfully")
-        model_size = model.get_memory_footprint()
-        print("Model size: ", model_size, " Bytes")
-        print("Model number of parameters: ", model.num_parameters())
-        # check if model size is within the limit. If not, return an error
-        if model_size > MAX_MODEL_SIZE:
-            del model
-            torch.cuda.empty_cache()
-            raise Exception(
-                f"Model is too large when loaded in 4 bit quant: {model_size} Bytes. Should be less than {MAX_MODEL_SIZE} Bytes",
-            )
-
-        model_size_score = 1 - (model_size / MAX_MODEL_SIZE)
-        print("Model size score: ", model_size_score)
-        model_downloaded = True
-    except Exception as e:
-        failure_reason = str(e)
-        cleanup(None, model_downloaded, request)
-        raise Exception("Error loading model: " + failure_reason)
-    dataset = PippaDataset(
-        "datasets/pippa_deduped.jsonl",
-        max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LENGTH - 200,
-    )
-    # set the chat template params
-    dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
-
-    print("Sampling dataset")
-    try:
-        sampled_data = dataset.sample_dataset(SAMPLE_SIZE)
-    except Exception as e:
-        failure_reason = str(e)
-        cleanup(model, model_downloaded, request)
-        raise Exception(f"Error sampling dataset: {failure_reason}")
-
-    # Part 2: Evaluate the model
-    print("Evaluating model")
-    try:
-        evaluation_results = eval_score(
-            model,
-            sampled_data,
-            input_tokenizer=input_tokenizer,
-            output_tokenizer=output_tokenizer,
-            request=request,
-        )
-        evaluation_score = evaluation_results["average_prob"]
-        entropy_score = evaluation_results["average_entropy"]
-        print("Model evaluation score: ", evaluation_score)
-        print("Model entropy (creativity) score: ", entropy_score)
-    except Exception as e:
-        failure_reason = str(e)
-        cleanup(model, model_downloaded, request)
-        raise Exception("Error evaluating model: " + failure_reason)
-
-    return {
-        "eval_score": evaluation_score,
-        "latency_score": latency_score,
-        "model_size_score": model_size_score,
-        "creativity_score": entropy_score,
     }

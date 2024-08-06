@@ -58,7 +58,7 @@ def _run(
     request: EvaluateModelRequest,
     run_type: str,
 ):
-    from scoring.eval_score import get_eval_score
+    from scoring.get_eval_score import get_eval_score
     from scoring.coherence_score import get_coherence_score
     from scoring.vibe_score import get_vibe_match_score
 

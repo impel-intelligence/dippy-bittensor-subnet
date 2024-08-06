@@ -64,6 +64,7 @@ from scipy import optimize, stats
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
 ) -> Tuple[Dict[int, int], Dict[int, float]]:
@@ -440,7 +441,6 @@ class Validator:
             bt.logging.error(f"Failed to run step : {e} {traceback.format_exc()}")
             return False
 
-
     def fetch_model_data(self, hotkey: str) -> Optional[MinerEntry]:
         try:
             metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.config.netuid, hotkey)
@@ -544,7 +544,6 @@ class Validator:
         for uid in invalid_uids:
             miner_registry[uid].invalid = True
             miner_registry[uid].total_score = 0
-
 
         # Compute wins and win rates per uid.
         wins, win_rate = compute_wins(miner_registry)
