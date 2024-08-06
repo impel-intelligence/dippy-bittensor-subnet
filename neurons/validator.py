@@ -64,6 +64,13 @@ from scipy import optimize, stats
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+# models submitted before this block will be considered "old"
+# rough date of cutover: Aug 6
+NEW_MODEL_SUBMISSION_CUTOFF_BLOCK = 3552500
+# after this block, "old" models will be marked invalid
+# rough date of cutover: Aug 8
+SCORE_CHANGE_BLOCK = 3_557_700
+
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
@@ -475,7 +482,7 @@ class Validator:
         synced = await self.try_sync_metagraph(ttl=60)
         if not synced:
             return False
-        cutoff_block = self.metagraph.block.item()
+        current_block = self.metagraph.block.item()
         competition_parameters = constants.COMPETITION_SCHEDULE[0]
         telemetry_report(self.local_metadata)
         all_uids = self.metagraph.uids.tolist()
@@ -497,9 +504,13 @@ class Validator:
                     bt.logging.info(f"skip {uid} no model_data")
                     continue
                 # Skip model submitted after run step has begun
-                if model_data.block > cutoff_block:
+                if model_data.block > current_block:
                     invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} submitted on {model_data.block} after {cutoff_block}")
+                    bt.logging.info(f"skip {uid} submitted on {model_data.block} after {current_block}")
+                    continue
+                # old models submitted are marked invalid after certain time
+                if current_block >= SCORE_CHANGE_BLOCK and model_data.block < NEW_MODEL_SUBMISSION_CUTOFF_BLOCK :
+                    invalid_uids.append(uid)
                     continue
                 if model_data.model_id is None:
                     invalid_uids.append(uid)
@@ -538,7 +549,7 @@ class Validator:
                 continue
 
         bt.logging.info(
-            f"all_uids : {len(miner_registry)} invalid uids: {len(invalid_uids)} cutoff_block : {cutoff_block}"
+            f"all_uids : {len(miner_registry)} invalid uids: {len(invalid_uids)} cutoff_block : {current_block}"
         )
         # Mark uids that do not have a proper score
         for uid in invalid_uids:
