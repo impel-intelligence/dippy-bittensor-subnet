@@ -70,6 +70,6 @@ class Scores(BaseModel):
         total_score += MODEL_SIZE_SCORE_WEIGHT * self.llm_size_score
         total_score += LATENCY_SCORE_WEIGHT * self.latency_score
         total_score += VIBE_SCORE_WEIGHT * self.vibe_score
-        self.coherence_score = 1 if self.coherence_score > 0.9 else 0
+        self.coherence_score = 1 if self.coherence_score >= 0.9 else 0
         total_score = total_score * self.coherence_score
         return total_score

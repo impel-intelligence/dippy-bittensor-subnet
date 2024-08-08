@@ -149,7 +149,7 @@ def get_eval_score(request: EvaluateModelRequest):
     print("Sampling dataset")
     try:
         sampled_data = dataset.sample_dataset(EVALUATION_DATASET_SAMPLE_SIZE)
-        pippa_data = pippa_dataset.sample_dataset(EVALUATION_DATASET_SAMPLE_SIZE)
+        pippa_data = pippa_dataset.sample_dataset(1)
     except Exception as e:
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)

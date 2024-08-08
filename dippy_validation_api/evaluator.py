@@ -32,7 +32,7 @@ class VibeScore(BaseModel):
 
 
 class CoherenceScore(BaseModel):
-    coherence_score: int
+    coherence_score: float
 
 
 class Evaluator:

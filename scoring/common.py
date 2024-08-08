@@ -25,9 +25,9 @@ MAX_SEQ_LEN = (
 MAX_SEQ_LEN_VIBE_SCORE = 2048  # maximum sequence length that should be allowed for vibe score calculation because it is slow with longer sequences than this
 BATCH_SIZE_VIBE_SCORE = 4  # batch size for vibe score calculation
 SAMPLE_SIZE_VIBE_SCORE = 128  # number of samples to evaluate the model from the dataset for vibe score calculation
-SAMPLE_SIZE_COHERENCE_SCORE = (
-    128  # number of samples to evaluate the model from the dataset for coherence score calculation
-)
+# number of samples to evaluate the model from the dataset for coherence score calculation
+SAMPLE_SIZE_COHERENCE_SCORE = 128
+
 
 VLLM_GPU_MEMORY = 0.4
 
@@ -65,6 +65,7 @@ class EvaluateModelRequest(BaseModel):
     admin_key: Optional[str] = "admin_key"
     hotkey: Optional[str] = ""
     block: Optional[int] = 0
+    tokenizer: Optional[str] = "llama"
 
     def to_args(self) -> str:
         return " ".join([self.repo_name, self.repo_namespace, self.chat_template_type, self.hash])

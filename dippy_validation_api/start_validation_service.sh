@@ -1,10 +1,19 @@
 #!/bin/bash
 
 # Create a log directory if it doesn't exist
-mkdir -p log
+mkdir -p api_logs
+# Parse command line arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --venv_name) VENV_NAME="$2"; shift ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
 
-# Virtual environment name
-VENV_NAME="model_validation_venv"
+# Set default value for VENV_NAME if not provided
+VENV_NAME=${VENV_NAME:-"model_validation_venv"}
+
 
 # Function to check if a port is in use
 is_port_in_use() {
