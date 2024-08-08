@@ -107,13 +107,12 @@ def eval_score(
 
     # unzip the sampled data
     sample_contexts, sample_target_texts, _ = zip(*sampled_data)
-    pippa_contexts, pippa_target_texts, _ = zip(*pippa_data)
 
     total_prob = 0
     total_entropy = 0
     count = 0
-    contexts = sample_contexts + pippa_contexts
-    target_texts = sample_target_texts + pippa_target_texts
+    contexts = sample_contexts
+    target_texts = sample_target_texts
 
     # now we want to calculate the average probability of the target tokens that model assigns.
     batch_size = BATCH_SIZE
