@@ -127,7 +127,7 @@ Before logging in, make sure you have the `wandb` Python package installed. If y
 it yet, you can do so using pip:
 
 ```bash
-# Should already be installed with the sturdy repo
+# Should already be installed with the repo
 pip install wandb
 ```
 
