@@ -59,7 +59,7 @@ SAMPLE_SIZE_VIBE_SCORE = 128  # number of samples to evaluate the model from the
 SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
 
-BLOCK_RATE_LIMIT = 3600  # Every 3600 blocks = 12 hours
+BLOCK_RATE_LIMIT = 14400  # Every 14400 blocks = 48 hours
 app = FastAPI()
 evaluator = Evaluator()
 supabaser = SupabaseState()
