@@ -126,95 +126,6 @@ The themes of the conversation are: {data_point['categories']}."""
 
         return [self[i] for i in indices]
 
-
-class BippaDataset(Dataset):
-    def __init__(self, filename, max_input_len):
-        self.filename = filename
-        with open(filename, "r") as f:
-            data = [json.loads(line) for line in f]
-
-        self.dataset = self.process_data(data, max_input_len)
-
-        self._chat_template = None
-        self._tokenizer = None
-
-    def set_chat_template_params(self, template_path: str, tokenizer: AutoTokenizer):
-        self._chat_template = jinja2.Template(open(template_path).read())
-        self._tokenizer = tokenizer
-
-    def process_data(self, data, max_input_len):
-        """
-        Convert pippa dataset to a format that can be used downstream.
-        """
-        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")  # to get approx token count
-        converted_dataset = []
-        for data_point in data:
-            system_prompt = data_point["system_prompt"]
-            messages = [{"role": "system", "content": system_prompt}]
-            # get index of the last message from the chatbot
-            input_len_so_far = len(encoding.encode(messages[0]["content"]))
-
-            for chat_message in data_point["messages"]:
-                input_len_so_far += len(encoding.encode(chat_message["content"]))
-                if input_len_so_far > max_input_len:
-                    break
-                entry = {
-                    "role": chat_message["role"],
-                    "content": chat_message["content"],
-                }
-                messages.append(entry)
-            character_response = messages.pop()["content"]
-            last_user_message = messages[-2]["content"]
-
-            converted_dataset.append(
-                {
-                    "messages": messages,
-                    "last_user_message": last_user_message,  # get the last user message
-                    "character_response": character_response,
-                }
-            )
-
-        return converted_dataset
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, idx):
-        if self._chat_template is None:
-            raise ValueError("Chat template is not set. Please set the chat template before generating chat.")
-
-        if self._tokenizer is None:
-            raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
-
-        chat_input = self._chat_template.render(
-            bos_token=self._tokenizer.bos_token,
-            eos_token=self._tokenizer.eos_token,
-            messages=self.dataset[idx]["messages"],
-            include_beginning_of_conversation=True,
-            add_generation_prompt=True,
-        )  # shouldn't end with eos token
-
-        if chat_input.endswith(self._tokenizer.eos_token):
-            chat_input = chat_input[: -len(self._tokenizer.eos_token)]
-
-        if not chat_input.startswith(self._tokenizer.bos_token):
-            chat_input = f"{self._tokenizer.bos_token}{chat_input}"
-
-        return (
-            chat_input,  # context
-            f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}",  # target text
-            self.dataset[idx]["last_user_message"],  # last user message
-        )
-
-    def sample_dataset(self, n: int):
-        # get indices of the dataset
-        indices = list(range(len(self.dataset)))
-        random.shuffle(indices)
-        indices = indices[:n]
-
-        return [self[i] for i in indices]
-
-
 DATASET_CACHE_DIR = "evalsets"
 hf_token = os.environ.get("HF_TOKEN")
 
@@ -228,94 +139,6 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
         partition_data = [d["data"] for d in dataset_[partition]]
         partial_data.extend(partition_data)
     return partial_data
-
-
-class DippaFormattedDataset(Dataset):
-    def __init__(self, dataset_name: str, partitions: List[str], max_input_len: int):
-        self.dataset_name = dataset_name
-
-        data = prepare_from_hf_dataset(dataset_name, partitions)
-
-        self.dataset = self.process_data(data, max_input_len)
-
-        self._chat_template = None
-        self._tokenizer = None
-
-    def set_chat_template_params(self, template_path: str, tokenizer: AutoTokenizer):
-        self._chat_template = jinja2.Template(open(template_path).read())
-        self._tokenizer = tokenizer
-
-    def process_data(self, data, max_input_len):
-        """
-        Convert pippa dataset to a format that can be used downstream.
-        """
-        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")  # to get approx token count
-        converted_dataset = []
-        for data_point in data:
-            system_prompt = data_point["system_prompt"]
-            messages = [{"role": "system", "content": system_prompt}]
-            # get index of the last message from the chatbot
-            input_len_so_far = len(encoding.encode(messages[0]["content"]))
-
-            for chat_message in data_point["messages"]:
-                input_len_so_far += len(encoding.encode(chat_message["content"]))
-                if input_len_so_far > max_input_len:
-                    break
-                entry = {
-                    "role": chat_message["role"],
-                    "content": chat_message["content"],
-                }
-                messages.append(entry)
-            character_response = messages.pop()["content"]
-            last_user_message = messages[-2]["content"]
-
-            converted_dataset.append(
-                {
-                    "messages": messages,
-                    "last_user_message": last_user_message,  # get the last user message
-                    "character_response": character_response,
-                }
-            )
-
-        return converted_dataset
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, idx):
-        if self._chat_template is None:
-            raise ValueError("Chat template is not set. Please set the chat template before generating chat.")
-
-        if self._tokenizer is None:
-            raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
-
-        chat_input = self._chat_template.render(
-            bos_token=self._tokenizer.bos_token,
-            eos_token=self._tokenizer.eos_token,
-            messages=self.dataset[idx]["messages"],
-            include_beginning_of_conversation=True,
-            add_generation_prompt=True,
-        )  # shouldn't end with eos token
-
-        if chat_input.endswith(self._tokenizer.eos_token):
-            chat_input = chat_input[: -len(self._tokenizer.eos_token)]
-
-        if not chat_input.startswith(self._tokenizer.bos_token):
-            chat_input = f"{self._tokenizer.bos_token}{chat_input}"
-
-        return (
-            chat_input,  # context
-            f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}",  # target text
-            self.dataset[idx]["last_user_message"],  # last user message
-        )
-
-    def sample_dataset(self, n: int):
-        # get indices of the dataset
-        indices = list(range(len(self.dataset)))
-        random.shuffle(indices)
-        indices = indices[:n]
-
-        return [self[i] for i in indices]
 
 import requests
 DATASET_URL = "http://75.101.234.38:8111/latest"
@@ -349,20 +172,26 @@ class StreamedSyntheticDataset(Dataset):
             system_prompt = data_point["system_prompt"]
             messages = [{"role": "system", "content": system_prompt}]
             # get index of the last message from the chatbot
-            input_len_so_far = len(encoding.encode(messages[0]["content"]))
-
+            input_len_so_far = 0
+            limit_reached = False
             for chat_message in data_point["messages"]:
                 input_len_so_far += len(encoding.encode(chat_message["content"]))
                 if input_len_so_far > max_input_len:
+                    limit_reached = True
                     break
+
                 entry = {
                     "role": chat_message["role"],
                     "content": chat_message["content"],
                 }
                 messages.append(entry)
-            character_response = messages.pop()["content"]
-            last_user_message = messages[-2]["content"]
+            if limit_reached:
+                continue
 
+            character_response = messages.pop()["content"]
+            last_user_message = next((msg["content"] for msg in reversed(messages) if msg["role"] == "user"), None)
+            if last_user_message is None:
+                continue
             converted_dataset.append(
                 {
                     "messages": messages,
@@ -497,7 +326,7 @@ from datasets import load_dataset
 
 
 class SyntheticCoherenceDataset(Dataset):
-    def __init__(self, dataset_name="DippyAI/dippa_dataset_test0"):
+    def __init__(self, dataset_name="DippyAI/dippy_synthetic_dataset"):
         datass = load_dataset(dataset_name, token=os.environ.get("HF_TOKEN")).get("train", [])
 
         self.dataset = self.process_data(datass)
@@ -578,3 +407,196 @@ class SyntheticCoherenceDataset(Dataset):
         indices = indices[:n]
 
         return [self[i] for i in indices]
+
+class JSONLDataset(Dataset):
+    def __init__(self, filenames, max_input_len):
+        all_data = []
+        for filename in filenames:
+            with open(filename, "r") as f:
+                data = [json.loads(line) for line in f]
+                all_data.append(data)
+
+        self.dataset = self.process_data(all_data, max_input_len)
+        self._chat_template = None
+        self._tokenizer = None
+
+    def set_chat_template_params(self, template_path: str, tokenizer: AutoTokenizer):
+        self._chat_template = jinja2.Template(open(template_path).read())
+        self._tokenizer = tokenizer
+
+    def process_data(self, data, max_input_len):
+        converted_dataset = []
+
+        for data_point in data:
+            for entry in data_point:
+                # Always only 3 messages
+                system_prompt = entry["system_prompt"]
+                augmented_system_prompt = f"""
+                You are an assistant playing the following character:
+                {system_prompt}
+                """
+                messages = [
+                    {"role": "system", "content": augmented_system_prompt},
+                ]
+
+                first_message = entry["messages"][0]
+                messages.append(
+                    {"role": "user", "content": first_message["content"]},
+                )
+                converted_dataset.append(
+                    {
+                        "messages": messages,
+                    }
+                )
+
+        return converted_dataset
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def new_input(self, messages):
+        chat_input = self._chat_template.render(
+            bos_token=self._tokenizer.bos_token,
+            eos_token=self._tokenizer.eos_token,
+            messages=messages,
+            include_beginning_of_conversation=True,
+            add_generation_prompt=True,
+        )  # shouldn't end with eos token
+
+        if chat_input.endswith(self._tokenizer.eos_token):
+            chat_input = chat_input[: -len(self._tokenizer.eos_token)]
+
+        if not chat_input.startswith(self._tokenizer.bos_token):
+            chat_input = f"{self._tokenizer.bos_token}{chat_input}"
+        return chat_input
+    def __getitem__(self, idx):
+        if self._chat_template is None:
+            raise ValueError("Chat template is not set. Please set the chat template before generating chat.")
+
+        if self._tokenizer is None:
+            raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
+        chat_input = self._chat_template.render(
+            bos_token=self._tokenizer.bos_token,
+            eos_token=self._tokenizer.eos_token,
+            messages=self.dataset[idx]["messages"],
+            include_beginning_of_conversation=True,
+            add_generation_prompt=True,
+        )  # shouldn't end with eos token
+
+        if chat_input.endswith(self._tokenizer.eos_token):
+            chat_input = chat_input[: -len(self._tokenizer.eos_token)]
+
+        if not chat_input.startswith(self._tokenizer.bos_token):
+            chat_input = f"{self._tokenizer.bos_token}{chat_input}"
+        return (
+            chat_input,  # context
+            self.dataset[idx]["messages"],  # full message history
+        )
+
+    def sample_dataset(self, n: int):
+        # get indices of the dataset
+        indices = list(range(len(self.dataset)))
+        random.shuffle(indices)
+        indices = indices[:n]
+
+        return [self[i] for i in indices]
+
+class PersonaHubDataset(Dataset):
+    def __init__(self, max_input_len):
+
+        all_data = load_dataset("DippyAI/personahub_augmented_v0", cache_dir=DATASET_CACHE_DIR)
+        partitions = []
+        for partition in all_data:
+            partition_data = all_data.get(partition)
+            for chunk in partition_data:
+                prompt = chunk.get('data')
+                partitions.append(prompt)
+        self.dataset = self.process_data(partitions, max_input_len)
+        self._chat_template = None
+        self._tokenizer = None
+
+
+
+    def set_chat_template_params(self, template_path: str, tokenizer: AutoTokenizer):
+        self._chat_template = jinja2.Template(open(template_path).read())
+        self._tokenizer = tokenizer
+
+    def process_data(self, data, max_input_len):
+        converted_dataset = []
+
+        for entry in data:
+            system_prompt = entry["system_prompt"]
+            augmented_system_prompt = f"""
+            You are an assistant playing the following character:
+            {system_prompt}
+            """
+            messages = [
+                {"role": "system", "content": augmented_system_prompt},
+            ]
+
+            first_message = entry["messages"][0]
+            messages.append(
+                {"role": "user", "content": first_message["content"]},
+            )
+            converted_dataset.append(
+                {
+                    "messages": messages,
+                }
+            )
+
+        return converted_dataset
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def new_input(self, messages):
+        chat_input = self._chat_template.render(
+            bos_token=self._tokenizer.bos_token,
+            eos_token=self._tokenizer.eos_token,
+            messages=messages,
+            include_beginning_of_conversation=True,
+            add_generation_prompt=True,
+        )  # shouldn't end with eos token
+
+        if chat_input.endswith(self._tokenizer.eos_token):
+            chat_input = chat_input[: -len(self._tokenizer.eos_token)]
+
+        if not chat_input.startswith(self._tokenizer.bos_token):
+            chat_input = f"{self._tokenizer.bos_token}{chat_input}"
+        return chat_input
+    def __getitem__(self, idx):
+        if self._chat_template is None:
+            raise ValueError("Chat template is not set. Please set the chat template before generating chat.")
+
+        if self._tokenizer is None:
+            raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
+        chat_input = self._chat_template.render(
+            bos_token=self._tokenizer.bos_token,
+            eos_token=self._tokenizer.eos_token,
+            messages=self.dataset[idx]["messages"],
+            include_beginning_of_conversation=True,
+            add_generation_prompt=True,
+        )  # shouldn't end with eos token
+
+        if chat_input.endswith(self._tokenizer.eos_token):
+            chat_input = chat_input[: -len(self._tokenizer.eos_token)]
+
+        if not chat_input.startswith(self._tokenizer.bos_token):
+            chat_input = f"{self._tokenizer.bos_token}{chat_input}"
+        return (
+            chat_input,  # context
+            self.dataset[idx]["messages"],  # full message history
+        )
+
+    def sample_dataset(self, n: int):
+        # get indices of the dataset
+        indices = list(range(len(self.dataset)))
+        random.shuffle(indices)
+        indices = indices[:n]
+
+        return [self[i] for i in indices]
+
+
+
+
+

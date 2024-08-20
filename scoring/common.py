@@ -23,6 +23,7 @@ MAX_SEQ_LEN = (
 )
 
 MAX_SEQ_LEN_VIBE_SCORE = 2048  # maximum sequence length that should be allowed for vibe score calculation because it is slow with longer sequences than this
+MAX_SEQ_LEN_COHERENCE_SCORE = 4096
 BATCH_SIZE_VIBE_SCORE = 4  # batch size for vibe score calculation
 SAMPLE_SIZE_VIBE_SCORE = 128  # number of samples to evaluate the model from the dataset for vibe score calculation
 # number of samples to evaluate the model from the dataset for coherence score calculation
@@ -35,7 +36,6 @@ SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
 COHERENCE_BATCH_SIZE = 16
 COHERENCE_MAX_TOKENS = 1024
-# COHERENCE_NUM_EVALS = 64
 COHERENCE_NUM_EVALS = 128
 COHERENCE_EVAL_MODEL = "gpt-4o"
 
