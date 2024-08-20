@@ -173,10 +173,12 @@ def calculate_coherence_score(
     coherence_score = 0
     penalty = 0
     for convo in evaluation_conversations:
-        coherence_score = coherence_evaluator(convo)
-        if coherence_score < 1:
-            penalty += 1
-
+        try:
+            coherence_score = coherence_evaluator(convo)
+            if coherence_score < 1:
+                penalty += 1
+        except Exception as e:
+            print(e)
     coherence_score = (COHERENCE_NUM_EVALS - penalty) / COHERENCE_NUM_EVALS
 
     destroy_model_parallel()

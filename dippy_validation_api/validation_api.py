@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Header, Response
 from huggingface_hub import HfApi, HfFolder
 from huggingface_hub.hf_api import HfApi, RepositoryNotFoundError, GatedRepoError
 from dotenv import load_dotenv
+import random
 from pydantic import BaseModel
 
 from dippy_validation_api.evaluator import Evaluator, RunError
@@ -106,6 +107,7 @@ def start_staggered_queues(num_queues: int, stagger_seconds: int):
 
 
 def _model_evaluation_step(duplicate: bool = False):
+    time.sleep(random.random())
     request = get_next_model_to_eval()
     if request is None:  # Sentinel value to exit the process
         logger.info("No more models to evaluate. Sleep for 15 seconds before checking again.")
@@ -161,6 +163,7 @@ def _evaluate_model(
         "Model evaluation in progress",
     )
 
+
     logger.info("Model evaluation in progress")
     try:
         eval_score_result = evaluator.eval_score(request)
@@ -174,6 +177,7 @@ def _evaluate_model(
             error_string,
         )
         raise RuntimeError(error_string)
+
 
     eval_score = eval_score_result.eval_score
     latency_score = eval_score_result.latency_score
@@ -201,6 +205,7 @@ def _evaluate_model(
         raise RuntimeError(error_string)
 
     vibe_score = vibe_score_response.vibe_score
+
     try:
         coherence_score_response = evaluator.coherence_score(request)
         if isinstance(coherence_score_response, RunError):
