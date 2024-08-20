@@ -164,7 +164,7 @@ class BippaDataset(Dataset):
                 }
                 messages.append(entry)
             character_response = messages.pop()["content"]
-            last_user_message = messages[-2]["content"]
+            last_user_message = messages[-1]["content"]
 
             converted_dataset.append(
                 {
@@ -267,7 +267,7 @@ class DippaFormattedDataset(Dataset):
                 }
                 messages.append(entry)
             character_response = messages.pop()["content"]
-            last_user_message = messages[-2]["content"]
+            last_user_message = messages[-1]["content"]
 
             converted_dataset.append(
                 {
@@ -361,7 +361,7 @@ class StreamedSyntheticDataset(Dataset):
                 }
                 messages.append(entry)
             character_response = messages.pop()["content"]
-            last_user_message = messages[-2]["content"]
+            last_user_message = messages[-1]["content"]
 
             converted_dataset.append(
                 {
