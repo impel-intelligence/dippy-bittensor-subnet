@@ -384,7 +384,7 @@ class Validator:
                     wallet=self.wallet,
                     uids=self.metagraph.uids,
                     weights=adjusted_weights,
-                    wait_for_inclusion=False,
+                    wait_for_inclusion=True,
                     version_key=constants.weights_version_key,
                 )
                 weights_report = {"weights": {}}
