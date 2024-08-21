@@ -9,6 +9,7 @@ Objective requirements are:
 1. Access to a capable GPU for model training an evaluation (recommended A100)
 2. Enough tao for the subnet registration fee (baseline is 0.2 tao)
 3. Reading comprehension
+
 Subjective requirements:
 1. Ability to understand the code in this subnet
 2. Python experience
