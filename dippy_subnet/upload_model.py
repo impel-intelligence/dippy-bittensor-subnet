@@ -1,7 +1,7 @@
 """A script that pushes a model from disk to the subnet for evaluation.
 
 Usage:
-    python scripts/upload_model.py --load_model_dir <path to model> --hf_repo_id my-username/my-project --wallet.name coldkey --wallet.hotkey hotkey
+    python scripts/upload_model.py --model_dir <path to model> --hf_repo_id my-username/my-project --wallet.name coldkey --wallet.hotkey hotkey
 
 Prerequisites:
    1. HF_ACCESS_TOKEN is set in the environment or .env file.
