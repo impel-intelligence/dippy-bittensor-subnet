@@ -1,0 +1,21 @@
+{%- set ns = namespace(found=false) -%}
+{%- for message in messages -%}
+    {%- if message['role'] == 'system' -%}
+        {%- set ns.found = true -%}
+    {%- endif -%}
+{%- endfor -%}
+<|begin_of_text|>
+{%- for message in messages %}
+    {%- if message['role'] == 'system' -%}
+        {{- '<|start_header_id|>system<|end_header_id|>\n' + message['content'].strip() + '<|eot_id|>\n' -}}
+    {%- else -%}
+        {%- if message['role'] == 'user' -%}
+            {{-'<|start_header_id|>user<|end_header_id|>\n' + message['content'].strip() + '<|eot_id|>\n'-}}
+        {%- else -%}
+            {{-'<|start_header_id|>assistant<|end_header_id|>\n' + message['content'] + '<|eot_id|>\n' -}}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}
+{%- if add_generation_prompt -%}
+    {{-'<|start_header_id|>assistant<|end_header_id|>\n'-}}
+{%- endif -%}

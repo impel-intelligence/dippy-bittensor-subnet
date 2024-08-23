@@ -6,7 +6,7 @@ import torch
 import math
 from transformers import AutoTokenizer
 from accelerate.utils import release_memory
-
+import random
 # Import necessary modules and functions from the main API file
 from scoring.common import (
     MAX_GENERATION_LENGTH,
@@ -232,10 +232,6 @@ def eval_score(
             scaled_entropy = 1 - math.exp(-CREATIVITY_SCALE_FACTOR * normalized)
             total_entropy += scaled_entropy
 
-            # get the average entropy per batch per token distribution
-            # entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-9), dim=-1)
-            # batch_entropy = (entropy * targets_ids_mask).sum() / targets_ids_mask.sum()
-            # total_entropy += batch_entropy.item()
 
             if torch.isnan(probabilities).any():
                 raise ValueError("NaN values detected in the probabilities tensor")

@@ -2,8 +2,9 @@ wheel
 setuptools
 docker
 packaging
-torch==2.2.1
-tqdm
+torch==2.3.1
+tqdm >= 4.66.5
+vllm==0.5.2
 pydantic >= 2.0
 accelerate
 bitsandbytes

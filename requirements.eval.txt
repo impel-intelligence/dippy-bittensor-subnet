@@ -1,10 +1,11 @@
-torch==2.2.1
+torch >= 2.3.1
 tqdm
-vllm==0.4.1
+vllm==0.5.4
 pydantic >= 2.0
 accelerate
 bitsandbytes
-flash-attn
+flash-attn >= 2.6.3
+vllm-flash-attn
 supabase
 pandas
 threadpoolctl
@@ -12,4 +13,4 @@ loguru
 numpy
 typer
 openai
-datasets
+datasets >= 2.21.0
