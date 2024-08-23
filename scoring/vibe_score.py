@@ -5,7 +5,7 @@ from transformers import AutoTokenizer
 import gc
 import ray
 from vllm.distributed.parallel_state import destroy_model_parallel
-from scoring.dataset import PippaDataset
+from scoring.dataset import StreamedSyntheticDataset
 
 # Import necessary modules and functions from the main API file
 from scoring.common import (
@@ -17,7 +17,6 @@ from scoring.common import (
     SAMPLE_SIZE_VIBE_SCORE,
     EvaluateModelRequest,
     chat_template_mappings,
-    PIPPA_FILENAME,
     full_path,
     VLLM_GPU_MEMORY,
 )
@@ -101,10 +100,13 @@ def get_vibe_match_score(request: EvaluateModelRequest):
         input_tokenizer = AutoTokenizer.from_pretrained(
             f"{request.repo_namespace}/{request.repo_name}", revision=request.revision
         )
-        vibe_score_dataset = PippaDataset(
-            full_path(PIPPA_FILENAME),
-            max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
-        )
+        # vibe_score_dataset = PippaDataset(
+        #     full_path(PIPPA_FILENAME),
+        #     max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
+        # )
+        vibe_score_dataset =  StreamedSyntheticDataset(
+        max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
+    )
         # Set chat template params
         vibe_score_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 

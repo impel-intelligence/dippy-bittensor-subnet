@@ -7,7 +7,6 @@ import docker
 from pydantic import BaseModel
 from typing import Optional, Union
 
-from scoring.entrypoint import _dl_dataset
 from scoring.common import EvaluateModelRequest
 from utilities.event_logger import EventLogger
 from model.scores import Scores
@@ -69,6 +68,7 @@ class Evaluator:
             "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY"),
             "HF_TOKEN": os.environ.get("HF_TOKEN"),
             "COHERENCE_DATASET_NAME": os.environ.get("COHERENCE_DATASET_NAME"),
+            "PYTORCH_CUDA_ALLOC_CONF":"expandable_segments:True",
         }
         self.trace = trace
 
@@ -198,7 +198,6 @@ def calculate_c_score(initial_score, creativity_score, threshold=0.2, steepness=
 
 # Command to manually run evaluation
 def entry():
-    _dl_dataset()
     # add command line arguments for the ports of the two apis
     import argparse
 

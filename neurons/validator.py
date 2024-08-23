@@ -168,6 +168,11 @@ class Validator:
             help="Validator does not set weights on the chain.",
         )
         parser.add_argument(
+            "--wait_for_inclusion",
+            action="store_true",
+            help="Validator does not set weights on the chain.",
+        )
+        parser.add_argument(
             "--offline",
             action="store_true",
             help="Does not launch a wandb run, does not set weights, does not check that your key is registered.",
@@ -289,6 +294,7 @@ class Validator:
         # Initialize wandb
         if self.config.wandb_key:
             wandb_logger.safe_login(api_key=self.config.wandb_key)
+            bt.logging.info(f"wandb locked in")
         wandb_logger.safe_init(
             "Validator",
             self.wallet,
@@ -309,7 +315,7 @@ class Validator:
             self.event_logger = EventLogger(filepath=eventlog_path)
             self.use_event_logger = True
         except Exception as e:
-            bt.logging.error(f"could not initialize event logger: {e}")
+            bt.logging.error(f"Could not initialize event logger: {e}. Event logging is optional and used for diagnostic purposes. If you do not know what this is for, that's ok.")
 
         # == Initialize the update thread ==
         self.stop_event = threading.Event()
@@ -370,7 +376,14 @@ class Validator:
         if self.config.dont_set_weights or self.config.offline:
             return
 
-        async def _try_set_weights():
+        wait_for_inclusion = False
+        try:
+            if self.config.wait_for_inclusion:
+                wait_for_inclusion = True
+        except Exception as e:
+            bt.logging.info(f"wait_for_inclusion not set: {wait_for_inclusion}")
+        
+        async def _try_set_weights(wait_for_inclusion=False):
             try:
                 # Fetch latest metagraph
                 metagraph = self.subtensor.metagraph(self.config.netuid)
@@ -384,7 +397,7 @@ class Validator:
                     wallet=self.wallet,
                     uids=self.metagraph.uids,
                     weights=adjusted_weights,
-                    wait_for_inclusion=True,
+                    wait_for_inclusion=wait_for_inclusion,
                     version_key=constants.weights_version_key,
                 )
                 weights_report = {"weights": {}}
@@ -392,8 +405,10 @@ class Validator:
                     weights_report["weights"][uid] = score
                 wandb_logger.safe_log(weights_report)
                 self._event_log("set_weights_complete", weights=weights_report)
+                bt.logging.info(f"successfully_set_weights")
             except Exception as e:
-                bt.logging.error(f"failed to set weights {e}")
+                bt.logging.error(f"failed_set_weights {e}")
+            # Only dump weight state to console
             ws, ui = self.weights.topk(len(self.weights))
             table = Table(title="All Weights")
             table.add_column("uid", justify="right", style="cyan", no_wrap=True)
@@ -405,7 +420,7 @@ class Validator:
 
         try:
             bt.logging.debug("Setting weights.")
-            await asyncio.wait_for(_try_set_weights(), ttl)
+            await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
             bt.logging.debug("Finished setting weights.")
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")

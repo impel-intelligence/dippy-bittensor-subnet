@@ -29,7 +29,7 @@ from utilities.repo_details import (
 )
 from dippy_validation_api.duplicate import duplicate
 from utilities.event_logger import EventLogger
-from scoring.common import EvaluateModelRequest
+from scoring.common import EvaluateModelRequest, chat_template_mappings
 from dotenv import load_dotenv
 from huggingface_hub import HfApi, list_models
 
@@ -75,15 +75,6 @@ app.state.leaderboard = None
 
 admin_key = os.environ["ADMIN_KEY"]
 hf_api = HfApi()
-chat_template_mappings = {
-    "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
-    "chatml": "prompt_templates/chatml_prompt_template.jinja",
-    "mistral": "prompt_templates/mistral_prompt_template.jinja",
-    "zephyr": "prompt_templates/zephyr_prompt_template.jinja",
-    "alpaca": "prompt_templates/alpaca_prompt_template.jinja",
-    "llama2": "prompt_templates/llama2_prompt_template.jinja",
-    "llama3": "prompt_templates/llama3_prompt_template.jinja",
-}
 
 
 def model_evaluation_queue(queue_id):
