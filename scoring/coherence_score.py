@@ -59,7 +59,8 @@ def coherence_evaluator(generated_text: str):
     Coherence assessment (1 or 0):
     '''
 
-    chat_completion = remote_client.chat.completions.create(
+    try:
+        chat_completion = remote_client.chat.completions.create(
         messages=[
             {
                 "role": "user",
@@ -68,8 +69,12 @@ def coherence_evaluator(generated_text: str):
         ],
         model=COHERENCE_EVAL_MODEL,
     )
-    score = int(chat_completion.choices[0].message.content)
-    return score
+        score = int(chat_completion.choices[0].message.content)
+        return score
+    except Exception as e:
+        print(e)
+        return 0
+    
 
 
 def get_coherence_score(request: EvaluateModelRequest):
@@ -78,17 +83,16 @@ def get_coherence_score(request: EvaluateModelRequest):
             f"{request.repo_namespace}/{request.repo_name}", revision=request.revision
         )
         # Set chat template params
-        coherence_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
+        coherence_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)        
 
         # Unzip the sampled data
-        chat_contexts, messages = zip(*coherence_dataset.sample_dataset(COHERENCE_NUM_EVALS))
+        _, messages = zip(*coherence_dataset.sample_dataset(COHERENCE_NUM_EVALS))
 
         model_name = f"{request.repo_namespace}/{request.repo_name}"
 
         cscore = calculate_coherence_score(
             model_name=model_name,
             revision=request.revision,
-            chat_contexts=chat_contexts,
             dataset_formatter=coherence_dataset,
             messages=messages
         )
@@ -99,7 +103,9 @@ def get_coherence_score(request: EvaluateModelRequest):
 
 
 
-def pretty_convo(dict_list):
+def pretty_convo(dict_list,score):
+    print(f"score: {score}")
+    print(f"convos: {len(dict_list)}")
     for i, item in enumerate(dict_list):
         print(f"Entry {i + 1}:")
         print(f"  Role: {item['role']}")
@@ -120,8 +126,9 @@ def stringify_convo(dict_list):
 
 import random
 MIN_CONVERSATIONS = 2
-MAX_CONVERSATIONS = 5
-def calculate_coherence_score(
+MAX_CONVERSATIONS = 4
+def OLD_calculate_coherence_score(
+        
         model_name,
         revision,
         chat_contexts,
@@ -134,7 +141,7 @@ def calculate_coherence_score(
         revision=revision,
         tensor_parallel_size=torch.cuda.device_count(),
         gpu_memory_utilization=VLLM_GPU_MEMORY,
-        max_num_seqs=10,
+        max_num_seqs=16,
         max_model_len=MAX_SEQ_LEN_COHERENCE_SCORE,
     )
 
@@ -145,7 +152,8 @@ def calculate_coherence_score(
         temperature=0.0,
         max_tokens=COHERENCE_MAX_TOKENS,
     )
-    messages = messages[:COHERENCE_NUM_EVALS]
+    # messages = messages[:COHERENCE_NUM_EVALS]
+    messages = messages[:64]
     # Create a conversation of n messages
     for message in messages:
         message_history = message.copy()
@@ -167,14 +175,15 @@ def calculate_coherence_score(
         generated_samples.append(message_history)
     evaluation_conversations = []
     for m in generated_samples:
-        # pretty_convo(m)
+        pretty_convo(m)
         evaluation_conversations.append(stringify_convo(m))
 
     coherence_score = 0
     penalty = 0
-    for convo in evaluation_conversations:
+    for i,convo in enumerate(evaluation_conversations):
         try:
             coherence_score = coherence_evaluator(convo)
+            pretty_convo(generated_samples[i], coherence_score)
             if coherence_score < 1:
                 penalty += 1
         except Exception as e:
@@ -194,3 +203,93 @@ def calculate_coherence_score(
         print("No process group to destroy")
 
     return coherence_score
+
+def calculate_coherence_score(
+        model_name,
+        revision,
+        dataset_formatter,
+        messages,
+        verbose=False) -> int:
+    # instantiate a vllm model as it is faster and more memory efficient for text generation
+    model = LLM(
+        model_name,
+        revision=revision,
+        tensor_parallel_size=torch.cuda.device_count(),
+        gpu_memory_utilization=VLLM_GPU_MEMORY,
+        max_num_seqs=16,
+        max_model_len=MAX_SEQ_LEN_COHERENCE_SCORE,
+    )
+    
+
+    generated_samples = []
+
+    sampling_params = SamplingParams(
+        temperature=0.0,
+        max_tokens=COHERENCE_MAX_TOKENS,
+    )
+    # Initialize all conversations
+    conversations = [message.copy() for message in messages]
+    max_messages = [random.randint(MIN_CONVERSATIONS, MAX_CONVERSATIONS) for _ in messages]
+
+    # Generate conversations in batches
+    for turn in range(max(max_messages)):
+        # Prepare batch of prompts
+        batch_prompts = []
+        active_conversations = []
+        
+        for i, (conversation, max_turn) in enumerate(zip(conversations, max_messages)):
+            if turn < max_turn:
+                
+                new_input = dataset_formatter.new_input(conversation)
+                
+                batch_prompts.append(new_input)
+                active_conversations.append(i)
+
+        if not batch_prompts:
+            break  # All conversations are complete
+
+        # Generate responses for the batch
+        outputs = model.generate(prompts=batch_prompts, sampling_params=sampling_params)
+
+        # Update conversations with generated responses
+        for i, output in zip(active_conversations, outputs):
+            generated_text = output.outputs[0].text
+            # print(f"generated_text: {generated_text}")
+            role = "assistant" if conversations[i][-1]['role'] == 'user' else "user"
+            conversations[i].append({
+                "role": role,
+                "content": generated_text
+            })
+    
+
+    generated_samples = conversations
+
+    evaluation_conversations = [stringify_convo(m) for m in generated_samples]
+    penalty = 0
+    for i,convo in enumerate(evaluation_conversations):
+        try:
+            coherence_score = coherence_evaluator(convo)
+            # pretty_convo(generated_samples[i], coherence_score)
+            if coherence_score < 1:
+                penalty += 1
+        except Exception as e:
+            print(e)
+
+    final_coherence_score = (COHERENCE_NUM_EVALS - penalty) / COHERENCE_NUM_EVALS
+
+    destroy_model_parallel()
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    del model.llm_engine.model_executor
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+    ray.shutdown()
+    try:
+        torch.distributed.destroy_process_group()
+    except Exception as e:
+        print("No process group to destroy")
+
+    return final_coherence_score
+
+
+

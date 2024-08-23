@@ -3,7 +3,8 @@
 #ENV PYTHONUNBUFFERED=1 \
 #    DEBIAN_FRONTEND=noninteractive \
 
-FROM pytorch/pytorch:2.2.1-cuda12.1-cudnn8-devel
+# FROM pytorch/pytorch:2.2.1-cuda12.1-cudnn8-devel
+FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 
 # build-essential: installs gcc which is needed to install some deps like rasterio
 # libGL1: needed to avoid following error when using cv2

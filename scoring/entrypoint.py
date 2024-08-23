@@ -23,29 +23,6 @@ def _dl_dataset():
     # create dir data if not exists
     if not os.path.exists("./datasets"):
         os.makedirs("./datasets")
-    # download the file pippa_deduped.jsonl from huggingface
-    if not os.path.exists(full_path(PIPPA_FILENAME)):
-        huggingface_hub.hf_hub_download(
-            repo_id="PygmalionAI/PIPPA",
-            filename="pippa_deduped.jsonl",
-            repo_type="dataset",
-            local_dir="datasets",
-        )
-    # download the file pippa_deduped.jsonl from huggingface
-    if not os.path.exists(full_path(PROMPTS_1_FILENAME)):
-        huggingface_hub.hf_hub_download(
-            repo_id="Gryphe/Opus-WritingPrompts",
-            filename=PROMPTS_1_FILENAME,
-            repo_type="dataset",
-            local_dir="datasets",
-        )
-    if not os.path.exists(full_path(PROMPTS_2_FILENAME)):
-        huggingface_hub.hf_hub_download(
-            repo_id="Gryphe/Opus-WritingPrompts",
-            filename=PROMPTS_2_FILENAME,
-            repo_type="dataset",
-            local_dir="datasets",
-        )
 
 
 def write_to_json(data: dict, filepath: str = "/tmp/output.json"):
@@ -139,6 +116,8 @@ def stub():
     write_to_json(result, "/tmp/output.json")
 
 
+
+# example: python entrypoint.py python entrypoint.py eval repo_name repo_namespace chat_template_type hash
 if __name__ == "__main__":
     _dl_dataset()
     gc.collect()

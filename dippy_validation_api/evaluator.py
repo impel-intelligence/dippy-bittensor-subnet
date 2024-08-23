@@ -240,8 +240,9 @@ def entry():
         scores_data.latency_score = eval_result.latency_score
         scores_data.creativity_score = eval_result.creativity_score
         scores_data.llm_size_score = eval_result.eval_model_size_score
-        scores_data.coherence_score = coherence_result.coherence_score
         scores_data.vibe_score = vibe_result.vibe_score
+        scores_data.coherence_score = coherence_result.coherence_score
+        
 
         final_eval_score = (
             scores_data.adjusted_q_score(
