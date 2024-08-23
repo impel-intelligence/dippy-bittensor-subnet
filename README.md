@@ -230,6 +230,14 @@ model_validation_venv/bin/pip install -r requirements_val_api.txt
 ```
 
 #### Run model validation API service
+
+The validation API service requires a .env file in the root directory of the repo with ADMIN_KEY and DIPPY_KEY 
+```.env
+ADMIN_KEY=your_admin_key_here
+DIPPY_KEY=your_dippy_key_here
+```
+
+You can then start the validation service
 ```bash
 cd dippy_validation_api
 chmod +x start_validation_service.sh
