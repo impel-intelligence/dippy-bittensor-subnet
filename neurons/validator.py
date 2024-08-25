@@ -59,8 +59,7 @@ import bittensor as bt
 import os
 import numpy as np
 import torch
-from bittensor.extrinsics.set_weights import set_weights_extrinsic
-from scipy import optimize, stats
+from scipy import optimize
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -384,6 +383,7 @@ class Validator:
             bt.logging.info(f"wait_for_inclusion not set: {wait_for_inclusion}")
         
         async def _try_set_weights(wait_for_inclusion=False):
+            weights_success = False
             try:
                 # Fetch latest metagraph
                 metagraph = self.subtensor.metagraph(self.config.netuid)
@@ -406,6 +406,7 @@ class Validator:
                 wandb_logger.safe_log(weights_report)
                 self._event_log("set_weights_complete", weights=weights_report)
                 bt.logging.info(f"successfully_set_weights")
+                weights_success = True
             except Exception as e:
                 bt.logging.error(f"failed_set_weights {e}")
             # Only dump weight state to console
@@ -418,12 +419,35 @@ class Validator:
             console = Console()
             console.print(table)
 
+            # Weight setting status
+            status_table = Table(title="Weight Setting Status")
+            status_table.add_column("Status", style="cyan")
+            status_table.add_column("Value", style="magenta")
+            status_table.add_row("successfully_set_weights", str(weights_success))
+            status_table.add_row("failed_set_weights", str(not weights_success))
+            status_table.add_row("wait_for_inclusion", str(wait_for_inclusion))
+            console.print(status_table)
+            return weights_success
+
+
+        weights_set_success = False
         try:
             bt.logging.debug("Setting weights.")
-            await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
+            weights_set_success = await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
+            payload = {
+            "time": dt.datetime.utcnow(),
+            "weights_set_success": weights_set_success,
+            "wait_for_inclusion": wait_for_inclusion,
+            }
             bt.logging.debug("Finished setting weights.")
+            telemetry_report(self.local_metadata, payload)
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")
+        except Exception as e:
+            bt.logging.error(f"Error setting weights: {e}")
+            
+
+        
 
     async def try_sync_metagraph(self, ttl: int) -> bool:
         def sync_metagraph(endpoint):
@@ -484,13 +508,12 @@ class Validator:
     async def run_step(self):
         """
         Executes a step in the evaluation process of models. This function performs several key tasks:
-        1. Identifies valid models for evaluation (top sample_min from last run + newly updated models).
-        2. Generates random pages for evaluation and prepares batches for each page from the dataset.
-        3. Computes the scoring for each model based on the losses incurred on the evaluation batches.
+        1. Iterate through blockchain state to find miner entries for models.
+        2. Fetches model scoring data from separate evaluation instance.
+        3. Applies elimination logic to better calulate model scoring.
         4. Calculates wins and win rates for each model to determine their performance relative to others.
         5. Updates the weights of each model based on their performance and applies a softmax normalization.
-        6. Implements a blacklist mechanism to remove underperforming models from the evaluation set.
-        7. Logs all relevant data for the step, including model IDs, pages, batches, wins, win rates, and losses.
+        6. Logs all relevant data for the step, including model IDs, scores, and win rates.
         """
 
         # Update self.metagraph
@@ -603,9 +626,6 @@ class Validator:
             wins,
             win_rate,
         )
-
-        # Increment the number of completed run steps by 1
-        self.run_step_count += 1
         return True
 
     def log_step(
@@ -709,9 +729,11 @@ class Validator:
                 await asyncio.sleep(5)
 
 
-def telemetry_report(local_metadata: LocalMetadata):
+def telemetry_report(local_metadata: LocalMetadata, additional_payload = None):
     telemetry_endpoint = f"{constants.VALIDATION_SERVER}/telemetry_report"
-    payload = {}
+    
+    if additional_payload is not None:
+        payload = additional_payload
     headers = {
         "Git-Commit": str(local_metadata.commit),
         "Bittensor-Version": str(local_metadata.btversion),
@@ -789,8 +811,8 @@ def get_model_score(
         response.raise_for_status()  # Raise an exception for HTTP errors
         # Parse the response JSON
         result = response.json()
-        console = Console()
         if debug:
+            console = Console()
             console.print(f"Payload: {payload}")
         if result is None or "status" not in result:
             score_data.status = StatusEnum.FAILED
