@@ -80,5 +80,6 @@ chat_template_mappings = {
     "llama2": "prompt_templates/llama2_prompt_template.jinja",
     "llama3": "prompt_templates/llama3_prompt_template.jinja",
     "llama3dot1": "prompt_templates/llama3dot1_prompt_template.jinja",
+    # Currently not supported unti further optimizations are made
     "gemma": "prompt_templates/gemma_it_prompt_template.jinja",
 }

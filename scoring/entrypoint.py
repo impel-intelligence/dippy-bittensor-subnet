@@ -19,12 +19,6 @@ from scoring.common import (
 app = typer.Typer()
 
 
-def _dl_dataset():
-    # create dir data if not exists
-    if not os.path.exists("./datasets"):
-        os.makedirs("./datasets")
-
-
 def write_to_json(data: dict, filepath: str = "/tmp/output.json"):
     with open(filepath, "w") as f:
         json.dump(data, f, indent=2)
@@ -119,7 +113,6 @@ def stub():
 
 # example: python entrypoint.py python entrypoint.py eval repo_name repo_namespace chat_template_type hash
 if __name__ == "__main__":
-    _dl_dataset()
     gc.collect()
     torch.cuda.empty_cache()
     app()
