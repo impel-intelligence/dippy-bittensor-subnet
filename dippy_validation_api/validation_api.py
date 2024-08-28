@@ -9,7 +9,7 @@ import uvicorn
 
 import pandas as pd
 import torch
-from fastapi import FastAPI, HTTPException, Header, Response
+from fastapi import FastAPI, HTTPException, Header, Request, Response
 from huggingface_hub import HfApi, HfFolder
 from huggingface_hub.hf_api import HfApi, RepositoryNotFoundError, GatedRepoError
 from dotenv import load_dotenv
@@ -270,12 +270,14 @@ def repository_exists(repo_id):
 
 
 @app.post("/telemetry_report")
-def telemetry_report(
+async def telemetry_report(
+    request: Request,
     git_commit: str = Header(None, alias="Git-Commit"),
     bittensor_version: str = Header(None, alias="Bittensor-Version"),
     uid: str = Header(None, alias="UID"),
     hotkey: str = Header(None, alias="Hotkey"),
     coldkey: str = Header(None, alias="Coldkey"),
+    
 ):
     request_details = {
         "git_commit": git_commit,
@@ -284,10 +286,25 @@ def telemetry_report(
         "hotkey": hotkey,
         "coldkey": coldkey,
     }
+    if request is not None:
+        try:
+            payload = await request.json()
+            request_details = {**payload, **request_details}
+        except Exception as e:
+            if app.state.event_logger_enabled:
+                app.state.event_logger.info("failed_telemetry_request", extra=request_details)
+
 
     # log incoming request details
     if app.state.event_logger_enabled:
         app.state.event_logger.info("telemetry_request", extra=request_details)
+    return Response(status_code=200)
+
+@app.post("/event_report")
+async def event_report(
+    request: Request,
+):
+    
     return Response(status_code=200)
 
 

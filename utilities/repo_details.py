@@ -26,24 +26,28 @@ class ModelRepo:
 
 
 def get_model_size(repo_namespace: str, repo_name: str):
-    safetensor_index = f"https://huggingface.co/{repo_namespace}/{repo_name}/resolve/main/model.safetensors.index.json"
-    response = requests.get(safetensor_index)
-    if response.status_code != 200:
-        print(f"Error getting safetensors index: {response.text}")
+    try:
+        safetensor_index = f"https://huggingface.co/{repo_namespace}/{repo_name}/resolve/main/model.safetensors.index.json"
+        response = requests.get(safetensor_index)
+        if response.status_code != 200:
+            print(f"Error getting safetensors index: {response.text}")
+            return None
+
+        response_json = response.json()
+        if "metadata" not in response_json:
+            print("Error: metadata not found in safetensors index")
+            return None
+
+        if "total_size" not in response_json["metadata"]:
+            print("Error: total_size not found in safetensors index metadata")
+            return None
+
+        total_size = response_json["metadata"]["total_size"]
+
+        return total_size
+    except Exception as e:
+        print(e)
         return None
-
-    response_json = response.json()
-    if "metadata" not in response_json:
-        print("Error: metadata not found in safetensors index")
-        return None
-
-    if "total_size" not in response_json["metadata"]:
-        print("Error: total_size not found in safetensors index metadata")
-        return None
-
-    total_size = response_json["metadata"]["total_size"]
-
-    return total_size
 
 
 def check_model_repo_details(hash: str, repo_namespace: str, repo_name: str) -> Optional[ModelRepo]:
