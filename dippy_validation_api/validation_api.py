@@ -76,11 +76,10 @@ app.state.leaderboard = None
 admin_key = os.environ["ADMIN_KEY"]
 hf_api = HfApi()
 
-
 def model_evaluation_queue(queue_id):
     try:
         while True:
-            _model_evaluation_step()
+            _model_evaluation_step(queue_id)
             time.sleep(5)
     except Exception as e:
         app.state.event_logger.error("queue_error", queue_id=queue_id, error=e)
@@ -97,19 +96,24 @@ def start_staggered_queues(num_queues: int, stagger_seconds: int):
     return processes
 
 
-def _model_evaluation_step(duplicate: bool = False):
+def _model_evaluation_step(queue_id, duplicate: bool = False):
     time.sleep(random.random())
+
     request = get_next_model_to_eval()
     if request is None:  # Sentinel value to exit the process
         logger.info("No more models to evaluate. Sleep for 15 seconds before checking again.")
         return
-    logger.info(f"Model evaluation queued: {request}")
+    app.state.event_logger.info(f"Model evaluation queued: {request} {queue_id}")
     try:
         if duplicate:
             _duplicate_model(request)
-        result = _evaluate_model(request)
-        logger.info(f"Model evaluation completed: {result}")
-        app.state.event_logger.info("model_eval_queue_complete", result=result, request=request)
+        time.sleep(queue_id * 600)
+        app.state.event_logger.info(f"Model evaluation completed: {request} {queue_id}")
+
+
+        # result = _evaluate_model(request)
+        # logger.info(f"Model evaluation completed: {result}")
+        # app.state.event_logger.info("model_eval_queue_complete", result=result, request=request)
     except Exception as e:
         logger.error(f"Error during model evaluation: {e}")
         app.state.event_logger.info("model_eval_queue_error", error=e)
@@ -144,6 +148,7 @@ def _duplicate_model(request: EvaluateModelRequest):
 
 def _evaluate_model(
     request: EvaluateModelRequest,
+    queue_id: int,
 ):
     """
     Evaluate a model based on the model size and the quality of the model.
@@ -153,9 +158,7 @@ def _evaluate_model(
         "RUNNING",
         "Model evaluation in progress",
     )
-
-
-    logger.info("Model evaluation in progress")
+    evaluator = Evaluator()
     try:
         eval_score_result = evaluator.eval_score(request)
         if isinstance(eval_score_result, RunError):
@@ -168,7 +171,6 @@ def _evaluate_model(
             error_string,
         )
         raise RuntimeError(error_string)
-
 
     eval_score = eval_score_result.eval_score
     latency_score = eval_score_result.latency_score
@@ -186,28 +188,17 @@ def _evaluate_model(
         }
     )
     try:
-        vibe_score_response = evaluator.vibe_score(request)
-        if isinstance(vibe_score_response, RunError):
-            raise Exception(vibe_score_response.error)
+        inference_response = evaluator.inference_score(request)
+        if isinstance(inference_response, RunError):
+            raise Exception(inference_response.error)
 
     except Exception as e:
-        error_string = f"Error calling vibe_score job with message: {e}"
+        error_string = f"Error calling inference_score job with message: {e}"
         supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, error_string)
         raise RuntimeError(error_string)
 
-    vibe_score = vibe_score_response.vibe_score
-
-    try:
-        coherence_score_response = evaluator.coherence_score(request)
-        if isinstance(coherence_score_response, RunError):
-            raise Exception(coherence_score_response.error)
-
-    except Exception as e:
-        error_string = f"Error calling coherence_score job with message: {e}"
-        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, error_string)
-        raise RuntimeError(error_string)
-
-    coherence_score = coherence_score_response.coherence_score
+    vibe_score = inference_response.vibe_score
+    coherence_score = inference_response.coherence_score
 
     if eval_score is None or latency_score is None or model_size_score is None or vibe_score is None:
         raise HTTPException(
@@ -277,7 +268,6 @@ async def telemetry_report(
     uid: str = Header(None, alias="UID"),
     hotkey: str = Header(None, alias="Hotkey"),
     coldkey: str = Header(None, alias="Coldkey"),
-    
 ):
     request_details = {
         "git_commit": git_commit,
@@ -294,17 +284,17 @@ async def telemetry_report(
             if app.state.event_logger_enabled:
                 app.state.event_logger.info("failed_telemetry_request", extra=request_details)
 
-
     # log incoming request details
     if app.state.event_logger_enabled:
         app.state.event_logger.info("telemetry_request", extra=request_details)
     return Response(status_code=200)
 
+
 @app.post("/event_report")
 async def event_report(
     request: Request,
 ):
-    
+
     return Response(status_code=200)
 
 
@@ -517,7 +507,8 @@ def start():
     parser.add_argument(
         "--queues",
         type=int,
-        default=1,
+        # default=1,
+        default=4,
         help="Specify the number of queues to start (default: 1)",
     )
     args = parser.parse_args()

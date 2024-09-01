@@ -7,6 +7,7 @@ import math
 from transformers import AutoTokenizer
 from accelerate.utils import release_memory
 import random
+
 # Import necessary modules and functions from the main API file
 from scoring.common import (
     MAX_GENERATION_LENGTH,
@@ -39,7 +40,7 @@ def cleanup(model, model_downloaded, request: EvaluateModelRequest):
                 print("No process group to destroy")
 
 
-def _prepare_dummy_inputs(model, device="cuda"):
+def _prepare_dummy_inputs(model):
     max_model_len = min(model.config.max_position_embeddings, MAX_SEQ_LEN)
     input_ids = torch.randint(
         0,
@@ -47,9 +48,8 @@ def _prepare_dummy_inputs(model, device="cuda"):
         (BATCH_SIZE, max_model_len),
         requires_grad=False,
         dtype=torch.int64,
-        device=device,
     )
-    attention_mask = torch.ones_like(input_ids, requires_grad=False, dtype=torch.int64, device=device)
+    attention_mask = torch.ones_like(input_ids, requires_grad=False, dtype=torch.int64)
     return input_ids, attention_mask
 
 
@@ -64,7 +64,7 @@ def warmup_model(model):
         for _ in range(10):
             start_time = torch.cuda.Event(enable_timing=True)
             end_time = torch.cuda.Event(enable_timing=True)
-            inputs = _prepare_dummy_inputs(model, device="cuda")
+            inputs = _prepare_dummy_inputs(model)
             start_time.record()
             outputs = model(*inputs)
             end_time.record()
@@ -90,7 +90,6 @@ def warmup_model(model):
 def eval_score(
     model: Any,
     sampled_data: list[tuple],
-    pippa_data: list[tuple],
     input_tokenizer: AutoTokenizer,
     output_tokenizer: AutoTokenizer,
     request: EvaluateModelRequest,
@@ -115,7 +114,8 @@ def eval_score(
     target_texts = sample_target_texts
 
     # now we want to calculate the average probability of the target tokens that model assigns.
-    batch_size = BATCH_SIZE
+    # batch_size = BATCH_SIZE
+    batch_size = 1
     model.eval()
     with torch.no_grad():
         for i in tqdm.tqdm(range(0, len(contexts), batch_size), desc="Evaluating batches"):
@@ -146,8 +146,8 @@ def eval_score(
             )  # this will put padding to the left and truncate the input if it is too long
 
             # concatenate the inputs and targets and their attention masks using torch.cat
-            input_ids = torch.cat((inputs["input_ids"], targets["input_ids"]), dim=1).to("cuda")
-            attention_mask = torch.cat((inputs["attention_mask"], targets["attention_mask"]), dim=1).to("cuda")
+            input_ids = torch.cat((inputs["input_ids"], targets["input_ids"]), dim=1)
+            attention_mask = torch.cat((inputs["attention_mask"], targets["attention_mask"]), dim=1)
 
             if input_ids.shape[1] > max_len:
                 print(
@@ -165,7 +165,7 @@ def eval_score(
             targets_ids_mask = torch.cat(
                 [torch.zeros_like(targets_ids_mask[:, :1]), targets_ids_mask[:, :-1]],
                 dim=1,
-            ).to("cuda")
+            )
 
             # Get model predictions (logits)
             try:
@@ -224,14 +224,13 @@ def eval_score(
             # entropy = -(probabilities * torch.log(probabilities + 1e-9)).sum(dim=-1)
 
             # normalize the logits to get probabilities
-            probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1).cuda()
+            probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
             entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-9), dim=-1)
 
             batch_entropy = (entropy * targets_ids_mask).sum() / targets_ids_mask.sum()
             normalized = batch_entropy.item() / max_entropy
             scaled_entropy = 1 - math.exp(-CREATIVITY_SCALE_FACTOR * normalized)
             total_entropy += scaled_entropy
-
 
             if torch.isnan(probabilities).any():
                 raise ValueError("NaN values detected in the probabilities tensor")
@@ -287,6 +286,169 @@ def eval_score(
             )
             gc.collect()
             torch.cuda.empty_cache()
+
+    average_prob = total_prob / count
+    average_entropy = total_entropy / count
+    print(f"Average probability of target tokens: {average_prob}")
+    cleanup(model, True, request)
+
+    return {
+        "average_prob": average_prob,
+        "average_entropy": average_entropy,
+    }
+
+
+import gc
+import os
+from typing import Any
+import tqdm
+import torch
+import math
+from transformers import AutoTokenizer
+from accelerate.utils import release_memory
+import random
+from scoring.common import (
+    MAX_GENERATION_LENGTH,
+    PROB_TOP_K,
+    VOCAB_TRUNCATION,
+    MAX_SEQ_LEN,
+    CREATIVITY_SCALE_FACTOR,
+    EvaluateModelRequest,
+)
+
+BATCH_SIZE = 2
+max_entropy = math.log(VOCAB_TRUNCATION)
+
+
+def eval_score_batch(
+    model: Any,
+    sampled_data: list[tuple],
+    input_tokenizer: AutoTokenizer,
+    output_tokenizer: AutoTokenizer,
+    request: EvaluateModelRequest,
+    debug: bool = False,
+):
+    max_len = min(model.config.max_position_embeddings, MAX_SEQ_LEN)
+    if max_len is None:
+        raise ValueError("Model does not have a maximum position embedding set")
+
+    sample_contexts, sample_target_texts, _ = zip(*sampled_data)
+
+    total_prob = 0
+    total_entropy = 0
+    count = 0
+    contexts = sample_contexts
+    target_texts = sample_target_texts
+
+    num_gpus = torch.cuda.device_count()
+    batch_size = BATCH_SIZE * num_gpus  # Increase batch size proportionally to GPU count
+
+    model.eval()
+    with torch.no_grad():
+        for i in tqdm.tqdm(range(0, len(contexts), batch_size), desc="Evaluating batches"):
+            batch_contexts = contexts[i : i + batch_size]
+            batch_targets = target_texts[i : i + batch_size]
+
+            # Process each GPU's portion of the batch
+            batch_results = []
+            for gpu_id in range(num_gpus):
+                start_idx = gpu_id * BATCH_SIZE
+                end_idx = (gpu_id + 1) * BATCH_SIZE
+                gpu_contexts = batch_contexts[start_idx:end_idx]
+                gpu_targets = batch_targets[start_idx:end_idx]
+
+                if not gpu_contexts:
+                    continue  # Skip if this GPU has no data to process
+
+                with torch.cuda.device(gpu_id):
+                    inputs = input_tokenizer(
+                        gpu_contexts,
+                        return_tensors="pt",
+                        padding="max_length",
+                        truncation=True,
+                        max_length=max_len - MAX_GENERATION_LENGTH,
+                        add_special_tokens=True,
+                    ).to(f"cuda:{gpu_id}")
+
+                    targets = output_tokenizer(
+                        gpu_targets,
+                        return_tensors="pt",
+                        padding="max_length",
+                        truncation=True,
+                        max_length=MAX_GENERATION_LENGTH,
+                        add_special_tokens=False,
+                    ).to(f"cuda:{gpu_id}")
+
+                    input_ids = torch.cat((inputs["input_ids"], targets["input_ids"]), dim=1)
+                    attention_mask = torch.cat((inputs["attention_mask"], targets["attention_mask"]), dim=1)
+
+                    targets_ids_mask = torch.cat(
+                        [torch.zeros_like(inputs["attention_mask"]), targets["attention_mask"]],
+                        dim=1,
+                    )
+                    targets_ids_mask = torch.cat(
+                        [torch.zeros_like(targets_ids_mask[:, :1]), targets_ids_mask[:, :-1]],
+                        dim=1,
+                    )
+
+                    outputs = model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        use_cache=False,
+                    )
+
+                    outputs.logits = torch.cat(
+                        [torch.zeros_like(outputs.logits[:, :1, :]), outputs.logits[:, :-1, :]],
+                        dim=1,
+                    )
+
+                    top_k_logits, top_k_indices = outputs.logits.topk(VOCAB_TRUNCATION, dim=-1)
+                    outputs.logits = torch.full_like(outputs.logits, float("-inf")).scatter(
+                        -1, top_k_indices, top_k_logits
+                    )
+
+                    probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
+                    entropy = -torch.sum(probabilities * torch.log(probabilities + 1e-9), dim=-1)
+
+                    batch_entropy = (entropy * targets_ids_mask).sum() / targets_ids_mask.sum()
+                    normalized = batch_entropy.item() / max_entropy
+                    scaled_entropy = 1 - math.exp(-CREATIVITY_SCALE_FACTOR * normalized)
+
+                    top_prob_indices = torch.topk(probabilities, PROB_TOP_K, dim=-1).indices
+                    mask = torch.zeros_like(probabilities, dtype=torch.bool).scatter_(-1, top_prob_indices, True)
+                    probabilities[~mask] = 1e-9
+                    token_probabilities = probabilities.gather(-1, input_ids.unsqueeze(-1)).squeeze(-1)
+                    token_probabilities = token_probabilities * targets_ids_mask
+
+                    token_count = targets_ids_mask.sum().cpu().item()
+                    one_gram_probabilities = token_probabilities
+                    n_gram_prob = (one_gram_probabilities.sum().cpu().item() / token_count) * 0.25
+                    two_gram_probabilities = one_gram_probabilities[:, 1:] * one_gram_probabilities[:, :-1]
+                    n_gram_prob += (two_gram_probabilities.sum().cpu().item() / token_count) * 0.25
+                    three_gram_probabilities = two_gram_probabilities[:, 1:] * one_gram_probabilities[:, :-2]
+                    n_gram_prob += (three_gram_probabilities.sum().cpu().item() / token_count) * 0.25
+                    four_gram_probabilities = three_gram_probabilities[:, 1:] * one_gram_probabilities[:, :-3]
+                    n_gram_prob += (four_gram_probabilities.sum().cpu().item() / token_count) * 0.25
+
+                    batch_results.append((n_gram_prob, scaled_entropy, token_count))
+
+                    del (
+                        outputs,
+                        targets_ids_mask,
+                        probabilities,
+                        token_probabilities,
+                        one_gram_probabilities,
+                        two_gram_probabilities,
+                        three_gram_probabilities,
+                        four_gram_probabilities,
+                    )
+                    torch.cuda.empty_cache()
+
+            # Aggregate results from all GPUs
+            for n_gram_prob, scaled_entropy, token_count in batch_results:
+                total_prob += n_gram_prob
+                total_entropy += scaled_entropy
+                count += 1
 
     average_prob = total_prob / count
     average_entropy = total_entropy / count

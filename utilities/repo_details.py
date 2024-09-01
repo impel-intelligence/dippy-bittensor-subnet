@@ -27,7 +27,9 @@ class ModelRepo:
 
 def get_model_size(repo_namespace: str, repo_name: str):
     try:
-        safetensor_index = f"https://huggingface.co/{repo_namespace}/{repo_name}/resolve/main/model.safetensors.index.json"
+        safetensor_index = (
+            f"https://huggingface.co/{repo_namespace}/{repo_name}/resolve/main/model.safetensors.index.json"
+        )
         response = requests.get(safetensor_index)
         if response.status_code != 200:
             print(f"Error getting safetensors index: {response.text}")

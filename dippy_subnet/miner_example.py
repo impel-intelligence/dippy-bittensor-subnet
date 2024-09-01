@@ -1,6 +1,7 @@
 """
 Example script to download any arbitrary model and format the repo correctly.
 """
+
 import os
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from utilities.utils import save_model

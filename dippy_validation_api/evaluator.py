@@ -3,16 +3,19 @@ import tarfile
 import io
 import os
 import time
+import copy
 import docker
 from pydantic import BaseModel
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any
 
 from scoring.common import EvaluateModelRequest
 from utilities.event_logger import EventLogger
 from model.scores import Scores
 
 DEFAULT_IMAGE_NAME = "grader:latest"
-DEFAULT_HOME_DIR = "/home/new_prod_user/dippy-bittensor-subnet"
+
+DEFAULT_HOME_DIR = os.environ.get("EVALUATOR_HOME_DIR", "/home/new_prod_user/dippy-bittensor-subnet")
+DEFAULT_MODEL_CACHE_DIR = os.environ.get("EVALUATOR_MODEL_CACHE_DIR", "/workdir/model_cache_dir")
 
 
 class EvaluationScore(BaseModel):
@@ -34,41 +37,62 @@ class CoherenceScore(BaseModel):
     coherence_score: float
 
 
+class InferenceScore(BaseModel):
+    vibe_score: float
+    coherence_score: float
+
+
 class Evaluator:
     def __init__(
         self,
         image_name: str = DEFAULT_IMAGE_NAME,
+        gpu_ids: str = "0",
         logger: EventLogger = EventLogger(),
         trace: bool = False,
     ):
-        self.client = docker.from_env()
+        self.client = docker.from_env(version="auto")
         self.logger = logger
+
+        if trace:
+            self.logger = EventLogger(
+                filepath="/tmp/valapi_event_logs/trace_{time:UNIX}.log",
+                level="DEBUG",
+                stderr=True,
+            )
         self.image_name = image_name
+
+        prompt_template_path = os.path.join(DEFAULT_HOME_DIR, "scoring/prompt_templates")
+        evalsets_template_path = os.path.join(DEFAULT_HOME_DIR, "evalsets")
+
+        prompt_template_path = str(prompt_template_path)
+
         self.volume_configuration = {
-            f"{DEFAULT_HOME_DIR}/scoring/prompt_templates": {
+            prompt_template_path: {
                 "bind": "/app/prompt_templates",
                 "mode": "ro",
             },
-            f"{DEFAULT_HOME_DIR}/datasets": {
-                "bind": "/app/datasets",
+            evalsets_template_path: {
+                "bind": "/app/evalsets",
                 "mode": "rw",
             },
         }
         if trace:
-            self.volume_configuration[f"{DEFAULT_HOME_DIR}/scoring"] = {
+            scoring_path = os.path.join(DEFAULT_HOME_DIR, "scoring")
+            self.volume_configuration[str(scoring_path)] = {
                 "bind": "/app/scoring",
                 "mode": "ro",
             }
-            self.volume_configuration[f"{DEFAULT_HOME_DIR}/evalsets"] = {
-                "bind": "/app/evalsets",
+            self.volume_configuration[DEFAULT_MODEL_CACHE_DIR] = {
+                "bind": "/app/model_cache_dir",
                 "mode": "rw",
             }
-        self.device_requests = [docker.types.DeviceRequest(count=-1, capabilities=[["gpu"]])]
+        self.device_requests = [docker.types.DeviceRequest(device_ids=[gpu_ids], capabilities=[["gpu"]])]
+
         self.env = {
             "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY"),
             "HF_TOKEN": os.environ.get("HF_TOKEN"),
-            "COHERENCE_DATASET_NAME": os.environ.get("COHERENCE_DATASET_NAME"),
-            "PYTORCH_CUDA_ALLOC_CONF":"expandable_segments:True",
+            "VLLM_WORKER_MULTIPROC_METHOD": "_",
+            "PYTORCH_CUDA_ALLOC_CONF": "_",
         }
         self.trace = trace
 
@@ -77,21 +101,29 @@ class Evaluator:
         job_type: str,
         request: EvaluateModelRequest,
     ) -> dict:
-        # Configure volume mounting
         volumes = self.volume_configuration
-        # Configure GPU support
         device_requests = self.device_requests
 
         command = f"{job_type} {request.to_args()}"
         self.logger.debug("command", command=command)
+        self.logger.debug("device_requests", device_requests=device_requests)
 
-        # Run the container
+        env = copy.copy(self.env)
+        if job_type == "eval":
+            env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+            env["VLLM_WORKER_MULTIPROC_METHOD"] = "_"
+        if job_type == "inference":
+            env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:False"
+            env["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
+
+        self.logger.debug("env", env=env)
+
         container = self.client.containers.run(
             self.image_name,
             command=command,
             volumes=volumes,
             device_requests=device_requests,
-            environment=self.env,
+            environment=env,
             detach=True,  # Run in background
         )
         filepath = f"/tmp/{job_type}_output.json"
@@ -100,11 +132,13 @@ class Evaluator:
         while container.status == "created":
             time.sleep(10)
             container.reload()
+        print("now waiting for container to complete")
         result = container.wait()
         self.logger.debug(f"container_run_complete, {result}")
+        print(f"container_run_complete, {result}")
 
         try:
-            bits, stat = container.get_archive(filepath)
+            bits, _ = container.get_archive(filepath)
             with io.BytesIO() as file_data:
                 for chunk in bits:
                     file_data.write(chunk)
@@ -150,35 +184,19 @@ class Evaluator:
         except Exception as e:
             return RunError(error=str(e))
 
-    def coherence_score(self, request: EvaluateModelRequest) -> Union[CoherenceScore, RunError]:
+    def inference_score(self, request: EvaluateModelRequest) -> Union[InferenceScore, RunError]:
         try:
-            coherence_result = self.run_docker_container(
-                job_type="coherence",
+            inference_result = self.run_docker_container(
+                job_type="inference",
                 request=request,
             )
-            if "error" in coherence_result:
-                raise Exception(coherence_result["error"])
-            if coherence_result["completed"] is False:
+            if "error" in inference_result:
+                raise Exception(inference_result["error"])
+            if inference_result["completed"] is False:
                 raise Exception("completion internal error")
-            score = CoherenceScore(
-                coherence_score=coherence_result["coherence_score"],
-            )
-            return score
-        except Exception as e:
-            return RunError(error=str(e))
-
-    def vibe_score(self, request: EvaluateModelRequest) -> Union[VibeScore, RunError]:
-        try:
-            vibe_result = self.run_docker_container(
-                job_type="vibe",
-                request=request,
-            )
-            if "error" in vibe_result:
-                raise Exception(vibe_result["error"])
-            if vibe_result["completed"] is False:
-                raise Exception("completion internal error")
-            score = VibeScore(
-                vibe_score=vibe_result["vibe_score"],
+            score = InferenceScore(
+                vibe_score=inference_result["vibe_score"],
+                coherence_score=inference_result["coherence_score"],
             )
             return score
         except Exception as e:
@@ -219,29 +237,23 @@ def entry():
     print(f"running {image_name} with {req}")
 
     try:
-        evaler = Evaluator(image_name=image_name, trace=True)
+        evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="6,7")
         eval_result = evaler.eval_score(req)
         print(f"eval_result : {eval_result}")
         if isinstance(eval_result, RunError):
             raise Exception(eval_result.error)
-        vibe_result = evaler.vibe_score(req)
-        if isinstance(vibe_result, RunError):
-            raise Exception(vibe_result.error)
-        print(f"vibe_result : {vibe_result}")
-        print("coherence start")
-        coherence_result = evaler.coherence_score(req)
-        if isinstance(coherence_result, RunError):
-            raise Exception(coherence_result.error)
-        print(f"coherence_result : {coherence_result}")
+        infrence_result = evaler.inference_score(req)
+        if isinstance(infrence_result, RunError):
+            raise Exception(infrence_result.error)
+        print(f"infrence_result : {infrence_result}")
 
         scores_data = Scores()
         scores_data.qualitative_score = eval_result.eval_score
         scores_data.latency_score = eval_result.latency_score
         scores_data.creativity_score = eval_result.creativity_score
         scores_data.llm_size_score = eval_result.eval_model_size_score
-        scores_data.vibe_score = vibe_result.vibe_score
-        scores_data.coherence_score = coherence_result.coherence_score
-        
+        scores_data.vibe_score = infrence_result.vibe_score
+        scores_data.coherence_score = infrence_result.coherence_score
 
         final_eval_score = (
             scores_data.adjusted_q_score(

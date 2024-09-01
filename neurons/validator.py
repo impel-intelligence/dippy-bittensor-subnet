@@ -314,7 +314,9 @@ class Validator:
             self.event_logger = EventLogger(filepath=eventlog_path)
             self.use_event_logger = True
         except Exception as e:
-            bt.logging.error(f"Could not initialize event logger: {e}. Event logging is optional and used for diagnostic purposes. If you do not know what this is for, that's ok.")
+            bt.logging.error(
+                f"Could not initialize event logger: {e}. Event logging is optional and used for diagnostic purposes. If you do not know what this is for, that's ok."
+            )
 
         # == Initialize the update thread ==
         self.stop_event = threading.Event()
@@ -381,7 +383,7 @@ class Validator:
                 wait_for_inclusion = True
         except Exception as e:
             bt.logging.info(f"wait_for_inclusion not set: {wait_for_inclusion}")
-        
+
         async def _try_set_weights(wait_for_inclusion=False):
             weights_success = False
             try:
@@ -429,15 +431,14 @@ class Validator:
             console.print(status_table)
             return weights_success
 
-
         weights_set_success = False
         try:
             bt.logging.debug("Setting weights.")
             weights_set_success = await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
             payload = {
-            "time": dt.datetime.utcnow(),
-            "weights_set_success": weights_set_success,
-            "wait_for_inclusion": wait_for_inclusion,
+                "time": dt.datetime.utcnow(),
+                "weights_set_success": weights_set_success,
+                "wait_for_inclusion": wait_for_inclusion,
             }
             bt.logging.debug("Finished setting weights.")
             telemetry_report(self.local_metadata, payload)
@@ -445,9 +446,6 @@ class Validator:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")
         except Exception as e:
             bt.logging.error(f"Error setting weights: {e}")
-            
-
-        
 
     async def try_sync_metagraph(self, ttl: int) -> bool:
         def sync_metagraph(endpoint):
@@ -547,7 +545,7 @@ class Validator:
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} after {current_block}")
                     continue
                 # old models submitted are marked invalid after certain time
-                if current_block >= SCORE_CHANGE_BLOCK and model_data.block < NEW_MODEL_SUBMISSION_CUTOFF_BLOCK :
+                if current_block >= SCORE_CHANGE_BLOCK and model_data.block < NEW_MODEL_SUBMISSION_CUTOFF_BLOCK:
                     invalid_uids.append(uid)
                     continue
                 if model_data.model_id is None:
@@ -729,9 +727,9 @@ class Validator:
                 await asyncio.sleep(5)
 
 
-def telemetry_report(local_metadata: LocalMetadata, additional_payload = None):
+def telemetry_report(local_metadata: LocalMetadata, additional_payload=None):
     telemetry_endpoint = f"{constants.VALIDATION_SERVER}/telemetry_report"
-    
+
     if additional_payload is not None:
         payload = additional_payload
     headers = {

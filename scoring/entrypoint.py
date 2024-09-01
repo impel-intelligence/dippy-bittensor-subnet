@@ -6,14 +6,9 @@ import os
 import sys
 import gc
 import traceback
-import huggingface_hub
 
 from scoring.common import (
     EvaluateModelRequest,
-    PIPPA_FILENAME,
-    full_path,
-    PROMPTS_1_FILENAME,
-    PROMPTS_2_FILENAME,
 )
 
 app = typer.Typer()
@@ -30,18 +25,15 @@ def _run(
     run_type: str,
 ):
     from scoring.get_eval_score import get_eval_score
-    from scoring.coherence_score import get_coherence_score
-    from scoring.vibe_score import get_vibe_match_score
+    from scoring.inference_score import get_inference_score
 
     typer.echo(f"Evaluating with parameters: {request}")
     result = {"completed": False}
     try:
         if run_type == "eval":
             result = get_eval_score(request)
-        if run_type == "vibe":
-            result = get_vibe_match_score(request)
-        if run_type == "coherence":
-            result = get_coherence_score(request)
+        if run_type == "inference":
+            result = get_inference_score(request)
         result["completed"] = True
         typer.echo(f"Evaluated with parameters: {result}")
     except Exception as e:
@@ -71,8 +63,8 @@ def evaluate(
     _run(request=request, run_type="eval")
 
 
-@app.command("coherence")
-def coherence(
+@app.command("inference")
+def inference_score(
     repo_name: str = typer.Argument(help="Repository name"),
     repo_namespace: str = typer.Argument(help="Repository namespace"),
     chat_template_type: str = typer.Argument(help="Chat template type"),
@@ -84,23 +76,7 @@ def coherence(
         chat_template_type=chat_template_type,
         hash=hash,
     )
-    _run(request=request, run_type="coherence")
-
-
-@app.command("vibe")
-def vibe_score(
-    repo_name: str = typer.Argument(help="Repository name"),
-    repo_namespace: str = typer.Argument(help="Repository namespace"),
-    chat_template_type: str = typer.Argument(help="Chat template type"),
-    hash: Optional[str] = typer.Argument(help="hash"),
-):
-    request = EvaluateModelRequest(
-        repo_namespace=repo_namespace,
-        repo_name=repo_name,
-        chat_template_type=chat_template_type,
-        hash=hash,
-    )
-    _run(request=request, run_type="vibe")
+    _run(request=request, run_type="inference")
 
 
 @app.command("stub")
@@ -108,7 +84,6 @@ def stub():
     print("stub")
     result = {"g": True}
     write_to_json(result, "/tmp/output.json")
-
 
 
 # example: python entrypoint.py python entrypoint.py eval repo_name repo_namespace chat_template_type hash

@@ -126,6 +126,7 @@ The themes of the conversation are: {data_point['categories']}."""
 
         return [self[i] for i in indices]
 
+
 DATASET_CACHE_DIR = "evalsets"
 hf_token = os.environ.get("HF_TOKEN")
 
@@ -140,14 +141,19 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
         partial_data.extend(partition_data)
     return partial_data
 
+
 import requests
+
 DATASET_URL = "http://75.101.234.38:8111/latest"
 DATASET_API_KEY = os.environ.get("DATASET_API_KEY", "dippy")
+
+
 def get_latest_from_set():
     response = requests.get(DATASET_URL, params={"key": DATASET_API_KEY})
     response.raise_for_status()  # Raise an error for bad responses
     data = response.json().get("data", [])
     return data
+
 
 class StreamedSyntheticDataset(Dataset):
     def __init__(self, max_input_len: int):
@@ -408,6 +414,7 @@ class SyntheticCoherenceDataset(Dataset):
 
         return [self[i] for i in indices]
 
+
 class JSONLDataset(Dataset):
     def __init__(self, filenames, max_input_len):
         all_data = []
@@ -469,6 +476,7 @@ class JSONLDataset(Dataset):
         if not chat_input.startswith(self._tokenizer.bos_token):
             chat_input = f"{self._tokenizer.bos_token}{chat_input}"
         return chat_input
+
     def __getitem__(self, idx):
         if self._chat_template is None:
             raise ValueError("Chat template is not set. Please set the chat template before generating chat.")
@@ -501,6 +509,7 @@ class JSONLDataset(Dataset):
 
         return [self[i] for i in indices]
 
+
 class PersonaHubDataset(Dataset):
     def __init__(self, max_input_len):
 
@@ -509,13 +518,11 @@ class PersonaHubDataset(Dataset):
         for partition in all_data:
             partition_data = all_data.get(partition)
             for chunk in partition_data:
-                prompt = chunk.get('data')
+                prompt = chunk.get("data")
                 partitions.append(prompt)
         self.dataset = self.process_data(partitions, max_input_len)
         self._chat_template = None
         self._tokenizer = None
-
-
 
     def set_chat_template_params(self, template_path: str, tokenizer: AutoTokenizer):
         self._chat_template = jinja2.Template(open(template_path).read())
@@ -564,6 +571,7 @@ class PersonaHubDataset(Dataset):
         if not chat_input.startswith(self._tokenizer.bos_token):
             chat_input = f"{self._tokenizer.bos_token}{chat_input}"
         return chat_input
+
     def __getitem__(self, idx):
         if self._chat_template is None:
             raise ValueError("Chat template is not set. Please set the chat template before generating chat.")
@@ -595,8 +603,3 @@ class PersonaHubDataset(Dataset):
         indices = indices[:n]
 
         return [self[i] for i in indices]
-
-
-
-
-
