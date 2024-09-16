@@ -9,7 +9,7 @@ from accelerate.utils import release_memory
 from datetime import datetime, timezone, timedelta
 
 from scoring.eval_score import eval_score, cleanup, warmup_model, eval_score_batch
-from scoring.dataset import PippaDataset, StreamedSyntheticDataset
+from scoring.dataset import StreamedSyntheticDataset
 
 # Import necessary modules and functions from the main API file
 from scoring.common import (
@@ -54,9 +54,10 @@ def get_eval_score(request: EvaluateModelRequest):
             quantization_config=quant_config,
             attn_implementation="flash_attention_2",
             torch_dtype=torch.bfloat16,
-            device_map="auto",
+            device_map="sequential",
             cache_dir=f"model_cache_dir/{cache_path}",
         )
+        print(f"loaded model as {type(model)}")
 
     except Exception as e:
         try:
@@ -100,13 +101,16 @@ def get_eval_score(request: EvaluateModelRequest):
         raise Exception("Error downloading tokenizer: " + failure_reason)
 
     # warm up the model
-    print("Warming up model")
+    num_gpus = torch.cuda.device_count()
+    print(f"Warming up model with gpus {num_gpus}")
+    
     try:
         avg_latency = warmup_model(model)
         if not avg_latency:  # either 0 or None
             raise Exception("Error warming up model")
 
     except Exception as e:
+        print(e)
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
         raise Exception("Error warming up model: " + failure_reason)

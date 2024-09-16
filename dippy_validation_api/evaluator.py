@@ -93,6 +93,7 @@ class Evaluator:
             "HF_TOKEN": os.environ.get("HF_TOKEN"),
             "VLLM_WORKER_MULTIPROC_METHOD": "_",
             "PYTORCH_CUDA_ALLOC_CONF": "_",
+            "DATASET_API_KEY": os.environ.get("DATASET_API_KEY"),
         }
         self.trace = trace
 
@@ -105,8 +106,8 @@ class Evaluator:
         device_requests = self.device_requests
 
         command = f"{job_type} {request.to_args()}"
-        self.logger.debug("command", command=command)
-        self.logger.debug("device_requests", device_requests=device_requests)
+        self.logger.info("command", command=command)
+        self.logger.info("device_requests", device_requests=device_requests)
 
         env = copy.copy(self.env)
         if job_type == "eval":
@@ -237,15 +238,18 @@ def entry():
     print(f"running {image_name} with {req}")
 
     try:
-        evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="6,7")
-        eval_result = evaler.eval_score(req)
-        print(f"eval_result : {eval_result}")
-        if isinstance(eval_result, RunError):
-            raise Exception(eval_result.error)
+        evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="0,1,2,3")
+
         infrence_result = evaler.inference_score(req)
         if isinstance(infrence_result, RunError):
             raise Exception(infrence_result.error)
         print(f"infrence_result : {infrence_result}")
+
+        eval_result = evaler.eval_score(req)
+        print(f"eval_result : {eval_result}")
+        if isinstance(eval_result, RunError):
+            raise Exception(eval_result.error)
+        
 
         scores_data = Scores()
         scores_data.qualitative_score = eval_result.eval_score

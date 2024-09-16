@@ -15,6 +15,7 @@ from huggingface_hub.hf_api import HfApi, RepositoryNotFoundError, GatedRepoErro
 from dotenv import load_dotenv
 import random
 from pydantic import BaseModel
+from typing import Dict, Any
 
 from dippy_validation_api.evaluator import Evaluator, RunError
 from dippy_validation_api.persistence import SupabaseState
@@ -62,7 +63,6 @@ SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
 BLOCK_RATE_LIMIT = 14400  # Every 14400 blocks = 48 hours
 app = FastAPI()
-evaluator = Evaluator()
 supabaser = SupabaseState()
 
 logger = logging.getLogger("uvicorn")
@@ -107,13 +107,10 @@ def _model_evaluation_step(queue_id, duplicate: bool = False):
     try:
         if duplicate:
             _duplicate_model(request)
-        time.sleep(queue_id * 600)
-        app.state.event_logger.info(f"Model evaluation completed: {request} {queue_id}")
-
-
-        # result = _evaluate_model(request)
-        # logger.info(f"Model evaluation completed: {result}")
-        # app.state.event_logger.info("model_eval_queue_complete", result=result, request=request)
+        result = _evaluate_model(request, queue_id)
+        if result is None:
+            result = {"note": "incoherent model"}    
+        app.state.event_logger.info("model_eval_queue_complete", result=result, request=request)
     except Exception as e:
         logger.error(f"Error during model evaluation: {e}")
         app.state.event_logger.info("model_eval_queue_error", error=e)
@@ -145,6 +142,14 @@ def _duplicate_model(request: EvaluateModelRequest):
             f"model error : {e}",
         )
 
+GPU_ID_MAP = {
+    0: "0,1",
+    1: "2,3",
+    2: "4,5",
+    3: "6,7",
+    4: "8,9"
+}
+
 
 def _evaluate_model(
     request: EvaluateModelRequest,
@@ -156,9 +161,33 @@ def _evaluate_model(
     supabaser.update_leaderboard_status(
         request.hash,
         "RUNNING",
-        "Model evaluation in progress",
+        "Model evaluation in progress starting with inference score",
     )
-    evaluator = Evaluator()
+
+    evaluator = Evaluator(gpu_ids=GPU_ID_MAP[queue_id])
+    try:
+        inference_response = evaluator.inference_score(request)
+        if isinstance(inference_response, RunError):
+            raise Exception(inference_response.error)
+        vibe_score = inference_response.vibe_score
+        coherence_score = inference_response.coherence_score
+
+        if coherence_score < 0.95:
+            supabaser.update_leaderboard_status(request.hash, StatusEnum.COMPLETED, "Incoherent model submitted")
+            return None
+        update_row_supabase(
+        {
+            "hash": request.hash,
+            "vibe_score": vibe_score,
+            "coherence_score": coherence_score,
+            "notes": "Now computing evaluation score",
+        }
+    )
+    except Exception as e:
+        error_string = f"Error calling inference_score job with message: {e}"
+        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, error_string)
+        raise RuntimeError(error_string)
+
     try:
         eval_score_result = evaluator.eval_score(request)
         if isinstance(eval_score_result, RunError):
@@ -177,29 +206,6 @@ def _evaluate_model(
     model_size_score = eval_score_result.eval_model_size_score
     creativity_score = eval_score_result.creativity_score
 
-    update_row_supabase(
-        {
-            "hash": request.hash,
-            "model_size_score": model_size_score,
-            "qualitative_score": eval_score,
-            "latency_score": latency_score,
-            "creativity_score": creativity_score,
-            "notes": "Now computing vibe and coherence score",
-        }
-    )
-    try:
-        inference_response = evaluator.inference_score(request)
-        if isinstance(inference_response, RunError):
-            raise Exception(inference_response.error)
-
-    except Exception as e:
-        error_string = f"Error calling inference_score job with message: {e}"
-        supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, error_string)
-        raise RuntimeError(error_string)
-
-    vibe_score = inference_response.vibe_score
-    coherence_score = inference_response.coherence_score
-
     if eval_score is None or latency_score is None or model_size_score is None or vibe_score is None:
         raise HTTPException(
             status_code=500,
@@ -215,33 +221,26 @@ def _evaluate_model(
     full_score_data.latency_score = latency_score
     # Enable after introducing new
     total_score = full_score_data.calculate_total_score()
-
     try:
         update_row_supabase(
             {
                 "hash": request.hash,
-                "model_size_score": model_size_score,
-                "qualitative_score": eval_score,
-                "latency_score": latency_score,
-                "vibe_score": vibe_score,
-                "total_score": total_score,
-                "coherence_score": coherence_score,
+                "model_size_score": full_score_data.llm_size_score,
+                "qualitative_score": full_score_data.qualitative_score,
+                "creativity_score": full_score_data.creativity_score,
+                "latency_score": full_score_data.latency_score,
+                "total_score": full_score_data.calculate_total_score(),
                 "status": StatusEnum.COMPLETED,
                 "notes": "",
             }
         )
-
     except Exception as e:
         failure_reason = str(e)
         logger.error(f"Updating leaderboard to FAILED: {failure_reason}")
         supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_reason)
         raise RuntimeError("Error updating leaderboard: " + failure_reason)
     result = {
-        "model_size_score": model_size_score,
-        "qualitative_score": eval_score,
-        "latency_score": latency_score,
-        "vibe_score": vibe_score,
-        "total_score": total_score,
+        "full_score_data": full_score_data,
     }
     return result
 
@@ -288,14 +287,24 @@ async def telemetry_report(
     if app.state.event_logger_enabled:
         app.state.event_logger.info("telemetry_request", extra=request_details)
     return Response(status_code=200)
-
+class EventData(BaseModel):
+    commit: str
+    btversion: str
+    uid: str
+    hotkey: str
+    coldkey: str
+    payload: Dict[Any, Any]
+    signature: Dict[str, Any]
 
 @app.post("/event_report")
-async def event_report(
-    request: Request,
-):
+async def event_report(event_data: EventData):
+    try:
+        if app.state.event_logger_enabled:
+            app.state.event_logger.info("event_request", extra=event_data)
+        return Response(status_code=200)
+    except Exception as e:
+        return Response(status_code=400, content={"error": str(e)})
 
-    return Response(status_code=200)
 
 
 class MinerboardRequest(BaseModel):
@@ -342,6 +351,8 @@ def evaluate_model(
     uid: str = Header(None, alias="UID"),
     hotkey: str = Header(None, alias="Hotkey"),
     coldkey: str = Header(None, alias="Coldkey"),
+    signed_payload: str = Header(None, alias="signed_payload"),
+    miner_hotkey: str = Header(None, alias="miner_hotkey"),
 ):
     request_details = {
         "git_commit": git_commit,
@@ -349,6 +360,8 @@ def evaluate_model(
         "uid": uid,
         "hotkey": hotkey,
         "coldkey": coldkey,
+        "signed_payload": signed_payload,
+        "miner_hotkey": miner_hotkey,
     }
     # log incoming request details
     if app.state.event_logger_enabled:
@@ -388,6 +401,12 @@ def check_model(
         raise HTTPException(status_code=400, detail="Hash does not match the model details")
     if request.admin_key != admin_key:
         raise HTTPException(status_code=403, detail="invalid key")
+
+    # validate the repo exists
+    repo_id = f"{request.repo_namespace}/{request.repo_name}"
+    if not repository_exists(repo_id):
+        failure_notes = f"Huggingface repo not public: {repo_id}"
+
 
     # check if the model already exists in the leaderboard
     # This needs to be a virtually atomic operation
@@ -496,6 +515,10 @@ def update_row_supabase(row):
 def display_leaderboard():
     return supabaser.get_leaderboard()
 
+@app.get("/hc")
+def hc():
+    return {"g": True}
+
 
 def start():
     # add command line arguments for the ports of the two apis
@@ -507,8 +530,7 @@ def start():
     parser.add_argument(
         "--queues",
         type=int,
-        # default=1,
-        default=4,
+        default=0,
         help="Specify the number of queues to start (default: 1)",
     )
     args = parser.parse_args()

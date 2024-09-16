@@ -144,21 +144,33 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
 
 import requests
 
-DATASET_URL = "http://75.101.234.38:8111/latest"
+# DATASET_URL = "http://75.101.234.38:8111/latest"
+DATASET_URL = "https://datasets.dippy-bittensor-subnet.com/latest"
+HISTORICAL_DATASET_URL = "https://datasets.dippy-bittensor-subnet.com/historical_only"
+RECENT_DATASET_URL = "https://datasets.dippy-bittensor-subnet.com/recent_only"
 DATASET_API_KEY = os.environ.get("DATASET_API_KEY", "dippy")
 
 
-def get_latest_from_set():
-    response = requests.get(DATASET_URL, params={"key": DATASET_API_KEY})
+def get_latest_from_set(filter: str = "both"):
+    url = DATASET_URL
+    if filter == "history":
+        url = HISTORICAL_DATASET_URL
+    elif filter == "recent":
+        url = RECENT_DATASET_URL
+    
+    response = requests.get(url, params={"key": DATASET_API_KEY, "bypass":"impel_intelligence_speical_ratelimit_bypass"})
     response.raise_for_status()  # Raise an error for bad responses
     data = response.json().get("data", [])
     return data
 
 
 class StreamedSyntheticDataset(Dataset):
-    def __init__(self, max_input_len: int):
-        data = get_latest_from_set()
-
+    def __init__(self, max_input_len: int, filter: str = "both"):
+        try:
+            data = get_latest_from_set(filter)
+        except Exception as e:
+            print(f"error loading dataset {e}")
+            raise e
         self.dataset = self.process_data(data, max_input_len)
 
         self._chat_template = None

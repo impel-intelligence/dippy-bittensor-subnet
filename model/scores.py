@@ -10,7 +10,7 @@ QUALITATIVE_SCORE_WEIGHT = 0.82  # weight of the qualitative score in the total 
 MODEL_SIZE_SCORE_WEIGHT = 0.06  # weight of the model size score in the total score
 LATENCY_SCORE_WEIGHT = 0.06  # weight of the latency score in the total score
 VIBE_SCORE_WEIGHT = 0.06  # weight of the vibe score in the total score
-
+COHERENCE_MINIMUM = 0.95
 
 class StrEnum(str, Enum):
     def __str__(self):
@@ -70,6 +70,17 @@ class Scores(BaseModel):
         total_score += MODEL_SIZE_SCORE_WEIGHT * self.llm_size_score
         total_score += LATENCY_SCORE_WEIGHT * self.latency_score
         total_score += VIBE_SCORE_WEIGHT * self.vibe_score
-        self.coherence_score = 1 if self.coherence_score >= 0.9 else 0
+        self.coherence_score = 1 if self.coherence_score >= COHERENCE_MINIMUM else 0
+        total_score = total_score * self.coherence_score
+        return total_score
+
+    def calculate_new_total_score(self, adjust_coherence: bool = False) -> float:
+        q_score = self.adjusted_q_score(self.qualitative_score, self.creativity_score)
+        total_score = 0
+        total_score += QUALITATIVE_SCORE_WEIGHT * q_score
+        
+        total_score += LATENCY_SCORE_WEIGHT * self.latency_score
+        total_score += VIBE_SCORE_WEIGHT * self.vibe_score
+        self.coherence_score = 1 if self.coherence_score >= 0.95 else 0
         total_score = total_score * self.coherence_score
         return total_score

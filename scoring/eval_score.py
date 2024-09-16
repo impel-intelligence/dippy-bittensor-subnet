@@ -1,3 +1,4 @@
+
 import gc
 import os
 from typing import Any
@@ -7,18 +8,16 @@ import math
 from transformers import AutoTokenizer
 from accelerate.utils import release_memory
 import random
-
-# Import necessary modules and functions from the main API file
 from scoring.common import (
     MAX_GENERATION_LENGTH,
     PROB_TOP_K,
     VOCAB_TRUNCATION,
     MAX_SEQ_LEN,
-    BATCH_SIZE,
     CREATIVITY_SCALE_FACTOR,
     EvaluateModelRequest,
 )
 
+BATCH_SIZE = 2
 max_entropy = math.log(VOCAB_TRUNCATION)
 
 
@@ -60,28 +59,35 @@ def warmup_model(model):
     # run the max sequence length input through the model with batch size BATCH_SIZE
     model.eval()
     latencies = []
-    with torch.no_grad():
-        for _ in range(10):
-            start_time = torch.cuda.Event(enable_timing=True)
-            end_time = torch.cuda.Event(enable_timing=True)
-            inputs = _prepare_dummy_inputs(model)
-            start_time.record()
-            outputs = model(*inputs)
-            end_time.record()
-            # Waits for everything to finish running
-            torch.cuda.synchronize()
+    
+    num_gpus = torch.cuda.device_count()
+    for gpu_id in range(num_gpus):
+        with torch.cuda.device(gpu_id):
+            with torch.no_grad():
+                for _ in range(10):
+                    start_time = torch.cuda.Event(enable_timing=True)
+                    end_time = torch.cuda.Event(enable_timing=True)
+                    inputs = _prepare_dummy_inputs(model)
+                    inputs = tuple(input.to(f"cuda:{gpu_id}") for input in inputs)
+                    torch.cuda.synchronize(device=f"cuda:{gpu_id}")
+                    start_time.record()
+                    outputs = model(*inputs)
+                    end_time.record()
+                    # Waits for everything to finish running
+                    torch.cuda.synchronize(device=f"cuda:{gpu_id}")
 
-            latency = start_time.elapsed_time(end_time)  # Measure latency in milliseconds
-            if torch.isnan(outputs.logits).any():
-                raise ValueError("NaN values detected in the logits tensor")
+                    latency = start_time.elapsed_time(end_time)  # Measure latency in milliseconds
+                    if torch.isnan(outputs.logits).any():
+                        raise ValueError("NaN values detected in the logits tensor")
 
-            latencies.append(latency)
-            del outputs, inputs
-            gc.collect()
-            torch.cuda.empty_cache()
+                    latencies.append(latency)
+                    del outputs, inputs
+                    gc.collect()
+                    torch.cuda.empty_cache()
 
-        average_latency = sum(latencies) / len(latencies)
-        print(f"Average model inference latency over 10 runs: {average_latency} ms")
+                average_latency = sum(latencies) / len(latencies)
+                print(f"Average model inference latency over 10 runs: {average_latency} ms")
+                return average_latency * 0.95
 
     # Test discount latency
     return average_latency * 0.95
@@ -298,27 +304,6 @@ def eval_score(
     }
 
 
-import gc
-import os
-from typing import Any
-import tqdm
-import torch
-import math
-from transformers import AutoTokenizer
-from accelerate.utils import release_memory
-import random
-from scoring.common import (
-    MAX_GENERATION_LENGTH,
-    PROB_TOP_K,
-    VOCAB_TRUNCATION,
-    MAX_SEQ_LEN,
-    CREATIVITY_SCALE_FACTOR,
-    EvaluateModelRequest,
-)
-
-BATCH_SIZE = 2
-max_entropy = math.log(VOCAB_TRUNCATION)
-
 
 def eval_score_batch(
     model: Any,
@@ -454,7 +439,6 @@ def eval_score_batch(
     average_entropy = total_entropy / count
     print(f"Average probability of target tokens: {average_prob}")
     cleanup(model, True, request)
-
     return {
         "average_prob": average_prob,
         "average_entropy": average_entropy,

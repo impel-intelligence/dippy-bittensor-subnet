@@ -92,8 +92,38 @@ def pretty_convo(dict_list, score):
         print(f"  Content: {item['content']}")
         print()
 
+# 22 different combinations for conversations
+def parentheses_combinations():
+    combinations = [
+        ('(', ')'), 
+        ('[', ']'), 
+        ('{', '}'), 
+        ('<', '>'), 
+        ('«', '»'), 
+        ('‹', '›'),
+        ('『', '』'), 
+        ('「', '」'), 
+        ('【', '】'), 
+        ('〔', '〕'), 
+        ('《', '》'), 
+        ('〈', '〉'), 
+        ('{|', '|}'),
+        ('⟨', '⟩'),  # Mathematical angle brackets
+        ('⦃', '⦄'),  # Mathematical white tortoise shell brackets
+        ('⦗', '⦘'),  # Mathematical flat square brackets
+        ('⸢', '⸣'),  # Corner brackets
+        ('⟦', '⟧'),  # Mathematical double square brackets
+        ('⟪', '⟫'),  # Mathematical double angle brackets
+        ('⟬', '⟭'),  # Mathematical white tortoise shell brackets
+        ('⦅', '⦆'),  # Mathematical white parentheses
+        ('⦇', '⦈'),  # Mathematical left white square bracket
+        ('⦉', '⦊'),  # Mathematical right white square bracket
+    ]
+    
+    return combinations
 
 def stringify_convo(dict_list):
+    
     result = []
     for i, item in enumerate(dict_list):
         if item["role"] == "system":
@@ -148,6 +178,7 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
             generated_text = output.outputs[0].text
             # print(f"generated_text: {generated_text}")
             role = "assistant" if conversations[i][-1]["role"] == "user" else "user"
+            # Insert synthetic response
             conversations[i].append({"role": role, "content": generated_text})
 
     generated_samples = conversations

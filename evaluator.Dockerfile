@@ -3,7 +3,6 @@
 #ENV PYTHONUNBUFFERED=1 \
 #    DEBIAN_FRONTEND=noninteractive \
 
-# FROM pytorch/pytorch:2.2.1-cuda12.1-cudnn8-devel
 FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 
 # build-essential: installs gcc which is needed to install some deps like rasterio
@@ -39,7 +38,7 @@ COPY constants ./constants
 COPY README.md .
 COPY pyproject.toml .
 COPY .git .git
-RUN uv pip install -e .
+RUN uv pip install --system -e .
 
 COPY scoring/entrypoint.py .
 

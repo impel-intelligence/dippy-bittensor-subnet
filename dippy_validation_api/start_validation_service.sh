@@ -12,7 +12,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Set default value for VENV_NAME if not provided
-VENV_NAME=${VENV_NAME:-"model_validation_venv"}
+VENV_NAME=${VENV_NAME:-".venv"}
 
 
 # Function to check if a port is in use
@@ -33,7 +33,7 @@ exit_if_port_in_use() {
 
 
 # Define ports for services with offsets
-VALIDATION_API_PORT=8000
+VALIDATION_API_PORT=8001
 
 # Check if ports are already in use before starting services
 exit_if_port_in_use "validation_api" $VALIDATION_API_PORT
@@ -84,7 +84,7 @@ echo "DIPPY_KEY: $DIPPY_KEY"
 
 # Start the validation_api
 echo "Starting validation_api..."
-./../$VENV_NAME/bin/python3 validation_api.py --queues 4 --main-api-port $VALIDATION_API_PORT >> "api_logs/validation_api.log" 2>&1 &
+./../$VENV_NAME/bin/python3 validation_api.py --queues 0 --main-api-port $VALIDATION_API_PORT >> "api_logs/validation_api.log" 2>&1 &
 echo $! > api_logs/validation_api.pid
 
 echo "All APIs are running in the background"

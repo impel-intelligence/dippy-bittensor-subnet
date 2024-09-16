@@ -19,7 +19,8 @@ class CompetitionParameters:
 # ---------------------------------
 
 # Validation API hosted by SN Owner
-VALIDATION_SERVER = "http://34.41.206.211:8000"
+# VALIDATION_SERVER = "http://34.41.206.211:8000"
+VALIDATION_SERVER = "https://dippy-bittensor-subnet.com"
 
 # The uid for this subnet.
 SUBNET_UID = 11
@@ -55,5 +56,3 @@ weights_version_key = 1
 alpha = 0.9
 # validator scoring exponential temperature
 temperature = 0.25
-# validator score boosting for earlier models.
-timestamp_epsilon = 0.02
