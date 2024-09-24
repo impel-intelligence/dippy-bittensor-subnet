@@ -36,23 +36,18 @@ SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
 COHERENCE_BATCH_SIZE = 16
 COHERENCE_MAX_TOKENS = 1024
-COHERENCE_NUM_EVALS = 128
+COHERENCE_NUM_EVALS = 256
 COHERENCE_EVAL_MODEL = "gpt-4o"
 
 PIPPA_FILENAME = "pippa_deduped.jsonl"
 PROMPTS_1_FILENAME = "opus-writing-prompts-1-sharegpt.jsonl"
 PROMPTS_2_FILENAME = "opus-writing-prompts-2-sharegpt.jsonl"
 
-DATASET_DIR = "./datasets"
+DATASET_DIR = "evalsets"
+MODEL_CACHE_DIR = "./model_cache_dir"
 
-
-EVAL_WORKING_DIR = "evalsets"
 DIPPA_DATASET_MAX_PARTITIONS = 4
 PIPPA_DATASET_PATH = "datasets/pippa_deduped.jsonl"
-
-
-def full_path(filename: str) -> str:
-    return f"{DATASET_DIR}/{filename}"
 
 
 class EvaluateModelRequest(BaseModel):

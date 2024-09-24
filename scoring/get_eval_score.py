@@ -8,8 +8,8 @@ from transformers import AutoTokenizer, BitsAndBytesConfig, AutoModelForCausalLM
 from accelerate.utils import release_memory
 from datetime import datetime, timezone, timedelta
 
-from scoring.eval_score import eval_score, cleanup, warmup_model
-from scoring.dataset import PippaDataset, StreamedSyntheticDataset
+from scoring.eval_score import eval_score, cleanup, warmup_model, eval_score_batch
+from scoring.dataset import StreamedSyntheticDataset
 
 # Import necessary modules and functions from the main API file
 from scoring.common import (
@@ -18,8 +18,6 @@ from scoring.common import (
     MAX_MODEL_SIZE,
     VOCAB_TRUNCATION,
     MAX_SEQ_LEN,
-    EVAL_WORKING_DIR,
-    PIPPA_DATASET_PATH,
     EVALUATION_DATASET_SAMPLE_SIZE,
     EvaluateModelRequest,
     chat_template_mappings,
@@ -29,20 +27,26 @@ max_entropy = math.log(VOCAB_TRUNCATION)
 
 
 def get_eval_score(request: EvaluateModelRequest):
+    print(f"dumping env {os.environ}")
+    print("debug_cuda_devices")
+    for i in range(torch.cuda.device_count()):
+        print(torch.cuda.get_device_properties(i).name)
+
     # Now download the weights
     print("Downloading model weights")
     model_downloaded = False
     failure_reason = ""
     # make dir data/hash if not exist
     cache_path = f"{request.hash}_{request.repo_namespace}_{request.repo_name}"
-    if not os.path.exists(f"{EVAL_WORKING_DIR}/{cache_path}"):
-        os.makedirs(f"{EVAL_WORKING_DIR}/{cache_path}")
+    if not os.path.exists(f"model_cache_dir/{cache_path}"):
+        os.makedirs(f"model_cache_dir/{cache_path}")
 
     quant_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True,  # This does not hurt performance much according to
         bnb_4bit_compute_dtype=torch.bfloat16,
     )
+
     try:
         model = AutoModelForCausalLM.from_pretrained(
             f"{request.repo_namespace}/{request.repo_name}",
@@ -50,10 +54,10 @@ def get_eval_score(request: EvaluateModelRequest):
             quantization_config=quant_config,
             attn_implementation="flash_attention_2",
             torch_dtype=torch.bfloat16,
-            device_map="auto",
-            cache_dir=f"{EVAL_WORKING_DIR}/{cache_path}",
-            # force_download=True
+            device_map="sequential",
+            cache_dir=f"model_cache_dir/{cache_path}",
         )
+        print(f"loaded model as {type(model)}")
 
     except Exception as e:
         try:
@@ -64,7 +68,7 @@ def get_eval_score(request: EvaluateModelRequest):
                 f"{request.repo_namespace}/{request.repo_name}",
                 revision=request.revision,
                 device_map="auto",
-                cache_dir=f"{EVAL_WORKING_DIR}/{cache_path}",
+                cache_dir=f"model_cache_dir/{cache_path}",
                 # force_download=True
             )
         except Exception as e:
@@ -72,7 +76,6 @@ def get_eval_score(request: EvaluateModelRequest):
 
     model.eval()
 
-    # get the tokenizers
     print("Downloading tokenizer")
     try:
         input_tokenizer = AutoTokenizer.from_pretrained(
@@ -98,13 +101,16 @@ def get_eval_score(request: EvaluateModelRequest):
         raise Exception("Error downloading tokenizer: " + failure_reason)
 
     # warm up the model
-    print("Warming up model")
+    num_gpus = torch.cuda.device_count()
+    print(f"Warming up model with gpus {num_gpus}")
+    
     try:
         avg_latency = warmup_model(model)
         if not avg_latency:  # either 0 or None
             raise Exception("Error warming up model")
 
     except Exception as e:
+        print(e)
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
         raise Exception("Error warming up model: " + failure_reason)
@@ -138,18 +144,12 @@ def get_eval_score(request: EvaluateModelRequest):
     dataset = StreamedSyntheticDataset(
         max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LENGTH - 200,
     )
-    pippa_dataset = PippaDataset(
-        PIPPA_DATASET_PATH,
-        max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LENGTH - 200,
-    )
     # set the chat template params
     dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
-    pippa_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 
     print("Sampling dataset")
     try:
         sampled_data = dataset.sample_dataset(EVALUATION_DATASET_SAMPLE_SIZE)
-        pippa_data = pippa_dataset.sample_dataset(1)
     except Exception as e:
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
@@ -158,10 +158,9 @@ def get_eval_score(request: EvaluateModelRequest):
     # Part 2: Evaluate the model
     print("Evaluating model")
     try:
-        evaluation_results = eval_score(
+        evaluation_results = eval_score_batch(
             model,
             sampled_data,
-            pippa_data,
             input_tokenizer=input_tokenizer,
             output_tokenizer=output_tokenizer,
             request=request,

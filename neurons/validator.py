@@ -63,13 +63,6 @@ from scipy import optimize
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-# models submitted before this block will be considered "old"
-# rough date of cutover: Aug 6
-NEW_MODEL_SUBMISSION_CUTOFF_BLOCK = 3552500
-# after this block, "old" models will be marked invalid
-# rough date of cutover: Aug 8
-SCORE_CHANGE_BLOCK = 3_557_700
-
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
@@ -314,7 +307,9 @@ class Validator:
             self.event_logger = EventLogger(filepath=eventlog_path)
             self.use_event_logger = True
         except Exception as e:
-            bt.logging.error(f"Could not initialize event logger: {e}. Event logging is optional and used for diagnostic purposes. If you do not know what this is for, that's ok.")
+            bt.logging.error(
+                f"Could not initialize event logger: {e}. Event logging is optional and used for diagnostic purposes. If you do not know what this is for, that's ok."
+            )
 
         # == Initialize the update thread ==
         self.stop_event = threading.Event()
@@ -327,6 +322,29 @@ class Validator:
         if self.use_event_logger:
             self.event_logger.info(msg, **kwargs)
         return
+
+    def _with_decoration(self, metadata: LocalMetadata, keypair, payload):
+        signature = sign_request(
+                    keypair,
+                    payload = metadata.hotkey,
+                )
+        combined_payload = {
+            "signature": signature,
+            "payload": payload,
+            "commit": str(metadata.commit),
+            "btversion": str(metadata.btversion),
+            "uid": str(metadata.uid),
+            "hotkey": str(metadata.hotkey),
+            "coldkey": str(metadata.coldkey),
+        }
+        return combined_payload
+    def _remote_log(self, payload):
+        event_report_endpoint = f"{constants.VALIDATION_SERVER}/event_report"
+        try:
+            response = requests.post(event_report_endpoint, json=payload)
+            response.raise_for_status()  # Raise an exception for HTTP errors
+        except Exception as e:
+            bt.logging.error(f"could not remote log: {e}. This error is ok to ignore if you are a validator")
 
     @staticmethod
     def adjust_for_vtrust(weights: np.ndarray, consensus: np.ndarray, vtrust_min: float = 0.5):
@@ -381,7 +399,7 @@ class Validator:
                 wait_for_inclusion = True
         except Exception as e:
             bt.logging.info(f"wait_for_inclusion not set: {wait_for_inclusion}")
-        
+
         async def _try_set_weights(wait_for_inclusion=False):
             weights_success = False
             try:
@@ -429,25 +447,22 @@ class Validator:
             console.print(status_table)
             return weights_success
 
-
         weights_set_success = False
         try:
             bt.logging.debug("Setting weights.")
             weights_set_success = await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
             payload = {
-            "time": dt.datetime.utcnow(),
-            "weights_set_success": weights_set_success,
-            "wait_for_inclusion": wait_for_inclusion,
+                "time": dt.datetime.utcnow(),
+                "weights_set_success": weights_set_success,
+                "wait_for_inclusion": wait_for_inclusion,
             }
             bt.logging.debug("Finished setting weights.")
-            telemetry_report(self.local_metadata, payload)
+            logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey,payload)
+            self._remote_log(logged_payload)
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")
         except Exception as e:
             bt.logging.error(f"Error setting weights: {e}")
-            
-
-        
 
     async def try_sync_metagraph(self, ttl: int) -> bool:
         def sync_metagraph(endpoint):
@@ -473,6 +488,8 @@ class Validator:
     async def try_run_step(self, ttl: int) -> Optional[bool]:
         async def _try_run_step():
             success = await self.run_step()
+            logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey,{"success": success})
+            self._remote_log(logged_payload)
             return success
 
         try:
@@ -546,10 +563,7 @@ class Validator:
                     invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} after {current_block}")
                     continue
-                # old models submitted are marked invalid after certain time
-                if current_block >= SCORE_CHANGE_BLOCK and model_data.block < NEW_MODEL_SUBMISSION_CUTOFF_BLOCK :
-                    invalid_uids.append(uid)
-                    continue
+                
                 if model_data.model_id is None:
                     invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} no model_id available")
@@ -558,16 +572,22 @@ class Validator:
                 miner_registry[uid].block = model_data.block
                 miner_registry[uid].model_id = model_data.model_id
 
+                signed_payload = sign_request(
+                    self.wallet.hotkey,
+                    hotkey,
+                )
                 _score_data = _get_model_score(
                     miner_registry[uid].model_id,
                     self.config,
                     self.local_metadata,
+                    signed_payload,
                 )
                 if _score_data.status != StatusEnum.COMPLETED:
                     _score_data = _get_model_score(
                         miner_registry[uid].model_id,
                         self.config,
                         self.local_metadata,
+                        signed_payload,
                         True,
                     )
                 bt.logging.info(
@@ -729,11 +749,9 @@ class Validator:
                 await asyncio.sleep(5)
 
 
-def telemetry_report(local_metadata: LocalMetadata, additional_payload = None):
+def telemetry_report(local_metadata: LocalMetadata, payload=None):
     telemetry_endpoint = f"{constants.VALIDATION_SERVER}/telemetry_report"
-    
-    if additional_payload is not None:
-        payload = additional_payload
+
     headers = {
         "Git-Commit": str(local_metadata.commit),
         "Bittensor-Version": str(local_metadata.btversion),
@@ -751,12 +769,29 @@ def telemetry_report(local_metadata: LocalMetadata, additional_payload = None):
     return
 
 
+import base64
+def sign_request(
+        keypair,
+        payload: str
+):
+
+    signed_payload = keypair.sign(data=payload)
+    signed_payload_base64 = base64.b64encode(signed_payload).decode('utf-8')
+
+    return {
+        "payload_signed": signed_payload_base64,
+        "payload": payload,
+    }
+
+
 def _get_model_score(
     model_id: ModelId,
     config,
     local_metadata: LocalMetadata,
+    signatures: Dict[str, str],
     retryWithRemote: bool = False,
 ) -> Scores:
+
     return get_model_score(
         namespace=model_id.namespace,
         name=model_id.name,
@@ -764,6 +799,7 @@ def _get_model_score(
         template=model_id.chat_template,
         config=config,
         local_metadata=local_metadata,
+        signatures=signatures,
         retryWithRemote=retryWithRemote,
     )
 
@@ -775,6 +811,7 @@ def get_model_score(
     template,
     config,
     local_metadata: LocalMetadata,
+    signatures: Dict[str, str],
     retryWithRemote: bool = False,
     debug: bool = False,
 ) -> Scores:
@@ -793,7 +830,6 @@ def get_model_score(
         "hash": hash,
         "chat_template_type": template,
     }
-
     headers = {
         "Git-Commit": str(local_metadata.commit),
         "Bittensor-Version": str(local_metadata.btversion),
@@ -801,6 +837,7 @@ def get_model_score(
         "Hotkey": str(local_metadata.hotkey),
         "Coldkey": str(local_metadata.coldkey),
     }
+    headers.update(signatures)
     if os.environ.get("ADMIN_KEY", None) not in [None, ""]:
         payload["admin_key"] = os.environ["ADMIN_KEY"]
 

@@ -5,11 +5,12 @@ from transformers import AutoTokenizer
 import gc
 import ray
 from vllm.distributed.parallel_state import destroy_model_parallel
-from scoring.dataset import StreamedSyntheticDataset
+from scoring.dataset import PippaDataset, StreamedSyntheticDataset
 
 # Import necessary modules and functions from the main API file
 from scoring.common import (
     BATCH_SIZE_VIBE_SCORE,
+    DATASET_DIR,
     LENGTH_DIFF_PENALTY_STEEPNESS,
     MAX_GENERATION_LEEWAY,
     MAX_GENERATION_LENGTH,
@@ -17,23 +18,17 @@ from scoring.common import (
     SAMPLE_SIZE_VIBE_SCORE,
     EvaluateModelRequest,
     chat_template_mappings,
-    full_path,
     VLLM_GPU_MEMORY,
 )
+from typing import List, Any
 
 
-def calculate_vibe_match_score(model_name, revision, contexts, last_user_messages, expected_outputs, verbose=False):
-    # instantiate a vllm model as it is faster and more memory efficient for text generation
-    model = LLM(
-        model_name,
-        revision=revision,
-        tensor_parallel_size=torch.cuda.device_count(),
-        gpu_memory_utilization=VLLM_GPU_MEMORY,
-        max_num_seqs=BATCH_SIZE_VIBE_SCORE,
-        max_model_len=MAX_SEQ_LEN_VIBE_SCORE,
-    )
+def calculate_vibe_match_score(
+    model: LLM, contexts: List[Any], last_user_messages: List[Any], expected_outputs: List[Any], verbose: bool = False
+):
 
     decoded_messages = []
+    BATCH_SIZE_VIBE_SCORE = 8
     # loop through the context in batches
     for i in range(0, len(contexts), BATCH_SIZE_VIBE_SCORE):
         max_user_message_len = max([len(message) for message in last_user_messages[i : i + BATCH_SIZE_VIBE_SCORE]])
@@ -80,33 +75,26 @@ def calculate_vibe_match_score(model_name, revision, contexts, last_user_message
             print("##############################################")
         i += 1
 
-    destroy_model_parallel()
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    del model.llm_engine.model_executor
-    del model
-    gc.collect()
-    torch.cuda.empty_cache()
-    ray.shutdown()
-    try:
-        torch.distributed.destroy_process_group()
-    except:
-        print("No process group to destroy")
-
     return sum(vibe_scores) / len(vibe_scores)
 
 
-def get_vibe_match_score(request: EvaluateModelRequest):
+def get_vibe_match_score(
+    request: EvaluateModelRequest,
+    model: LLM,
+):
     try:
         input_tokenizer = AutoTokenizer.from_pretrained(
             f"{request.repo_namespace}/{request.repo_name}", revision=request.revision
         )
-        # vibe_score_dataset = PippaDataset(
-        #     full_path(PIPPA_FILENAME),
-        #     max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
+        dataset_path = str(os.path.join(DATASET_DIR, "pippa_deduped.jsonl"))
+
+        vibe_score_dataset = PippaDataset(
+            dataset_path,
+            max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
+        )
+        # vibe_score_dataset =  StreamedSyntheticDataset(
+        # max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
         # )
-        vibe_score_dataset =  StreamedSyntheticDataset(
-        max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
-    )
         # Set chat template params
         vibe_score_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 
@@ -115,11 +103,8 @@ def get_vibe_match_score(request: EvaluateModelRequest):
             *vibe_score_dataset.sample_dataset(SAMPLE_SIZE_VIBE_SCORE)
         )
 
-        # Get the vibe score
-        model_name = f"{request.repo_namespace}/{request.repo_name}"
         vibe_score = calculate_vibe_match_score(
-            model_name,
-            request.revision,
+            model,
             vibe_contexts,
             vibe_last_user_messages,
             vibe_target_texts,
