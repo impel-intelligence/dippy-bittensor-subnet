@@ -62,7 +62,8 @@ import torch
 from scipy import optimize
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
+INVALID_BLOCK_START = 3840700
+INVALID_BLOCK_END = 3922200
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
@@ -562,6 +563,11 @@ class Validator:
                 if model_data.block > current_block:
                     invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} after {current_block}")
+                    continue
+
+                if model_data.block > INVALID_BLOCK_START and model_data.block < INVALID_BLOCK_END:
+                    invalid_uids.append(uid)
+                    bt.logging.info(f"skip {uid} submitted on {model_data.block} given range {INVALID_BLOCK_START} - {INVALID_BLOCK_END}")
                     continue
                 
                 if model_data.model_id is None:

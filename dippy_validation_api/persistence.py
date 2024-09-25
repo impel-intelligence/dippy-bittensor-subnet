@@ -174,6 +174,50 @@ class SupabaseState:
         except Exception as e:
             self.logger.error(f"Error fetching next model to evaluate: {e}")
             return None
+        
+    def get_next_restored_model_to_eval(self):
+        try:
+            response = (
+                self.client.table("minerboard")
+                .select("*, leaderboard(total_score, status)")
+                .eq("leaderboard.total_score", 0)
+                .gte("block", 3815100)
+                .lte("block", 3840700)
+                .order("block", desc=False)
+                .execute()
+            )
+            if len(response.data) == 0:
+                return None
+            
+            filtered_data = [item for item in response.data if item['leaderboard'] is not None]
+            print(filtered_data)
+            new_filtered_data = []
+            for item in filtered_data:
+                leadboard_stats = item.get('leaderboard')
+                if leadboard_stats is not None:
+                    if leadboard_stats.get('status') == 'COMPLETED':
+                        if leadboard_stats.get('total_score') == 0:
+                            new_filtered_data.append(item)
+            filtered_data = new_filtered_data
+            if len(filtered_data) > 0:
+                hash_to_lookup = filtered_data[0]['hash']
+                print(f"llokup {hash_to_lookup}")
+                leaderboard_response = (
+                    self.client.table("leaderboard")
+                    .select("*")
+                    .eq("hash", hash_to_lookup)
+                    .limit(1)
+                    .execute()
+                )
+                if len(leaderboard_response.data) == 0:
+                    return None
+                return leaderboard_response.data[0]
+            return None
+
+            
+        except Exception as e:
+            self.logger.error(f"Error fetching next model to evaluate: {e}")
+            return None
 
     def get_failed_model_to_eval(self):
         try:
