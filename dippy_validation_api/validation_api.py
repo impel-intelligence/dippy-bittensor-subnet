@@ -121,7 +121,8 @@ def _model_evaluation_step(queue_id, duplicate: bool = False):
 
 
 def get_next_model_to_eval():
-    response = supabaser.get_next_model_to_eval()
+    # response = supabaser.get_next_model_to_eval()
+    response = supabaser.get_next_restored_model_to_eval()
     if response is None:
         return None
     return EvaluateModelRequest(
@@ -143,8 +144,8 @@ def _duplicate_model(request: EvaluateModelRequest):
         )
 
 GPU_ID_MAP = {
-    0: "0,1",
-    1: "2,3",
+    0: "0",
+    1: "0",
     2: "4,5",
     3: "6,7",
     4: "8,9"
@@ -219,8 +220,7 @@ def _evaluate_model(
     full_score_data.creativity_score = creativity_score
     full_score_data.vibe_score = vibe_score
     full_score_data.latency_score = latency_score
-    # Enable after introducing new
-    total_score = full_score_data.calculate_total_score()
+
     try:
         update_row_supabase(
             {

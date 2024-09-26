@@ -158,7 +158,7 @@ def get_latest_from_set(filter: str = "both"):
     elif filter == "recent":
         url = RECENT_DATASET_URL
     
-    response = requests.get(url, params={"key": DATASET_API_KEY, "bypass":"impel_intelligence_speical_ratelimit_bypass"})
+    response = requests.get(url, headers = {"validator-hotkey": DATASET_API_KEY, "Authorization": DATASET_API_KEY})
     response.raise_for_status()  # Raise an error for bad responses
     data = response.json().get("data", [])
     return data
