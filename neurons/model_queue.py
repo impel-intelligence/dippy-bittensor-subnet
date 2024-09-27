@@ -155,6 +155,7 @@ class ModelQueue:
                 metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.netuid, hotkey)
                 if metadata is None:
                     no_metadata += 1
+                    self.logger.info(f"NO_METADATA : uid: {uid} hotkey : {hotkey}")
                     continue
                 commitment = metadata["info"]["fields"][0]
                 hex_data = commitment[list(commitment.keys())[0]][2:]
@@ -172,15 +173,15 @@ class ModelQueue:
                     config=self.config,
                     retryWithRemote=True,
                 )
-                stats = f"uid: {uid} hotkey : {hotkey} model_metadata : {model_id} \n result: {result}"
-                if result.status == StatusEnum.QUEUED:
-                    self.logger.info(f"QUEUED : {stats}")
-                    queued += 1
+                stats = f"{result.status} : uid: {uid} hotkey : {hotkey} block: {block} model_metadata : {model_id}"
+                self.logger.info(stats)
                 if result.status == StatusEnum.FAILED:
-                    self.logger.info(f"FAILED : {stats}")
                     failed += 1
+                
+                if result.status == StatusEnum.QUEUED:
+                    queued += 1
+                
                 if result.status == StatusEnum.COMPLETED:
-                    self.logger.info(f"COMPLETED : {stats}")
                     completed += 1
 
                 push_minerboard(
@@ -194,7 +195,7 @@ class ModelQueue:
                 )
 
             except Exception as e:
-                self.logger.error(e)
+                self.logger.error(f"exception for uid {uid} : {e}")
                 continue
         self.logger.info(f"no_metadata {no_metadata} queued {queued} failed {failed} completed {completed}")
 
@@ -238,7 +239,7 @@ class ModelQueue:
             # Parse the response JSON
             result = response.json()
             if result is None:
-                raise RuntimeError(f"no entry exists at this time for {payload}")
+                raise RuntimeError(f"no leaderboard entry exists at this time for {payload}")
                 
             status = StatusEnum.from_string(result["status"])
             score_data.status = status

@@ -141,12 +141,15 @@ def get_eval_score(request: EvaluateModelRequest):
         cleanup(None, model_downloaded, request)
         raise Exception("Error loading model: " + failure_reason)
 
-    dataset = StreamedSyntheticDataset(
+    try:
+        dataset = StreamedSyntheticDataset(
         max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LENGTH - 200,
-    )
-    # set the chat template params
-    dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
+        )
+        # set the chat template params
+        dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 
+    except Exception as e:
+        raise Exception(f"could not load dataset (my bad) : {e}")
     print("Sampling dataset")
     try:
         sampled_data = dataset.sample_dataset(EVALUATION_DATASET_SAMPLE_SIZE)

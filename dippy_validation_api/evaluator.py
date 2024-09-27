@@ -50,7 +50,7 @@ class Evaluator:
         logger: EventLogger = EventLogger(),
         trace: bool = False,
     ):
-        self.client = docker.from_env(version="auto")
+        self.client = docker.from_env(version="auto", timeout=600)
         self.logger = logger
 
         if trace:
@@ -85,6 +85,14 @@ class Evaluator:
             self.volume_configuration[DEFAULT_MODEL_CACHE_DIR] = {
                 "bind": "/app/model_cache_dir",
                 "mode": "rw",
+            }
+            self.volume_configuration[DEFAULT_MODEL_CACHE_DIR] = {
+                "bind": "/app/model_cache_dir",
+                "mode": "rw",
+            }
+            self.volume_configuration["/home/new_prod_user/dippy-bittensor-subnet/ddd"] = {
+                "bind": "/tmp/ddd",
+                "mode": "ro",
             }
         self.device_requests = [docker.types.DeviceRequest(device_ids=[gpu_ids], capabilities=[["gpu"]])]
 
@@ -130,9 +138,6 @@ class Evaluator:
         filepath = f"/tmp/{job_type}_output.json"
         filename = f"{job_type}_output.json"
 
-        while container.status == "created":
-            time.sleep(10)
-            container.reload()
         print("now waiting for container to complete")
         result = container.wait()
         self.logger.debug(f"container_run_complete, {result}")
@@ -157,7 +162,10 @@ class Evaluator:
                         },
                     )
                     if not self.trace:
-                        container.remove()
+                        try:
+                            container.remove()
+                        except Exception as e:
+                            self.logger.error("container_remove_error")
                     return container_results
         except Exception as e:
             self.logger.error("docker_error", error=e)
@@ -240,10 +248,10 @@ def entry():
     try:
         evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="0")
 
-        infrence_result = evaler.inference_score(req)
-        if isinstance(infrence_result, RunError):
-            raise Exception(infrence_result.error)
-        print(f"infrence_result : {infrence_result}")
+        # infrence_result = evaler.inference_score(req)
+        # if isinstance(infrence_result, RunError):
+        #     raise Exception(infrence_result.error)
+        # print(f"infrence_result : {infrence_result}")
 
         eval_result = evaler.eval_score(req)
         print(f"eval_result : {eval_result}")
@@ -256,8 +264,8 @@ def entry():
         scores_data.latency_score = eval_result.latency_score
         scores_data.creativity_score = eval_result.creativity_score
         scores_data.llm_size_score = eval_result.eval_model_size_score
-        scores_data.vibe_score = infrence_result.vibe_score
-        scores_data.coherence_score = infrence_result.coherence_score
+        # scores_data.vibe_score = infrence_result.vibe_score
+        # scores_data.coherence_score = infrence_result.coherence_score
 
         final_eval_score = (
             scores_data.adjusted_q_score(

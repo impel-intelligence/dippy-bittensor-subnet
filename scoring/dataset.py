@@ -163,11 +163,37 @@ def get_latest_from_set(filter: str = "both"):
     data = response.json().get("data", [])
     return data
 
+def get_latest_from_file(filter: str = "both"):
+    import json
+
+    try:
+        with open('/tmp/ddd/live_data_20240929_1.json', 'r') as file:
+            data = json.load(file)
+        
+        if not isinstance(data, list):
+            raise ValueError("The top-level structure in the JSON file is not an array.")
+        
+        # Ensure each item in the list is a dictionary
+        data = [item for item in data]
+
+        print(f"loaded data with len {len(data)}")
+    except FileNotFoundError:
+        print("Error: dataset.json file not found.")
+        data = []
+    except json.JSONDecodeError:
+        print("Error: Invalid JSON format in dataset.json.")
+        data = []
+    except Exception as e:
+        print(f"An unexpected error occurred: {str(e)}")
+        data = []
+    return data
+
 
 class StreamedSyntheticDataset(Dataset):
     def __init__(self, max_input_len: int, filter: str = "both"):
         try:
             data = get_latest_from_set(filter)
+            # data = get_latest_from_file(filter)
         except Exception as e:
             print(f"error loading dataset {e}")
             raise e
@@ -230,6 +256,14 @@ class StreamedSyntheticDataset(Dataset):
         if self._tokenizer is None:
             raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
 
+
+        messages=self.dataset[idx]["messages"]
+        if len(messages) < 1:
+            raise ValueError("empty messages")
+        for m in messages:
+            if len(m["content"]) < 1:
+                raise ValueError("empty message content")
+
         chat_input = self._chat_template.render(
             bos_token=self._tokenizer.bos_token,
             eos_token=self._tokenizer.eos_token,
@@ -256,7 +290,15 @@ class StreamedSyntheticDataset(Dataset):
         random.shuffle(indices)
         indices = indices[:n]
 
-        return [self[i] for i in indices]
+        sampled_data = []
+        for i in indices:
+            try:
+                sampled_data.append(self[i])
+            except Exception as e:
+                print(f"Skipping index {i} due to error: {str(e)}")
+                continue
+
+        return sampled_data
 
 
 class PromptDataset(Dataset):

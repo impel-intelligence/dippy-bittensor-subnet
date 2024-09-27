@@ -29,6 +29,7 @@ class StrEnum(str, Enum):
 
 class StatusEnum(StrEnum):
     QUEUED = "QUEUED"
+    PRECHECK = "PRECHECK"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     RUNNING = "RUNNING"
