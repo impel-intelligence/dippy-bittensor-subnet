@@ -6,9 +6,10 @@ For miners specifically, the subnet's intended purpose is to reward miners that 
 
 ## What will I need to effectively mine on this subnet?
 Objective requirements are:
-1. Access to a capable GPU for model training an evaluation (recommended A100)
-2. Enough tao for the subnet registration fee (baseline is 0.2 tao)
-3. Reading comprehension
+1. Access to a capable GPU for model training an evaluation (recommended A100 80GB)
+2. Enough tao for the subnet registration fee (baseline is 0.15 tao)  
+3. Reading comprehension  
+4. Intimate knowledge of bittensor network operations
 Subjective requirements:
 1. Ability to understand the code in this subnet
 2. Python experience
@@ -17,7 +18,7 @@ Subjective requirements:
 ## How exactly is my miner evaluated?
 There are three general scoring phases:
 1. Evaluation
-   1. The model responses are graded against a streaming dataset. At 1am UTC, the previous day's data is dumped into https://huggingface.co/datasets/DippyAI/dippy_synthetic_dataset for reference. Note that the dataset if there to provide reference, but the actual evaluation is done on a sample that is generated in realtime. The current dataset generation can be seen in the repository github.com/impel-intelligence/synthetic_data_gen
+   1. The model responses are graded against a streaming dataset. At certain intervals, the previous day data is dumped into https://huggingface.co/datasets/DippyAI/dippy_synthetic_dataset for reference. Note that the dataset if there to provide reference, but the actual evaluation is done on a sample that is generated in realtime. 
    2. Creativity is a score that modifies the above evaluation score. The less creative your model is (aka overfit), the less total score is achievable for evaluation.
    3. A small amount of the total score takes into account model size, latency, etc. The details can be seen in the `scoring` folder
 4. Vibe Score
@@ -30,7 +31,7 @@ Once your model is scored, it is compared against other submitted models to crea
 ## I submitted my model. When will I get my rewards?
 
 Rewards are based upon a combination of your model being scored and your model win rate. 
-The subnet's epoch time is 360 blocks, or roughly every 30minutes. This means that once your model is fully scored, it will take at least one epoch if not another to fully allocate incentive.
+The subnet's epoch time is 360 blocks, or roughly every 30 minutes. This means that once your model is fully scored, it will take at least one epoch if not another to fully allocate incentive. The bittensor network itself may also vary in its payout of miner emissions. 
 
 ## My model has a high score but I'm not receiving enough emissions. Why?
 

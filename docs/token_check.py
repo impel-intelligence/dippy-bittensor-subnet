@@ -90,6 +90,7 @@ def auth_flow():
         response_json = response.json()
         access_token = response_json.get("access_token")
         print(f"POST request successful. Access token: {access_token}")
+        print(f"Use the token to set the env variable DATASET_API_KEY in this format: DATASET_API_KEY=\"Bearer {access_token}\"")
     except requests.exceptions.RequestException as e:
         print(f"POST request failed: {e}")
 

@@ -230,6 +230,7 @@ model_validation_venv/bin/pip install -r requirements_val_api.txt
 ```
 
 #### Run model validation API service
+(Note: there are currently breaking changes that pose challenges to running a local validation API service)
 ```bash
 cd dippy_validation_api
 chmod +x start_validation_service.sh
