@@ -121,8 +121,8 @@ def _model_evaluation_step(queue_id, duplicate: bool = False):
 
 
 def get_next_model_to_eval():
-    # response = supabaser.get_next_model_to_eval()
-    response = supabaser.get_next_restored_model_to_eval()
+    response = supabaser.get_next_model_to_eval()
+    
     if response is None:
         return None
     return EvaluateModelRequest(
@@ -402,10 +402,13 @@ def check_model(
     if request.admin_key != admin_key:
         raise HTTPException(status_code=403, detail="invalid key")
 
+    early_failure = False
+    failure_notes = ""
     # validate the repo exists
     repo_id = f"{request.repo_namespace}/{request.repo_name}"
     if not repository_exists(repo_id):
         failure_notes = f"Huggingface repo not public: {repo_id}"
+        early_failure = True
 
 
     # check if the model already exists in the leaderboard
@@ -413,9 +416,17 @@ def check_model(
     current_status = supabaser.get_json_result(request.hash)
 
     if current_status is not None:
+        if early_failure:
+            logger.error(failure_notes)
+            updated_entry = update_failure(current_status, failure_notes)
+            update_row_supabase(updated_entry)
+            return supabaser.get_json_result(request.hash)
+
         return current_status
-    logger.error("QUEUING NEW MODEL")
-    failure_notes = ""
+    
+    if current_status is None:
+        logger.error(f"COULD NOT FIND EXISTING MODEL for {request} : QUEUING NEW MODEL")
+    
     # add the model to leaderboard with status QUEUED
     new_entry_dict = {
         "hash": request.hash,
@@ -433,6 +444,12 @@ def check_model(
         "coherence_score": 0,
         "notes": failure_notes,
     }
+
+    if early_failure:
+        logger.error(failure_notes)
+        updated_entry = update_failure(new_entry_dict, failure_notes)
+        update_row_supabase(updated_entry)
+        return supabaser.get_json_result(request.hash)
 
     logger.info("QUEUING: " + str(new_entry_dict))
 
@@ -494,7 +511,7 @@ def check_model(
         logger.error(failure_notes)
         new_entry_dict = update_failure(new_entry_dict, failure_notes)
 
-    if new_entry_dict["model_hash"] and supabaser.record_exists_with_model_hash(new_entry_dict["model_hash"]):
+    if "model_hash" in new_entry_dict and supabaser.record_exists_with_model_hash(new_entry_dict["model_hash"]):
         existing_hash = new_entry_dict["model_hash"]
         failure_notes = f"model hash {existing_hash} already exists"
         logger.error(failure_notes)
@@ -530,7 +547,7 @@ def start():
     parser.add_argument(
         "--queues",
         type=int,
-        default=0,
+        default=1,
         help="Specify the number of queues to start (default: 1)",
     )
     args = parser.parse_args()

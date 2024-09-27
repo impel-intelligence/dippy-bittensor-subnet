@@ -106,7 +106,7 @@ class SupabaseState:
                     "status": response.data[0]["status"],
                 }
                 return result
-            raise RuntimeError("No record QUEUED")
+            raise RuntimeError(f"No record exists for {hash}")
         except Exception as e:
             self.logger.error(f"Error fetching leaderboard entry from database: {e}")
             return None
