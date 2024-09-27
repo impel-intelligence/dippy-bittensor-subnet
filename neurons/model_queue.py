@@ -237,6 +237,9 @@ class ModelQueue:
             response.raise_for_status()  # Raise an exception for HTTP errors
             # Parse the response JSON
             result = response.json()
+            if result is None:
+                raise RuntimeError(f"no entry exists at this time for {payload}")
+                
             status = StatusEnum.from_string(result["status"])
             score_data.status = status
         except Exception as e:
