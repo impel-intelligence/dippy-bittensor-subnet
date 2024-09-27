@@ -119,7 +119,7 @@ class SupabaseState:
             self.logger.error(f"could not delete record {str(e)}")
             return None
 
-    def update_row(self, row):
+    def upsert_row(self, row):
         if "timestamp" in row:
             row["timestamp"] = row["timestamp"].isoformat()
         try:

@@ -176,7 +176,7 @@ def _evaluate_model(
         if coherence_score < 0.95:
             supabaser.update_leaderboard_status(request.hash, StatusEnum.COMPLETED, "Incoherent model submitted")
             return None
-        update_row_supabase(
+        upsert_row_supabase(
         {
             "hash": request.hash,
             "vibe_score": vibe_score,
@@ -222,7 +222,7 @@ def _evaluate_model(
     full_score_data.latency_score = latency_score
 
     try:
-        update_row_supabase(
+        upsert_row_supabase(
             {
                 "hash": request.hash,
                 "model_size_score": full_score_data.llm_size_score,
@@ -413,20 +413,21 @@ def check_model(
 
     # check if the model already exists in the leaderboard
     # This needs to be a virtually atomic operation
-    current_status = supabaser.get_json_result(request.hash)
+    try:
+        current_status = supabaser.get_json_result(request.hash)
 
-    if current_status is not None:
-        if early_failure:
-            logger.error(failure_notes)
-            updated_entry = update_failure(current_status, failure_notes)
-            update_row_supabase(updated_entry)
-            return supabaser.get_json_result(request.hash)
+        if current_status is not None:
+            if early_failure:
+                logger.error(failure_notes)
+                updated_entry = update_failure(current_status, failure_notes)
+                upsert_row_supabase(updated_entry)
+                return supabaser.get_json_result(request.hash)
 
-        return current_status
-    
-    if current_status is None:
+            return current_status
+    except Exception as e:
+        logger.error(e)
         logger.error(f"COULD NOT FIND EXISTING MODEL for {request} : QUEUING NEW MODEL")
-    
+
     # add the model to leaderboard with status QUEUED
     new_entry_dict = {
         "hash": request.hash,
@@ -448,7 +449,8 @@ def check_model(
     if early_failure:
         logger.error(failure_notes)
         updated_entry = update_failure(new_entry_dict, failure_notes)
-        update_row_supabase(updated_entry)
+        supabaser.upsert_row(updated_entry)
+        upsert_row_supabase(updated_entry)
         return supabaser.get_json_result(request.hash)
 
     logger.info("QUEUING: " + str(new_entry_dict))
@@ -460,11 +462,12 @@ def check_model(
             last_block = last_model["block"]
             current_block = request.block
             # eg block 3001 - 2001 = 1000
-            if current_block - last_block < BLOCK_RATE_LIMIT:
+            if abs(current_block - last_block) < BLOCK_RATE_LIMIT and abs(current_block - last_block) > 0:
                 failure_notes = f"""
                 Exceeded rate limit. 
-                Last submitted model was block {last_block}. 
-                Current submission {current_block} which exceeds minimum {BLOCK_RATE_LIMIT}"""
+                Last submitted model was block {last_block} with details {last_model}.
+                Block difference between last block {last_block} and current block {current_block} is {(current_block - last_block)}
+                Current submission {current_block} exceeds minimum block limit {BLOCK_RATE_LIMIT}"""
                 logger.error(failure_notes)
                 new_entry_dict = update_failure(new_entry_dict, failure_notes)
 
@@ -516,12 +519,12 @@ def check_model(
         failure_notes = f"model hash {existing_hash} already exists"
         logger.error(failure_notes)
         new_entry_dict = update_failure(new_entry_dict, failure_notes)
-    update_row_supabase(new_entry_dict)
+    upsert_row_supabase(new_entry_dict)
 
     return supabaser.get_json_result(request.hash)
 
 
-def update_row_supabase(row):
+def upsert_row_supabase(row):
     if "timestamp" in row:
         row["timestamp"] = row["timestamp"].isoformat()
 
