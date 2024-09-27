@@ -63,7 +63,7 @@ from scipy import optimize
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 INVALID_BLOCK_START = 3840700
-INVALID_BLOCK_END = 3922200
+INVALID_BLOCK_END = 3927400
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
