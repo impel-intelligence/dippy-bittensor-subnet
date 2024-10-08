@@ -81,8 +81,8 @@ def get_config():
     return config
 
 
-def regenerate_hash(namespace, name, chat_template, competition_id):
-    s = " ".join([namespace, name, chat_template, competition_id])
+def regenerate_hash(namespace, name, chat_template, hotkey):
+    s = " ".join([namespace, name, chat_template, hotkey])
     hash_output = hashlib.sha256(s.encode("utf-8")).hexdigest()
     return int(hash_output[:16], 16)  # Returns a 64-bit integer from the first 16 hexadecimal characters
 
@@ -152,7 +152,7 @@ async def main(config: bt.config):
         chat_template=config.chat_template,
         competition_id=config.competition_id,
         commit=config.model_commit_id,
-        hash=str(regenerate_hash(repo_namespace, repo_name, config.chat_template, config.competition_id)),
+        hash=str(regenerate_hash(repo_namespace, repo_name, config.chat_template, wallet.hotkey.ss58_address)),
     )
 
     if not config.skip_model_upload:
@@ -180,7 +180,7 @@ async def main(config: bt.config):
         namespace=repo_namespace,
         name=repo_name,
         chat_template=config.chat_template,
-        hash=str(regenerate_hash(repo_namespace, repo_name, config.chat_template, config.competition_id)),
+        hash=str(regenerate_hash(repo_namespace, repo_name, config.chat_template, wallet.hotkey.ss58_address)),
         commit=model_id_with_commit.commit,
         competition_id=config.competition_id,
     )
