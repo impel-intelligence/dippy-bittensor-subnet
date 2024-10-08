@@ -1,0 +1,9 @@
+services:
+  vapi:
+    # image: vapi:v0
+    image: vapi:v9
+    command: ["python", "validation_api.py", "--queues", "0"]
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
