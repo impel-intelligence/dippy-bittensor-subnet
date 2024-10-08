@@ -512,17 +512,18 @@ class Validator:
             metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.config.netuid, hotkey)
             if metadata is None:
                 return None
+            
             commitment = metadata["info"]["fields"][0]
             hex_data = commitment[list(commitment.keys())[0]][2:]
             chain_str = bytes.fromhex(hex_data).decode()
-            bt.logging.error(f"Chain String --> {chain_str}")
-    
+     
             model_id = ModelId.from_compressed_str(chain_str) # --
             submission_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, model_id.competition_id, hotkey)
             if int(submission_hash) != int(model_id.hash):
                 bt.logging.error(f"Submission Hash {submission_hash} -- Original Hash {model_id.hash}")
                
             block = metadata["block"] # --
+            bt.logging.error(f"BLOCK -- {metadata['block']}")
             entry = MinerEntry()
             entry.block = block
             entry.model_id = model_id
