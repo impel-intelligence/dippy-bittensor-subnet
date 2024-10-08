@@ -33,23 +33,37 @@ class SupabaseState:
             self.logger.error(f"Error updating leaderboard status for {hash}: {e}")
             return None
 
-    def record_exists_with_model_hash(self, model_hash_value: str) -> bool:
+    def upsert_and_return(self, row, hash: str):
+        self.upsert_row(row)
+        self.logger.info(f"upserted row {row}")
+        return self.get_json_result(hash)
+    def upsert_row(self, row):
+        self.client.table("leaderboard").upsert(row).execute()
+    def search_record_with_model_hash(self, model_hash_value: str, block: int):
         if not model_hash_value:  # Check if the provided model_hash_value is empty
-            return False
+            return None
+        if not block:
+            return None
 
         # Query the table to check for the existence of the model_hash
         response = (
             self.client.table("leaderboard")
-            .select("model_hash")
+            .select("*, minerboard(*)")
             .neq("model_hash", "")
             .neq("model_hash", None)
             .eq("model_hash", model_hash_value)
-            .limit(1)
             .execute()
         )
-
-        # Return True if there is at least one record that matches the criteria
-        return len(response.data) > 0
+        if len(response.data) < 1:
+            return None
+        for record in response.data:
+            model_hash_matches = model_hash_value == record.get("model_hash")
+            minerboard_entry = record.get("minerboard", [{}])
+            exists_in_older_block = block > minerboard_entry[0].get("block", block)
+            if model_hash_matches and exists_in_older_block:
+                return record
+            
+        return None
 
     def last_uploaded_model(self, miner_hotkey: str):
         data = self.client.table("minerboard").select("*, leaderboard(status)").eq("hotkey", miner_hotkey).execute()
@@ -75,7 +89,7 @@ class SupabaseState:
             )
             return response
         except Exception as e:
-            self.logger.error(f"Error updating leaderboard status for {hash}: {e}")
+            self.logger.error(f"Error updating minerboard status for {hash}: {e}")
             return None
 
     def minerboard_fetch(self):
@@ -106,10 +120,21 @@ class SupabaseState:
                     "status": response.data[0]["status"],
                 }
                 return result
-            raise RuntimeError(f"No record exists for {hash}")
+            self.logger.error(f"Did not find leaderboard entry for hash {hash}: {response}")
+            return None
         except Exception as e:
             self.logger.error(f"Error fetching leaderboard entry from database: {e}")
-            return None
+            raise e
+        r
+    def get_internal_result(self, hash):
+        try:
+            response = self.client.table("leaderboard").select("*").eq("hash", hash).execute()
+            if len(response.data) > 0:
+                return response.data[0]
+            self.logger.error(f"Did not find leaderboard entry : {response}")
+        except Exception as e:
+            self.logger.error(f"Error fetching leaderboard entry from database: {e}")
+        return None
 
     def remove_record(self, hash: str):
         try:
