@@ -61,6 +61,8 @@ import numpy as np
 import torch
 from scipy import optimize
 
+from utilities.validation_utils import regenerate_hash
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 INVALID_BLOCK_START = 3840700
 INVALID_BLOCK_END = 3933300
@@ -513,8 +515,12 @@ class Validator:
             commitment = metadata["info"]["fields"][0]
             hex_data = commitment[list(commitment.keys())[0]][2:]
             chain_str = bytes.fromhex(hex_data).decode()
-            model_id = ModelId.from_compressed_str(chain_str)
-            block = metadata["block"]
+            model_id = ModelId.from_compressed_str(chain_str) # --
+            submission_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, hotkey)
+            if submission_hash != model_id.hash:
+                bt.logging.error(f"Submission Hash {submission_hash} -- Original Hash {model_id.hash}")
+                
+            block = metadata["block"] # --
             entry = MinerEntry()
             entry.block = block
             entry.model_id = model_id
