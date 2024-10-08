@@ -515,6 +515,7 @@ class Validator:
             commitment = metadata["info"]["fields"][0]
             hex_data = commitment[list(commitment.keys())[0]][2:]
             chain_str = bytes.fromhex(hex_data).decode()
+            bt.logging.error(f"Chain String --> {chain_str}")
             model_id = ModelId.from_compressed_str(chain_str) # --
             submission_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, hotkey)
             if submission_hash != model_id.hash:
