@@ -387,6 +387,9 @@ def update_failure(new_entry, failure_notes):
     return new_entry
 
 
+INVALID_BLOCK_START = 3840700
+INVALID_BLOCK_END = 3933300
+
 @app.post("/check_model")
 def check_model(
     request: EvaluateModelRequest,
@@ -411,22 +414,23 @@ def check_model(
         early_failure = True
 
 
-    # check if the model already exists in the leaderboard
+    # only check if the model already exists in the leaderboard
+    # update state if repo not public
     # This needs to be a virtually atomic operation
     try:
-        current_status = supabaser.get_json_result(request.hash)
-
-        if current_status is not None:
-            if early_failure:
-                logger.error(failure_notes)
-                updated_entry = update_failure(current_status, failure_notes)
-                upsert_row_supabase(updated_entry)
-                return supabaser.get_json_result(request.hash)
-
-            return current_status
+        current_entry = supabaser.get_json_result(request.hash)
+        if current_entry is not None and early_failure:
+            logger.error(failure_notes)
+            internal_entry = supabaser.get_internal_result(request.hash)
+            internal_entry = update_failure(internal_entry, failure_notes)
+            return supabaser.upsert_and_return(internal_entry, request.hash)
+        if current_entry is not None:
+            return current_entry
+        
     except Exception as e:
-        logger.error(e)
-        logger.error(f"COULD NOT FIND EXISTING MODEL for {request} : QUEUING NEW MODEL")
+        logger.error(f"error while fetching request {request} : {e}")
+        return None
+    logger.info(f"COULD NOT FIND EXISTING MODEL for {request} : QUEUING NEW MODEL")
 
     # add the model to leaderboard with status QUEUED
     new_entry_dict = {
@@ -449,9 +453,8 @@ def check_model(
     if early_failure:
         logger.error(failure_notes)
         updated_entry = update_failure(new_entry_dict, failure_notes)
-        supabaser.upsert_row(updated_entry)
-        upsert_row_supabase(updated_entry)
-        return supabaser.get_json_result(request.hash)
+        return supabaser.upsert_and_return(updated_entry, request.hash)
+        
 
     logger.info("QUEUING: " + str(new_entry_dict))
 
@@ -459,7 +462,7 @@ def check_model(
     if last_model is not None:
         last_model_status = StatusEnum.from_string(last_model["leaderboard"]["status"])
         if last_model_status != StatusEnum.FAILED:
-            last_block = last_model["block"]
+            last_block = last_model.get("block", request.block)
             current_block = request.block
             # eg block 3001 - 2001 = 1000
             if abs(current_block - last_block) < BLOCK_RATE_LIMIT and abs(current_block - last_block) > 0:
@@ -483,6 +486,13 @@ def check_model(
         failure_notes = f"Huggingface repo not public: {repo_id}"
         logger.error(failure_notes)
         new_entry_dict = update_failure(new_entry_dict, failure_notes)
+        return supabaser.upsert_and_return(new_entry_dict, request.hash)
+    
+    if INVALID_BLOCK_START < request.block < INVALID_BLOCK_END:
+        failure_notes = f"{INVALID_BLOCK_START} < {request.block} < {INVALID_BLOCK_END}"
+        logger.error(failure_notes)
+        new_entry_dict = update_failure(new_entry_dict, failure_notes)
+        return supabaser.upsert_and_return(new_entry_dict, request.hash)
 
     # check repo size of the model to see if it is within the limit
     try:
@@ -491,16 +501,19 @@ def check_model(
             failure_notes = "Error checking model repo size. Make sure the model repository exists and is accessible."
             logger.error(failure_notes)
             new_entry_dict = update_failure(new_entry_dict, failure_notes)
+            return supabaser.upsert_and_return(new_entry_dict, request.hash)
         model_repo_size = model_repo_details.repo_size
         new_entry_dict["model_hash"] = model_repo_details.model_hash
         if model_repo_size > MAX_REPO_SIZE or model_repo_size < MIN_REPO_SIZE:
             failure_notes = f"Model repo size is not up to requirements: {model_repo_size} bytes. Should be less than {MAX_REPO_SIZE} bytes and greater than {MIN_REPO_SIZE} bytes"
             logger.error(failure_notes)
             new_entry_dict = update_failure(new_entry_dict, failure_notes)
+            return supabaser.upsert_and_return(new_entry_dict, request.hash)
     except Exception as e:
         failure_notes = f"Error checking model repo size: {e}"
         logger.error(failure_notes)
         new_entry_dict = update_failure(new_entry_dict, failure_notes)
+        return supabaser.upsert_and_return(new_entry_dict, request.hash)
 
     # check model size by checking safetensors index
     model_size = get_model_size(request.repo_namespace, request.repo_name)
@@ -508,25 +521,29 @@ def check_model(
         failure_notes = "Error getting model size. Make sure the model.index.safetensors.json file exists in the model repository. And it has the metadata->total_size field."
         logger.error(failure_notes)
         new_entry_dict = update_failure(new_entry_dict, failure_notes)
+        return supabaser.upsert_and_return(new_entry_dict, request.hash)
 
     if (model_size // 4) > MAX_MODEL_SIZE:
         failure_notes = f"Model size is too large: {model_size} bytes. Should be less than {MAX_MODEL_SIZE} bytes"
         logger.error(failure_notes)
         new_entry_dict = update_failure(new_entry_dict, failure_notes)
+        return supabaser.upsert_and_return(new_entry_dict, request.hash)
 
-    if "model_hash" in new_entry_dict and supabaser.record_exists_with_model_hash(new_entry_dict["model_hash"]):
-        existing_hash = new_entry_dict["model_hash"]
-        failure_notes = f"model hash {existing_hash} already exists"
+    existing_record = supabaser.search_record_with_model_hash(
+        new_entry_dict.get("model_hash", ""),
+        request.block,
+    )
+
+    if "model_hash" in new_entry_dict and existing_record is not None:
+        failure_notes = f"Given entry {new_entry_dict} has conflicting model_hash with existing record {existing_record}"
         logger.error(failure_notes)
         new_entry_dict = update_failure(new_entry_dict, failure_notes)
-    upsert_row_supabase(new_entry_dict)
+        return supabaser.upsert_and_return(new_entry_dict, request.hash)
 
-    return supabaser.get_json_result(request.hash)
+    return supabaser.upsert_and_return(new_entry_dict, request.hash)
 
 
 def upsert_row_supabase(row):
-    if "timestamp" in row:
-        row["timestamp"] = row["timestamp"].isoformat()
 
     app.state.supabase_client.table("leaderboard").upsert(row).execute()
 

@@ -50,7 +50,7 @@ class Evaluator:
         logger: EventLogger = EventLogger(),
         trace: bool = False,
     ):
-        self.client = docker.from_env(version="auto")
+        self.client = docker.from_env(version="auto", timeout=600)
         self.logger = logger
 
         if trace:
@@ -86,6 +86,11 @@ class Evaluator:
                 "bind": "/app/model_cache_dir",
                 "mode": "rw",
             }
+            self.volume_configuration[DEFAULT_MODEL_CACHE_DIR] = {
+                "bind": "/app/model_cache_dir",
+                "mode": "rw",
+            }
+            
         self.device_requests = [docker.types.DeviceRequest(device_ids=[gpu_ids], capabilities=[["gpu"]])]
 
         self.env = {
@@ -130,9 +135,6 @@ class Evaluator:
         filepath = f"/tmp/{job_type}_output.json"
         filename = f"{job_type}_output.json"
 
-        while container.status == "created":
-            time.sleep(10)
-            container.reload()
         print("now waiting for container to complete")
         result = container.wait()
         self.logger.debug(f"container_run_complete, {result}")
@@ -157,7 +159,10 @@ class Evaluator:
                         },
                     )
                     if not self.trace:
-                        container.remove()
+                        try:
+                            container.remove()
+                        except Exception as e:
+                            self.logger.error("container_remove_error")
                     return container_results
         except Exception as e:
             self.logger.error("docker_error", error=e)

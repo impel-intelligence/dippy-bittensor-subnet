@@ -52,3 +52,11 @@ As a miner, you can also run a pseudo validator to verify if validators are sett
 
 Note that to prevent favoring miners over others, we will prioritize public discourse over DMs / private messages.
 
+## I submitted my model some time ago and it still hasn’t shown up in the queue.
+
+There are some troubleshooting steps a miner can take to ensure that their submission was managed successfully:
+1. Ensure that the commit data to the bittensor network is correct. 
+1a. A service such as taostats, or fetching raw block data from a subtensor node, can provide specific evidence. 
+1b. Example of a successful `commit` call to the bittensor network for this subnet can be seen here: https://taostats.io/extrinsic/3997404-0010
+2. Run the sample validator step mentioned in the `miner.md` documentation to check the specific status of your entry as reported by validators
+3. If all else fails, create a detailed github issue with the specific details of the miner entry (hotkey, uid, registration time) and the team will investigate if necessary
