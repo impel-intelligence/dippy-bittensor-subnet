@@ -615,22 +615,27 @@ class Validator:
 
         try:
             for uid1, entry1 in miner_registry.items():
-                if entry1.invalid:
+                if entry1.invalid or entry1.model_id is None:
                     continue
                 for uid2, entry2 in miner_registry.items():
-                    if uid1 == uid2 or entry2.invalid:
+                    if uid1 == uid2 or entry2.invalid or entry2.model_id is None:
                         continue
+                    entry1_repo_id = f"{entry1.model_id.namespace}/{entry1.model_id.name}"
+                    entry2_repo_id = f"{entry2.model_id.namespace}/{entry2.model_id.name}"
+
+                    hash_matches = entry1.model_id.hash == entry2.model_id.hash
+                    repo_details_matches = entry1_repo_id == entry2_repo_id
+
                     # Check if the model hashes are the same
-                    if entry1.model_id.hash == entry2.model_id.hash:
+                    if hash_matches or repo_details_matches:
                         # If blocks are different, mark the one with greater block as invalid
                         if entry1.block > entry2.block:
-                            miner_registry[uid1].invalid = True
-                            miner_registry[uid1].total_score = 0
+                            invalid_uids.append(uid1)
                             bt.logging.info(f"Marked uid {uid1} as invalid due to duplicate model with newer block")
+
                             break
                         elif entry2.block > entry1.block:
-                            miner_registry[uid2].invalid = True
-                            miner_registry[uid2].total_score = 0
+                            invalid_uids.append(uid2)
                             bt.logging.info(f"Marked uid {uid2} as invalid due to duplicate model with newer block")
         except Exception as e:
             bt.logging.error(f"could not perform hash check {e}")
