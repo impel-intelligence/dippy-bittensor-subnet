@@ -520,6 +520,7 @@ class Validator:
             submission_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, model_id.competition_id, hotkey)
             if submission_hash != model_id.hash:
                 bt.logging.error(f"Submission Hash {submission_hash} -- Original Hash {model_id.hash}")
+                bt.logging.error(f"Submission Hash: {submission_hash} (Type: {type(submission_hash)}), Original Hash: {model_id.hash} (Type: {type(model_id.hash)})")
                 
             block = metadata["block"] # --
             entry = MinerEntry()
