@@ -517,7 +517,7 @@ class Validator:
             chain_str = bytes.fromhex(hex_data).decode()
             bt.logging.error(f"Chain String --> {chain_str}")
             model_id = ModelId.from_compressed_str(chain_str) # --
-            submission_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, hotkey)
+            submission_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, model_id.competition_id, hotkey)
             if submission_hash != model_id.hash:
                 bt.logging.error(f"Submission Hash {submission_hash} -- Original Hash {model_id.hash}")
                 
