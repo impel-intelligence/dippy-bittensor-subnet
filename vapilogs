@@ -1,0 +1,1000 @@
+vapi-1  |     raise mapped_exc(message) from exc
+vapi-1  | httpx.RemoteProtocolError: Server disconnected
+vapi-1  | INFO:     172.19.0.1:40614 - "POST /evaluate_model HTTP/1.1" 500 Internal Server Error
+vapi-1  | ERROR:    Exception in ASGI application
+vapi-1  | Traceback (most recent call last):
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 435, in _read_incoming_data
+vapi-1  |     raise self._read_exception  # pragma: nocover
+vapi-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 435, in _read_incoming_data
+vapi-1  |     raise self._read_exception  # pragma: nocover
+vapi-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 435, in _read_incoming_data
+vapi-1  |     raise self._read_exception  # pragma: nocover
+vapi-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 452, in _read_incoming_data
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 440, in _read_incoming_data
+vapi-1  |     raise RemoteProtocolError("Server disconnected")
+vapi-1  | httpcore.RemoteProtocolError: Server disconnected
+vapi-1  | 
+vapi-1  | The above exception was the direct cause of the following exception:
+vapi-1  | 
+vapi-1  | Traceback (most recent call last):
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 401, in run_asgi
+vapi-1  |     result = await app(  # type: ignore[func-returns-value]
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+vapi-1  |     return await self.app(scope, receive, send)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/fastapi/applications.py", line 1054, in __call__
+vapi-1  |     await super().__call__(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/applications.py", line 113, in __call__
+vapi-1  |     await self.middleware_stack(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 187, in __call__
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 165, in __call__
+vapi-1  |     await self.app(scope, receive, _send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+vapi-1  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+vapi-1  |     await app(scope, receive, sender)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 715, in __call__
+vapi-1  |     await self.middleware_stack(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 735, in app
+vapi-1  |     await route.handle(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 288, in handle
+vapi-1  |     await self.app(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 76, in app
+vapi-1  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+vapi-1  |     await app(scope, receive, sender)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 73, in app
+vapi-1  |     response = await f(request)
+vapi-1  |                ^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 301, in app
+vapi-1  |     raw_response = await run_endpoint_function(
+vapi-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 214, in run_endpoint_function
+vapi-1  |     return await run_in_threadpool(dependant.call, **values)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/concurrency.py", line 39, in run_in_threadpool
+vapi-1  |     return await anyio.to_thread.run_sync(func, *args)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/anyio/to_thread.py", line 56, in run_sync
+vapi-1  |     return await get_async_backend().run_sync_in_worker_thread(
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 2405, in run_sync_in_worker_thread
+vapi-1  |     return await future
+vapi-1  |            ^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 914, in run
+vapi-1  |     result = context.run(func, *args)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/app/validation_api.py", line 378, in evaluate_model
+vapi-1  |     return supabaser.get_json_result(request.hash)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/app/dippy_validation_api/persistence.py", line 127, in get_json_result
+vapi-1  |     raise e
+vapi-1  |   File "/app/dippy_validation_api/persistence.py", line 105, in get_json_result
+vapi-1  |     response = self.client.table("leaderboard").select("*").eq("hash", hash).execute()
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/postgrest/_sync/request_builder.py", line 58, in execute
+vapi-1  |     r = self.session.request(
+vapi-1  |         ^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 837, in request
+vapi-1  |     return self.send(request, auth=auth, follow_redirects=follow_redirects)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 926, in send
+vapi-1  |     response = self._send_handling_auth(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 954, in _send_handling_auth
+vapi-1  |     response = self._send_handling_redirects(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 991, in _send_handling_redirects
+vapi-1  |     response = self._send_single_request(request)
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1027, in _send_single_request
+vapi-1  |     response = transport.handle_request(request)
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 235, in handle_request
+vapi-1  |     with map_httpcore_exceptions():
+vapi-1  |          ^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+vapi-1  |     self.gen.throw(value)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 89, in map_httpcore_exceptions
+vapi-1  |     raise mapped_exc(message) from exc
+vapi-1  | httpx.RemoteProtocolError: Server disconnected
+vapi-1  | INFO:     172.19.0.1:54718 - "POST /evaluate_model HTTP/1.1" 500 Internal Server Error
+vapi-1  | INFO:     172.19.0.1:57306 - "POST /evaluate_model HTTP/1.1" 500 Internal Server Error
+vapi-1  | ERROR:    Exception in ASGI application
+vapi-1  | Traceback (most recent call last):
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 435, in _read_incoming_data
+vapi-1  |     raise self._read_exception  # pragma: nocover
+vapi-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 435, in _read_incoming_data
+vapi-1  |     raise self._read_exception  # pragma: nocover
+vapi-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 435, in _read_incoming_data
+vapi-1  |     raise self._read_exception  # pragma: nocover
+vapi-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 452, in _read_incoming_data
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 440, in _read_incoming_data
+vapi-1  |     raise RemoteProtocolError("Server disconnected")
+vapi-1  | httpcore.RemoteProtocolError: Server disconnected
+vapi-1  | 
+vapi-1  | The above exception was the direct cause of the following exception:
+vapi-1  | 
+vapi-1  | Traceback (most recent call last):
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 401, in run_asgi
+vapi-1  |     result = await app(  # type: ignore[func-returns-value]
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+vapi-1  |     return await self.app(scope, receive, send)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/fastapi/applications.py", line 1054, in __call__
+vapi-1  |     await super().__call__(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/applications.py", line 113, in __call__
+vapi-1  |     await self.middleware_stack(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 187, in __call__
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 165, in __call__
+vapi-1  |     await self.app(scope, receive, _send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+vapi-1  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+vapi-1  |     await app(scope, receive, sender)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 715, in __call__
+vapi-1  |     await self.middleware_stack(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 735, in app
+vapi-1  |     await route.handle(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 288, in handle
+vapi-1  |     await self.app(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 76, in app
+vapi-1  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+vapi-1  |     await app(scope, receive, sender)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 73, in app
+vapi-1  |     response = await f(request)
+vapi-1  |                ^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 301, in app
+vapi-1  |     raw_response = await run_endpoint_function(
+vapi-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 214, in run_endpoint_function
+vapi-1  |     return await run_in_threadpool(dependant.call, **values)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/concurrency.py", line 39, in run_in_threadpool
+vapi-1  |     return await anyio.to_thread.run_sync(func, *args)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/anyio/to_thread.py", line 56, in run_sync
+vapi-1  |     return await get_async_backend().run_sync_in_worker_thread(
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 2405, in run_sync_in_worker_thread
+vapi-1  |     return await future
+vapi-1  |            ^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 914, in run
+vapi-1  |     result = context.run(func, *args)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/app/validation_api.py", line 378, in evaluate_model
+vapi-1  |     return supabaser.get_json_result(request.hash)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/app/dippy_validation_api/persistence.py", line 127, in get_json_result
+vapi-1  |     raise e
+vapi-1  |   File "/app/dippy_validation_api/persistence.py", line 105, in get_json_result
+vapi-1  |     response = self.client.table("leaderboard").select("*").eq("hash", hash).execute()
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/postgrest/_sync/request_builder.py", line 58, in execute
+vapi-1  |     r = self.session.request(
+vapi-1  |         ^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 837, in request
+vapi-1  |     return self.send(request, auth=auth, follow_redirects=follow_redirects)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 926, in send
+vapi-1  |     response = self._send_handling_auth(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 954, in _send_handling_auth
+vapi-1  |     response = self._send_handling_redirects(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 991, in _send_handling_redirects
+vapi-1  |     response = self._send_single_request(request)
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1027, in _send_single_request
+vapi-1  |     response = transport.handle_request(request)
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 235, in handle_request
+vapi-1  |     with map_httpcore_exceptions():
+vapi-1  |          ^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+vapi-1  |     self.gen.throw(value)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 89, in map_httpcore_exceptions
+vapi-1  |     raise mapped_exc(message) from exc
+vapi-1  | httpx.RemoteProtocolError: Server disconnected
+vapi-1  | ERROR:    Exception in ASGI application
+vapi-1  | Traceback (most recent call last):
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 435, in _read_incoming_data
+vapi-1  |     raise self._read_exception  # pragma: nocover
+vapi-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 435, in _read_incoming_data
+vapi-1  |     raise self._read_exception  # pragma: nocover
+vapi-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 435, in _read_incoming_data
+vapi-1  |     raise self._read_exception  # pragma: nocover
+vapi-1  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 72, in map_httpcore_exceptions
+vapi-1  |     yield
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 236, in handle_request
+vapi-1  |     resp = self._pool.handle_request(req)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 216, in handle_request
+vapi-1  |     raise exc from None
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 196, in handle_request
+vapi-1  |     response = connection.handle_request(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+vapi-1  |     return self._connection.handle_request(request)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 185, in handle_request
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 148, in handle_request
+vapi-1  |     status, headers = self._receive_response(
+vapi-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 292, in _receive_response
+vapi-1  |     event = self._receive_stream_event(request, stream_id)
+vapi-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 333, in _receive_stream_event
+vapi-1  |     self._receive_events(request, stream_id)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 361, in _receive_events
+vapi-1  |     events = self._read_incoming_data(request)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 452, in _read_incoming_data
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpcore/_sync/http2.py", line 440, in _read_incoming_data
+vapi-1  |     raise RemoteProtocolError("Server disconnected")
+vapi-1  | httpcore.RemoteProtocolError: Server disconnected
+vapi-1  | 
+vapi-1  | The above exception was the direct cause of the following exception:
+vapi-1  | 
+vapi-1  | Traceback (most recent call last):
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 401, in run_asgi
+vapi-1  |     result = await app(  # type: ignore[func-returns-value]
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+vapi-1  |     return await self.app(scope, receive, send)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/fastapi/applications.py", line 1054, in __call__
+vapi-1  |     await super().__call__(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/applications.py", line 113, in __call__
+vapi-1  |     await self.middleware_stack(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 187, in __call__
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/errors.py", line 165, in __call__
+vapi-1  |     await self.app(scope, receive, _send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 62, in __call__
+vapi-1  |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+vapi-1  |     await app(scope, receive, sender)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 715, in __call__
+vapi-1  |     await self.middleware_stack(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 735, in app
+vapi-1  |     await route.handle(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 288, in handle
+vapi-1  |     await self.app(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 76, in app
+vapi-1  |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 62, in wrapped_app
+vapi-1  |     raise exc
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/_exception_handler.py", line 51, in wrapped_app
+vapi-1  |     await app(scope, receive, sender)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/routing.py", line 73, in app
+vapi-1  |     response = await f(request)
+vapi-1  |                ^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 301, in app
+vapi-1  |     raw_response = await run_endpoint_function(
+vapi-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/fastapi/routing.py", line 214, in run_endpoint_function
+vapi-1  |     return await run_in_threadpool(dependant.call, **values)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/starlette/concurrency.py", line 39, in run_in_threadpool
+vapi-1  |     return await anyio.to_thread.run_sync(func, *args)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/anyio/to_thread.py", line 56, in run_sync
+vapi-1  |     return await get_async_backend().run_sync_in_worker_thread(
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 2405, in run_sync_in_worker_thread
+vapi-1  |     return await future
+vapi-1  |            ^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/anyio/_backends/_asyncio.py", line 914, in run
+vapi-1  |     result = context.run(func, *args)
+vapi-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/app/validation_api.py", line 378, in evaluate_model
+vapi-1  |     return supabaser.get_json_result(request.hash)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/app/dippy_validation_api/persistence.py", line 127, in get_json_result
+vapi-1  |     raise e
+vapi-1  |   File "/app/dippy_validation_api/persistence.py", line 105, in get_json_result
+vapi-1  |     response = self.client.table("leaderboard").select("*").eq("hash", hash).execute()
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/postgrest/_sync/request_builder.py", line 58, in execute
+vapi-1  |     r = self.session.request(
+vapi-1  |         ^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 837, in request
+vapi-1  |     return self.send(request, auth=auth, follow_redirects=follow_redirects)
+vapi-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 926, in send
+vapi-1  |     response = self._send_handling_auth(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 954, in _send_handling_auth
+vapi-1  |     response = self._send_handling_redirects(
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 991, in _send_handling_redirects
+vapi-1  |     response = self._send_single_request(request)
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_client.py", line 1027, in _send_single_request
+vapi-1  |     response = transport.handle_request(request)
+vapi-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 235, in handle_request
+vapi-1  |     with map_httpcore_exceptions():
+vapi-1  |          ^^^^^^^^^^^^^^^^^^^^^^^^^
+vapi-1  |   File "/usr/local/lib/python3.12/contextlib.py", line 158, in __exit__
+vapi-1  |     self.gen.throw(value)
+vapi-1  |   File "/usr/local/lib/python3.12/site-packages/httpx/_transports/default.py", line 89, in map_httpcore_exceptions
+vapi-1  |     raise mapped_exc(message) from exc
+vapi-1  | httpx.RemoteProtocolError: Server disconnected
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57320 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /event_report HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57320 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57320 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57320 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57320 - "POST /check_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | ERROR:dippy_validation_api.persistence:Did not find leaderboard entry : data=[] count=None
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /minerboard_update HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57320 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | ERROR:dippy_validation_api.persistence:Did not find leaderboard entry : data=[] count=None
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57320 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57320 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | ERROR:dippy_validation_api.persistence:Did not find leaderboard entry : data=[] count=None
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | ERROR:dippy_validation_api.persistence:Did not find leaderboard entry : data=[] count=None
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /check_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /minerboard_update HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57320 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /check_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /minerboard_update HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /event_report HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /check_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /minerboard_update HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /check_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /minerboard_update HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "GET /minerboard?repo_name=9-02102011-02Haymak&repo_namespace=OhaymakingO HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57322 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /check_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /minerboard_update HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /check_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /minerboard_update HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /check_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /minerboard_update HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:57330 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /check_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /event_report HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /event_report HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "GET /minerboard HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | ERROR:dippy_validation_api.persistence:Did not find leaderboard entry : data=[] count=None
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | ERROR:dippy_validation_api.persistence:Did not find leaderboard entry : data=[] count=None
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40582 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40604 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "GET /minerboard HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:40630 - "POST /evaluate_model HTTP/1.1" 200 OK
+vapi-1  | INFO:     172.19.0.1:55002 - "POST /evaluate_model HTTP/1.1" 200 OK
