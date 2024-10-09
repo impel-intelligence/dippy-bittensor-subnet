@@ -580,7 +580,8 @@ class Validator:
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} given range {INVALID_BLOCK_START} - {INVALID_BLOCK_END}")
                     continue
 
-                if model_data.block > PRE_HOTKEY_BLOCKS:
+                if model_data.block < PRE_HOTKEY_BLOCKS:
+                    invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} before {PRE_HOTKEY_BLOCKS} Pre Hotkey Check Blocks")
                     continue
 
