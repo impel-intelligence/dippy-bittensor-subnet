@@ -66,6 +66,7 @@ from utilities.validation_utils import regenerate_hash
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 INVALID_BLOCK_START = 3840700
 INVALID_BLOCK_END = 3933300
+PRE_HOTKEY_BLOCKS = 4005701
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
@@ -578,6 +579,11 @@ class Validator:
                     invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} given range {INVALID_BLOCK_START} - {INVALID_BLOCK_END}")
                     continue
+
+                if model_data.block > PRE_HOTKEY_BLOCKS:
+                    bt.logging.info(f"skip {uid} submitted on {model_data.block} before {PRE_HOTKEY_BLOCKS} Pre Hotkey Check Blocks")
+                    continue
+
                 
                 if model_data.model_id is None:
                     invalid_uids.append(uid)
