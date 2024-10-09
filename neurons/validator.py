@@ -66,6 +66,7 @@ from utilities.validation_utils import regenerate_hash
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 INVALID_BLOCK_START = 3840700
 INVALID_BLOCK_END = 3933300
+PRE_HOTKEY_BLOCKS = 4005701
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
@@ -512,15 +513,18 @@ class Validator:
             metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.config.netuid, hotkey)
             if metadata is None:
                 return None
+            
             commitment = metadata["info"]["fields"][0]
             hex_data = commitment[list(commitment.keys())[0]][2:]
             chain_str = bytes.fromhex(hex_data).decode()
+     
             model_id = ModelId.from_compressed_str(chain_str) # --
             submission_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, hotkey)
-            if submission_hash != model_id.hash:
+            if int(submission_hash) != int(model_id.hash):
                 bt.logging.error(f"Submission Hash {submission_hash} -- Original Hash {model_id.hash}")
-                
+               
             block = metadata["block"] # --
+            bt.logging.error(f"BLOCK -- {metadata['block']}")
             entry = MinerEntry()
             entry.block = block
             entry.model_id = model_id
@@ -575,6 +579,11 @@ class Validator:
                     invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} given range {INVALID_BLOCK_START} - {INVALID_BLOCK_END}")
                     continue
+
+                if model_data.block > PRE_HOTKEY_BLOCKS:
+                    bt.logging.info(f"skip {uid} submitted on {model_data.block} before {PRE_HOTKEY_BLOCKS} Pre Hotkey Check Blocks")
+                    continue
+
                 
                 if model_data.model_id is None:
                     invalid_uids.append(uid)
