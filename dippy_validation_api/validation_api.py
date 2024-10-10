@@ -342,6 +342,23 @@ def get_minerboard():
         results.append(flattened_entry)
     return results
 
+def hash_check(request: EvaluateModelRequest) -> bool:
+    hash_matches = int(request.hash) == regenerate_hash(
+        request.repo_namespace,
+        request.repo_name,
+        request.chat_template_type,
+        request.competition_id,
+    )
+    hotkey_hash_matches = int(request.hash) == regenerate_hash(
+        request.repo_namespace,
+        request.repo_name,
+        request.chat_template_type,
+        request.hotkey,
+    )
+    if hash_matches or hotkey_hash_matches:
+        return True
+    return False
+
 
 @app.post("/evaluate_model")
 def evaluate_model(
@@ -367,12 +384,8 @@ def evaluate_model(
     if app.state.event_logger_enabled:
         app.state.event_logger.info("incoming_evaluate_request", extra=request_details)
     # verify hash
-    if int(request.hash) != regenerate_hash(
-        request.repo_namespace,
-        request.repo_name,
-        request.chat_template_type,
-        request.competition_id,
-    ):
+    hash_verified =  hash_check(request)
+    if not hash_verified:
         raise HTTPException(status_code=400, detail="Hash does not match the model details")
 
     return supabaser.get_json_result(request.hash)
@@ -395,12 +408,8 @@ def check_model(
     request: EvaluateModelRequest,
 ):
     # verify hash
-    if int(request.hash) != regenerate_hash(
-        request.repo_namespace,
-        request.repo_name,
-        request.chat_template_type,
-        request.competition_id,
-    ):
+    hash_verified = hash_check(request)
+    if not hash_verified:
         raise HTTPException(status_code=400, detail="Hash does not match the model details")
     if request.admin_key != admin_key:
         raise HTTPException(status_code=403, detail="invalid key")

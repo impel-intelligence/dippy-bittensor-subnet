@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, PositiveInt
 # The maximum bytes for metadata on the chain.
 MAX_METADATA_BYTES = 128
 # The length, in bytes, of a git commit hash.
-GIT_COMMIT_LENGTH = 40
+HOTKEY_LENGTH = 40
 # The length, in bytes, of a base64 encoded sha256 hash.
 SHA256_BASE_64_LENGTH = 44
 # The max length, in characters, of the competition id
@@ -16,7 +16,7 @@ class ModelId(BaseModel):
     """Uniquely identifies a trained model"""
 
     MAX_REPO_ID_LENGTH: ClassVar[int] = (
-        MAX_METADATA_BYTES - GIT_COMMIT_LENGTH - SHA256_BASE_64_LENGTH - MAX_COMPETITION_ID_LENGTH - 4  # separators
+        MAX_METADATA_BYTES - HOTKEY_LENGTH - SHA256_BASE_64_LENGTH - MAX_COMPETITION_ID_LENGTH - 4  # separators
     )
 
     namespace: str = Field(description="Namespace where the model can be found. ex. Hugging Face username/org.")
@@ -24,9 +24,8 @@ class ModelId(BaseModel):
 
     chat_template: str = Field(description="Chat template for the model.")
 
-    # When handling a model locally the commit and hash are not necessary.
-    # Commit must be filled when trying to download from a remote store.
-    commit: Optional[str] = Field(description="Commit of the model. May be empty if not yet committed.")
+    # Include hotkey in hash to uniqely identify model
+    hotkey: str = Field(description="Hotkey of the submitting miner.")
     # Hash is filled automatically when uploading to or downloading from a remote store.
     hash: Optional[str] = Field(description="Hash of the trained model.")
     # Identifier for competition
@@ -34,7 +33,7 @@ class ModelId(BaseModel):
 
     def to_compressed_str(self) -> str:
         """Returns a compressed string representation."""
-        return f"{self.namespace}:{self.name}:{self.chat_template}:{self.commit}:{self.hash}:{self.competition_id}"
+        return f"{self.namespace}:{self.name}:{self.chat_template}:{self.hotkey}:{self.hash}:{self.competition_id}"
 
     @classmethod
     def from_compressed_str(cls, cs: str) -> Type["ModelId"]:
@@ -44,7 +43,7 @@ class ModelId(BaseModel):
             namespace=tokens[0],
             name=tokens[1],
             chat_template=tokens[2] if tokens[2] != "None" else None,
-            commit=tokens[3] if tokens[3] != "None" else None,
+            hotkey=tokens[3] if tokens[3] != "None" else "",
             hash=tokens[4] if tokens[4] != "None" else None,
             competition_id=(tokens[5] if len(tokens) >= 6 and tokens[5] != "None" else None),
         )
