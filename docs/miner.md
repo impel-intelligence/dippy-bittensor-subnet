@@ -1,5 +1,26 @@
 # Miner Guide
 This document will outline advanced steps that miners can utilize for competing in the subnet.
+
+## Environment Setup
+
+```shell
+pip install -r requirements.txt
+pip install -e .
+```
+
+
+## Submitting a model
+
+```shell
+btcli s register --netuid 11
+```
+
+
+```shell
+python3 neurons/miner.py --wallet.name coldkey  --wallet.hotkey hotkey --repo_namespace <your_huggingface_username> --repo_name <your_huggingface_repo> --chat_template <your_chat_template> --online True
+```
+
+
 ## Running local evaluation
 The same evaluation used by validators can be run locally. 
 Note that some score results, such as latency, may not be 100% exact given the nature of the scoring.

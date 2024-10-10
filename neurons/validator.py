@@ -508,6 +508,16 @@ class Validator:
             bt.logging.error(f"Failed to run step : {e} {traceback.format_exc()}")
             return False
 
+    def read_model_id_with_hotkey(self):
+        # submission_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, hotkey)
+        #     if int(submission_hash) != int(model_id.hash):
+        #         bt.logging.error(f"Submission Hash {submission_hash} -- Original Hash {model_id.hash}")
+        #         return None
+
+
+        return None
+
+
     def fetch_model_data(self, hotkey: str) -> Optional[MinerEntry]:
         try:
             metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.config.netuid, hotkey)
@@ -519,13 +529,8 @@ class Validator:
             chain_str = bytes.fromhex(hex_data).decode()
      
             model_id = ModelId.from_compressed_str(chain_str) # --
-            submission_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, hotkey)
-            if int(submission_hash) != int(model_id.hash):
-                bt.logging.error(f"Submission Hash {submission_hash} -- Original Hash {model_id.hash}")
-                return None
             
-            block = metadata["block"] # --
-            bt.logging.error(f"BLOCK -- {metadata['block']}")
+            block = metadata["block"]
             entry = MinerEntry()
             entry.block = block
             entry.model_id = model_id
@@ -581,10 +586,6 @@ class Validator:
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} given range {INVALID_BLOCK_START} - {INVALID_BLOCK_END}")
                     continue
 
-                if model_data.block < PRE_HOTKEY_BLOCKS:
-                    invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} submitted on {model_data.block} before {PRE_HOTKEY_BLOCKS} Pre Hotkey Check Blocks")
-                    continue
 
                 
                 if model_data.model_id is None:
