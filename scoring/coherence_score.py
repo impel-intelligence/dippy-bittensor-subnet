@@ -57,6 +57,7 @@ def coherence_evaluator(generated_text: str):
                 }
             ],
             model=COHERENCE_EVAL_MODEL,
+            temperature=0,
         )
         score = int(chat_completion.choices[0].message.content)
         return score
@@ -92,35 +93,6 @@ def pretty_convo(dict_list, score):
         print(f"  Content: {item['content']}")
         print()
 
-# 22 different combinations for conversations
-def parentheses_combinations():
-    combinations = [
-        ('(', ')'), 
-        ('[', ']'), 
-        ('{', '}'), 
-        ('<', '>'), 
-        ('«', '»'), 
-        ('‹', '›'),
-        ('『', '』'), 
-        ('「', '」'), 
-        ('【', '】'), 
-        ('〔', '〕'), 
-        ('《', '》'), 
-        ('〈', '〉'), 
-        ('{|', '|}'),
-        ('⟨', '⟩'),  # Mathematical angle brackets
-        ('⦃', '⦄'),  # Mathematical white tortoise shell brackets
-        ('⦗', '⦘'),  # Mathematical flat square brackets
-        ('⸢', '⸣'),  # Corner brackets
-        ('⟦', '⟧'),  # Mathematical double square brackets
-        ('⟪', '⟫'),  # Mathematical double angle brackets
-        ('⟬', '⟭'),  # Mathematical white tortoise shell brackets
-        ('⦅', '⦆'),  # Mathematical white parentheses
-        ('⦇', '⦈'),  # Mathematical left white square bracket
-        ('⦉', '⦊'),  # Mathematical right white square bracket
-    ]
-    
-    return combinations
 
 def stringify_convo(dict_list):
     
@@ -139,6 +111,7 @@ import random
 
 MIN_CONVERSATIONS = 2
 MAX_CONVERSATIONS = 4
+MAX_ERROR_RATE = 0.1
 
 
 def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=False) -> int:
@@ -185,6 +158,7 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
 
     evaluation_conversations = [stringify_convo(m) for m in generated_samples]
     penalty = 0
+    exceptions = 0
     for i, convo in enumerate(evaluation_conversations):
         try:
             coherence_score = coherence_evaluator(convo)
@@ -192,8 +166,14 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
             if coherence_score < 1:
                 penalty += 1
         except Exception as e:
+            exceptions += 1
             print(e)
 
-    final_coherence_score = (COHERENCE_NUM_EVALS - penalty) / COHERENCE_NUM_EVALS
+    if exceptions / COHERENCE_NUM_EVALS > MAX_ERROR_RATE:
+        raise RuntimeError("coherence failed due to api issues")
+
+    ADJUSTED_EVALS = COHERENCE_NUM_EVALS - exceptions
+
+    final_coherence_score = (ADJUSTED_EVALS - penalty) / ADJUSTED_EVALS
 
     return final_coherence_score
