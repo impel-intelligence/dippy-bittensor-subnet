@@ -61,9 +61,12 @@ import numpy as np
 import torch
 from scipy import optimize
 
+from utilities.validation_utils import regenerate_hash
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 INVALID_BLOCK_START = 3840700
 INVALID_BLOCK_END = 3933300
+PRE_HOTKEY_BLOCKS = 4444444
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
@@ -505,15 +508,28 @@ class Validator:
             bt.logging.error(f"Failed to run step : {e} {traceback.format_exc()}")
             return False
 
+    def model_id_matches_hotkey(self, model_id: ModelId, hotkey: str, block) -> bool:
+        original_hash = model_id.hash or ""
+        hotkey_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, hotkey)
+        hotkey_matches = original_hash == hotkey_hash
+        if block > PRE_HOTKEY_BLOCKS and not hotkey_matches:
+            return False
+        return True
+
+
     def fetch_model_data(self, hotkey: str) -> Optional[MinerEntry]:
         try:
             metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.config.netuid, hotkey)
             if metadata is None:
                 return None
+            
             commitment = metadata["info"]["fields"][0]
             hex_data = commitment[list(commitment.keys())[0]][2:]
             chain_str = bytes.fromhex(hex_data).decode()
+     
             model_id = ModelId.from_compressed_str(chain_str)
+            model_id.hotkey = hotkey
+            
             block = metadata["block"]
             entry = MinerEntry()
             entry.block = block
@@ -559,6 +575,7 @@ class Validator:
                     invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} no model_data")
                     continue
+                
                 # Skip model submitted after run step has begun
                 if model_data.block > current_block:
                     invalid_uids.append(uid)
@@ -569,6 +586,15 @@ class Validator:
                     invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} given range {INVALID_BLOCK_START} - {INVALID_BLOCK_END}")
                     continue
+                hotkey_hash_passes = self.model_id_matches_hotkey(model_data.model_id, hotkey, model_data.block)
+                
+                if not hotkey_hash_passes:
+                    invalid_uids.append(uid)
+                    bt.logging.info(f"{uid} submitted on {model_data.model_id.hash} does not include same hotkey")
+                    continue
+                
+
+
                 
                 if model_data.model_id is None:
                     invalid_uids.append(uid)
@@ -597,7 +623,7 @@ class Validator:
                         True,
                     )
                 bt.logging.info(
-                    f"_score_data for {uid} on block {miner_registry[uid].block} : {miner_registry[uid].model_id} is {_score_data}"
+                    f"_score_data for {uid} on block {miner_registry[uid].block} : {miner_registry[uid].model_id} {_score_data}"
                 )
                 if _score_data.status == StatusEnum.QUEUED or _score_data.status == StatusEnum.RUNNING:
                     invalid_uids.append(uid)
@@ -609,6 +635,7 @@ class Validator:
                     miner_registry[uid].total_score = 0
             except Exception as e:
                 bt.logging.error(f"could not update for {uid}:{hotkey} {e}")
+                bt.logging.error(f"Traceback: {traceback.format_exc()}")
                 invalid_uids.append(uid)
                 continue
 
@@ -831,6 +858,7 @@ def _get_model_score(
         name=model_id.name,
         hash=model_id.hash,
         template=model_id.chat_template,
+        hotkey=model_id.hotkey,
         config=config,
         local_metadata=local_metadata,
         signatures=signatures,
@@ -839,10 +867,11 @@ def _get_model_score(
 
 
 def get_model_score(
-    namespace,
-    name,
-    hash,
-    template,
+    namespace: str,
+    name: str,
+    hash: str,
+    template: str,
+    hotkey: str,
     config,
     local_metadata: LocalMetadata,
     signatures: Dict[str, str],
@@ -863,6 +892,7 @@ def get_model_score(
         "repo_name": name,
         "hash": hash,
         "chat_template_type": template,
+        "hotkey": hotkey,
     }
     headers = {
         "Git-Commit": str(local_metadata.commit),
