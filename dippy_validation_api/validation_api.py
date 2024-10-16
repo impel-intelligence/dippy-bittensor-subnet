@@ -145,10 +145,10 @@ def _duplicate_model(request: EvaluateModelRequest):
 
 GPU_ID_MAP = {
     0: "0",
-    1: "0",
-    2: "4,5",
-    3: "6,7",
-    4: "8,9"
+    1: "1",
+    2: "2",
+    3: "3",
+    # 4: "8,9"
 }
 
 
