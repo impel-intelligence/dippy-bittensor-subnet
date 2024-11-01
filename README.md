@@ -55,7 +55,7 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 
 ## Overview of Miner and Validator Functionality
 
-![overview](/assests/model_architecture.png)
+![overview](/assests/architecturenew.png)
 
 **Miners** would use existing frameworks, fine tuning techniques, or MergeKit, to train, fine tune, or merge models to create a unique roleplay LLM. These models would be submitted to a shared Hugging Face pool. 
 
