@@ -86,15 +86,10 @@ def get_vibe_match_score(
         input_tokenizer = AutoTokenizer.from_pretrained(
             f"{request.repo_namespace}/{request.repo_name}", revision=request.revision
         )
-        dataset_path = str(os.path.join(DATASET_DIR, "pippa_deduped.jsonl"))
-
-        vibe_score_dataset = PippaDataset(
-            dataset_path,
-            max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
+        
+        vibe_score_dataset =  StreamedSyntheticDataset(
+        max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
         )
-        # vibe_score_dataset =  StreamedSyntheticDataset(
-        # max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
-        # )
         # Set chat template params
         vibe_score_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 

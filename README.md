@@ -229,8 +229,8 @@ model_validation_venv/bin/pip install -e . --no-deps
 model_validation_venv/bin/pip install -r requirements_val_api.txt
 ```
 
-#### Run model validation API service
-(Note: there are currently breaking changes that pose challenges to running a local validation API service)
+#### Run model validation API service (optional)
+(Note: there are currently breaking changes that pose challenges to running a local validation API service. Any tasks that require the env vars `ADMIN_KEY` or `DIPPY_KEY` applies here)
 ```bash
 cd dippy_validation_api
 chmod +x start_validation_service.sh
@@ -251,7 +251,7 @@ chmod +x kill_validation_api.sh
 ./kill_validation_api.sh
 ```
 
-#### Running the validator with your own validation API service running locally
+#### Running the validator with your own validation API service running locally (optional)
 ```bash
 # Make a separate venv for the validator because of pydantic version conflict
 python -m venv validator_venv
@@ -262,7 +262,7 @@ validator_venv/bin/python neurons/model_queue.py --use-local-validation-api
 ```
 ## Model Evaluation Criteria
 ### Model Size
-A smaller model will score higher than a big model. Model size is the disk space occupied by the model repo from HF. The max model size is limited to 18GB.
+A smaller model will score higher than a big model. Model size is the disk space occupied by the model repo from HF. The max model size is limited to 72GB.
 
 <!-- $S_{size} = 1 - ModelSize/ MaxModelSize$ -->
 ### Latency
