@@ -144,7 +144,6 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
 
 import requests
 
-# DATASET_URL = "http://75.101.234.38:8111/latest"
 DATASET_URL = "https://datasets.dippy-bittensor-subnet.com/dataset"
 DATASET_API_KEY = os.environ.get("DATASET_API_KEY", "dippy")
 DEFAULT_EPOCH_DATE = "20240930"
