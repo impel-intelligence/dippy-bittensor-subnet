@@ -38,12 +38,17 @@ Feel free to modify the below with the appropriate commands if you use anything 
 # Setup virtual env
 uv venv
 source .venv/bin/activate
-uv pip install -r requirements.eval.txt
+# Install requirements specifically for running evaluator script
+uv pip install -r requirements.miner.txt
+# Install local package
+uv pip install -e .
+
 # You will need access to openai to grade coherence. Will transition to Corcel in a future update
 export OPENAI_API_KEY=x
 # You will also need access to the dataset api to set a token. Be sure to follow the instructions set out in `token_check.py` to set the correct value here
 export DATASET_API_KEY="Bearer YOUR_JWT_HERE"
-
+# Build the docker image used to score locally
+docker build -f evaluator.Dockerfile -t grader:latest .
 # In the `dippy_validation_api/evaluator.py` script, there is the following line:
 evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="0")
 # Edit the gpu_ids as needed to map to your actual GPU ids
