@@ -38,7 +38,7 @@ from utilities.event_logger import EventLogger
 from utilities.validation_utils import regenerate_hash
 
 l = LocalMetadata(commit="x", btversion="x")
-
+SKIP_BLOCK = 4200000
 
 import requests
 from huggingface_hub.utils import build_hf_headers, hf_raise_for_status
@@ -163,6 +163,7 @@ class ModelQueue:
             sleep_time = (next_epoch_minute_mark - now).total_seconds()
             self.logger.info(f"sleeping for {sleep_time}")
             time.sleep(sleep_time)
+            # time.sleep(1)
             try:
                 self.load_latest_metagraph()
             except Exception as e:
@@ -189,6 +190,8 @@ class ModelQueue:
                 chain_str = bytes.fromhex(hex_data).decode()
                 model_id = ModelId.from_compressed_str(chain_str)
                 block = metadata["block"]
+                if block < SKIP_BLOCK:
+                    continue
 
                 result = self.check_model_score(
                     namespace=model_id.namespace,
@@ -207,7 +210,8 @@ class ModelQueue:
                 
                 if result.status == StatusEnum.QUEUED:
                     try:
-                        duplicate(model_id.repo_namespace, model_id.repo_name)
+                        print(f"QUEUED: {hotkey}")
+                        # duplicate(model_id.repo_namespace, model_id.repo_name)
                     except Exception as e:
                         self.logger.error(f"could not duplicate repo : {e}")
                     queued += 1

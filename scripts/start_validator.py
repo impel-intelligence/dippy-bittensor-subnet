@@ -65,6 +65,7 @@ def start_validator_process(pm2_name: str, args: List[str]) -> subprocess.Popen:
         cwd=constants.ROOT_DIR,
     )
     process.pm2_name = pm2_name
+    log.info("Started validator process with pm2, name: %s", pm2_name)
 
     return process
 
