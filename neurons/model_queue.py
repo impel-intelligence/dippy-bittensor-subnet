@@ -35,6 +35,7 @@ from neurons.validator import LocalMetadata
 import os
 
 from utilities.event_logger import EventLogger
+from utilities.validation_utils import regenerate_hash
 
 l = LocalMetadata(commit="x", btversion="x")
 
@@ -142,7 +143,7 @@ class ModelQueue:
 
         # === Bittensor objects ====
         self.subtensor = bt.subtensor(config=self.config)
-        self.metagraph: bt.metagraph = self.subtensor.metagraph(self.config.netuid)
+        self.metagraph = self.subtensor.metagraph(self.config.netuid)
         logfilepath = "/tmp/modelq/{time:UNIX}.log"
         self.logger = EventLogger(
             filepath=logfilepath,

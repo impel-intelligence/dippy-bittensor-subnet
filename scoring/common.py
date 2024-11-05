@@ -8,9 +8,8 @@ LENGTH_DIFF_PENALTY_STEEPNESS = 2  # the steepness of the exponential decay of t
 MAX_AVG_LATENCY = 10000  # in milliseconds
 CREATIVITY_SCALE_FACTOR = 5
 
-MAX_MODEL_SIZE = 32 * 1024 * 1024 * 1024  # in bytes
+MAX_MODEL_SIZE = 72 * 1024 * 1024 * 1024  # in bytes
 MIN_REPO_SIZE = 10 * 1024 * 1024  # in bytes
-MAX_REPO_SIZE = 80 * 1024 * 1024 * 1024  #  in bytes
 SAMPLE_SIZE = 1024  # number of samples to evaluate the model from the dataset
 EVALUATION_DATASET_SAMPLE_SIZE = 4096  # number of samples to evaluate the model from the dataset
 BATCH_SIZE = 4  # batch size for evaluation
@@ -39,15 +38,10 @@ COHERENCE_MAX_TOKENS = 1024
 COHERENCE_NUM_EVALS = 256
 COHERENCE_EVAL_MODEL = "gpt-4o"
 
-PIPPA_FILENAME = "pippa_deduped.jsonl"
-PROMPTS_1_FILENAME = "opus-writing-prompts-1-sharegpt.jsonl"
-PROMPTS_2_FILENAME = "opus-writing-prompts-2-sharegpt.jsonl"
-
 DATASET_DIR = "evalsets"
 MODEL_CACHE_DIR = "./model_cache_dir"
 
 DIPPA_DATASET_MAX_PARTITIONS = 4
-PIPPA_DATASET_PATH = "datasets/pippa_deduped.jsonl"
 
 
 class EvaluateModelRequest(BaseModel):

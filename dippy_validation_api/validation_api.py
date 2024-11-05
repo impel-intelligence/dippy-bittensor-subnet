@@ -174,7 +174,7 @@ def _evaluate_model(
         coherence_score = inference_response.coherence_score
 
         if coherence_score < 0.95:
-            supabaser.update_leaderboard_status(request.hash, StatusEnum.COMPLETED, "Incoherent model submitted")
+            supabaser.update_leaderboard_status(request.hash, StatusEnum.COMPLETED, f"Incoherent model submitted given score {coherence_score} which fails to meet threshold 0.95")
             return None
         upsert_row_supabase(
         {
@@ -553,7 +553,6 @@ def check_model(
 
 
 def upsert_row_supabase(row):
-
     app.state.supabase_client.table("leaderboard").upsert(row).execute()
 
 

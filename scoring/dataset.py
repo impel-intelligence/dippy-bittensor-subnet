@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 from transformers import AutoTokenizer
 from torch.utils.data import Dataset
 import tiktoken
-
+from datetime import datetime, timezone
 
 class PippaDataset(Dataset):
     def __init__(self, filename, max_input_len):
@@ -144,19 +144,14 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
 
 import requests
 
-# DATASET_URL = "http://75.101.234.38:8111/latest"
-DATASET_URL = "https://datasets.dippy-bittensor-subnet.com/latest"
-HISTORICAL_DATASET_URL = "https://datasets.dippy-bittensor-subnet.com/historical_only"
-RECENT_DATASET_URL = "https://datasets.dippy-bittensor-subnet.com/recent_only"
+DATASET_URL = "https://datasets.dippy-bittensor-subnet.com/dataset"
 DATASET_API_KEY = os.environ.get("DATASET_API_KEY", "dippy")
+DEFAULT_EPOCH_DATE = "20240930"
 
-
-def get_latest_from_set(filter: str = "both"):
-    url = DATASET_URL
-    if filter == "history":
-        url = HISTORICAL_DATASET_URL
-    elif filter == "recent":
-        url = RECENT_DATASET_URL
+def get_latest_from_set():
+    
+    current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
+    url = f"{DATASET_URL}?epoch_date={DEFAULT_EPOCH_DATE}&current_date={current_date}"
     
     response = requests.get(url, headers = {"validator-hotkey": DATASET_API_KEY, "Authorization": DATASET_API_KEY})
     response.raise_for_status()  # Raise an error for bad responses
@@ -190,9 +185,9 @@ def get_latest_from_file(filter: str = "both", filename: str = "/tmp/dataset.jso
 
 
 class StreamedSyntheticDataset(Dataset):
-    def __init__(self, max_input_len: int, filter: str = "both"):
+    def __init__(self, max_input_len: int):
         try:
-            data = get_latest_from_set(filter)
+            data = get_latest_from_set()
             # data = get_latest_from_file(filter)
         except Exception as e:
             print(f"error loading dataset {e}")

@@ -5,7 +5,7 @@ import requests
 
 
 AUTHENTICATE_ENDPOINT = "https://datasets.dippy-bittensor-subnet.com/authenticate"
-FETCH_ENDPOINT = "https://datasets.dippy-bittensor-subnet.com/latest"
+FETCH_ENDPOINT = "https://datasets.dippy-bittensor-subnet.com/dataset"
 
 def main():
     auth_flow()
@@ -47,7 +47,8 @@ def get_dataset(jwt: str):
 
     # Make the GET request
     try:
-        response = requests.get(FETCH_ENDPOINT, headers=headers)
+        url = f"{FETCH_ENDPOINT}?epoch_date=20241001&current_date=20241030"
+        response = requests.get(url, headers=headers)
         response.raise_for_status()  # Raises an HTTPError for bad responses
         print(f"GET request successful. Response: {response.text}")
     except requests.exceptions.RequestException as e:

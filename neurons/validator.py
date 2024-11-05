@@ -64,9 +64,9 @@ from scipy import optimize
 from utilities.validation_utils import regenerate_hash
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-INVALID_BLOCK_START = 3840700
-INVALID_BLOCK_END = 3933300
-PRE_HOTKEY_BLOCKS = 4444444
+INVALID_BLOCK_START = 4200000
+INVALID_BLOCK_END = 4200000
+NEW_EPOCH_BLOCK = 4200000
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
@@ -512,9 +512,8 @@ class Validator:
         original_hash = model_id.hash or ""
         hotkey_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, hotkey)
         hotkey_matches = original_hash == hotkey_hash
-        if block > PRE_HOTKEY_BLOCKS and not hotkey_matches:
-            return False
-        return True
+        
+        return hotkey_matches
 
 
     def fetch_model_data(self, hotkey: str) -> Optional[MinerEntry]:
@@ -582,9 +581,9 @@ class Validator:
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} after {current_block}")
                     continue
 
-                if model_data.block > INVALID_BLOCK_START and model_data.block < INVALID_BLOCK_END:
+                if model_data.block < NEW_EPOCH_BLOCK:
                     invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} submitted on {model_data.block} given range {INVALID_BLOCK_START} - {INVALID_BLOCK_END}")
+                    bt.logging.info(f"skip {uid} submitted on {model_data.block} which is before {NEW_EPOCH_BLOCK}")
                     continue
                 hotkey_hash_passes = self.model_id_matches_hotkey(model_data.model_id, hotkey, model_data.block)
                 
@@ -592,9 +591,6 @@ class Validator:
                     invalid_uids.append(uid)
                     bt.logging.info(f"{uid} submitted on {model_data.model_id.hash} does not include same hotkey")
                     continue
-                
-
-
                 
                 if model_data.model_id is None:
                     invalid_uids.append(uid)
