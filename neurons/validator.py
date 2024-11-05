@@ -252,8 +252,7 @@ class Validator:
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
         self.subtensor = bt.subtensor(config=self.config)
-        self.metagraph: bt.metagraph = self.subtensor.metagraph(self.config.netuid)
-        torch.backends.cudnn.benchmark = True
+        self.metagraph = self.subtensor.metagraph(self.config.netuid)
 
         # Dont check registration status if offline.
         if not self.config.offline:
@@ -472,7 +471,6 @@ class Validator:
         def sync_metagraph(endpoint):
             # Update self.metagraph
             self.metagraph = self.subtensor.metagraph(self.config.netuid)
-            self.metagraph.save()
 
         process = multiprocessing.Process(target=sync_metagraph, args=(self.subtensor.chain_endpoint,))
         process.start()
@@ -483,7 +481,6 @@ class Validator:
             bt.logging.error(f"Failed to sync metagraph after {ttl} seconds")
             return False
 
-        self.metagraph.load()
         bt.logging.info("Synced metagraph")
         self._event_log("metagraph_sync_success")
 
@@ -771,26 +768,26 @@ class Validator:
     async def run(self):
         while True:
             try:
-                current_time = dt.datetime.utcnow()
+                current_time = dt.datetime.now(dt.timezone.utc)
                 minutes = current_time.minute
 
                 # Check if we're at a 20-minute mark
                 if minutes % 20 == 0 or self.config.immediate:
-                    bt.logging.info(f"Running step at {current_time.strftime('%H:%M')}")
+                    bt.logging.success(f"Running step at {current_time.strftime('%H:%M')}")
                     success = await self.try_run_step(ttl=60 * 20)
                     self.global_step += 1
                     if success:
                         await self.try_set_weights(ttl=120)
                     await self.try_sync_metagraph(ttl=120)
                     if self.config.immediate:
-                        await asyncio.sleep(3600)
+                        await asyncio.sleep(100)
                     # Wait for 1 minute to avoid running multiple times within the same minute
                     await asyncio.sleep(60)
                 else:
                     # Calculate minutes until next 20-minute mark
                     minutes_until_next = 20 - (minutes % 20)
                     next_run = current_time + dt.timedelta(minutes=minutes_until_next)
-                    bt.logging.info(
+                    bt.logging.success(
                         f"Waiting {minutes_until_next} minutes until next run at {next_run.strftime('%H:%M')}"
                     )
 
