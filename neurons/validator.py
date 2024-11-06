@@ -19,7 +19,7 @@ import copy
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 import datetime as dt
 import os
 import math
@@ -62,6 +62,8 @@ import torch
 from scipy import optimize
 
 from utilities.validation_utils import regenerate_hash
+from bittensor.core.subtensor import Subtensor
+from bittensor.core.metagraph import Metagraph
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 INVALID_BLOCK_START = 4200000
@@ -102,8 +104,10 @@ def compute_wins(
             total_matches += 1
         # Calculate win rate for uid i
         win_rate[uid_i] = wins[uid_i] / total_matches if total_matches > 0 else 0
+
         if miner_registry[uid_i].invalid or miner_registry[uid_i].total_score == 0:
             win_rate[uid_i] = float("-inf")
+
 
     return wins, win_rate
 
@@ -247,12 +251,19 @@ class Validator:
         self.config = Validator.config()
         bt.logging(config=self.config)
 
-        bt.logging.info(f"Starting validator with config: {self.config}")
+        bt.logging.warning(f"Starting validator with config: {self.config}")
 
+
+        network_name = self.config.subtensor.network or "finney"
+        netuid = self.config.netuid or 11
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
-        self.subtensor = bt.subtensor(config=self.config)
-        self.metagraph = self.subtensor.metagraph(self.config.netuid)
+        
+        # self.subtensor = bt.subtensor(config=self.config)
+        self.subtensor = Subtensor(config=self.config)
+
+        self.metagraph = Metagraph(netuid=netuid, network=network_name, lite=False, sync=True)
+        # self.metagraph.sync(subtensor=self.subtensor)
 
         # Dont check registration status if offline.
         if not self.config.offline:
@@ -262,15 +273,18 @@ class Validator:
         self.run_step_count = 0
 
         # === Running args ===
-        self.weights = torch.zeros_like(self.metagraph.S)
-        self.alt_weights = torch.zeros_like(self.metagraph.S)
+        torch_metagraph = torch.from_numpy(self.metagraph.S)
+
+        self.weights = torch.zeros_like(torch_metagraph)
+        self.alt_weights = torch.zeros_like(torch_metagraph)
         self.epoch_step = 0
         self.global_step = 0
         self.last_epoch = self.metagraph.block.item()
 
         # Sync to consensus
         if not self.config.genesis:
-            self.weights.copy_(self.metagraph.C)
+            torch_consensus = torch.from_numpy(self.metagraph.C)
+            self.weights.copy_(torch_consensus)
 
         validator_uid = 0
         if not self.config.offline:
@@ -284,12 +298,12 @@ class Validator:
             coldkey=self.wallet.coldkeypub.ss58_address,
             uid=validator_uid,
         )
-        bt.logging.info(f"dumping localmetadata: {self.local_metadata}")
+        bt.logging.warning(f"dumping localmetadata: {self.local_metadata}")
 
         # Initialize wandb
         if self.config.wandb_key:
             wandb_logger.safe_login(api_key=self.config.wandb_key)
-            bt.logging.info(f"wandb locked in")
+            bt.logging.warning(f"wandb locked in")
         wandb_logger.safe_init(
             "Validator",
             self.wallet,
@@ -320,10 +334,11 @@ class Validator:
     def __del__(self):
         if hasattr(self, "stop_event"):
             self.stop_event.set()
+        self.subtensor.close()
 
     def _event_log(self, msg: str, **kwargs):
         if self.use_event_logger:
-            self.event_logger.info(msg, **kwargs)
+            self.event_logger.warning(msg, **kwargs)
         return
 
     def _with_decoration(self, metadata: LocalMetadata, keypair, payload):
@@ -360,14 +375,14 @@ class Validator:
         # If the predicted vtrust is already above vtrust_min, then just return the current weights.
         orig_vtrust_loss = np.maximum(0.0, weights - consensus).sum()
         if orig_vtrust_loss <= vtrust_loss_desired:
-            bt.logging.info("Weights already satisfy vtrust_min. {} >= {}.".format(1 - orig_vtrust_loss, vtrust_min))
+            bt.logging.warning("Weights already satisfy vtrust_min. {} >= {}.".format(1 - orig_vtrust_loss, vtrust_min))
             return weights
 
         # If maximum vtrust allowable by the current consensus is less that vtrust_min, then choose the smallest lambda
         # that still maximizes the predicted vtrust. Otherwise, find lambda that achieves vtrust_min.
         vtrust_loss_min = 1 - np.sum(consensus)
         if vtrust_loss_min > vtrust_loss_desired:
-            bt.logging.info(
+            bt.logging.warning(
                 "Maximum possible vtrust with current consensus is less than vtrust_min. {} < {}.".format(
                     1 - vtrust_loss_min, vtrust_min
                 )
@@ -387,12 +402,12 @@ class Validator:
 
         new_weights = (1 - lam_opt) * weights + lam_opt * consensus_normalized
         vtrust_pred = np.minimum(weights, consensus).sum()
-        bt.logging.info(
+        bt.logging.warning(
             "Interpolated weights to satisfy vtrust_min. {} -> {}.".format(1 - orig_vtrust_loss, vtrust_pred)
         )
         return new_weights
 
-    async def try_set_weights(self, ttl: int):
+    async def try_set_weights(self, ttl: int) -> bool:
         if self.config.dont_set_weights or self.config.offline:
             return
 
@@ -401,15 +416,15 @@ class Validator:
             if self.config.wait_for_inclusion:
                 wait_for_inclusion = True
         except Exception as e:
-            bt.logging.info(f"wait_for_inclusion not set: {wait_for_inclusion}")
+            bt.logging.warning(f"wait_for_inclusion not set: {wait_for_inclusion}")
 
         async def _try_set_weights(wait_for_inclusion=False):
             weights_success = False
             try:
                 # Fetch latest metagraph
                 metagraph = self.subtensor.metagraph(self.config.netuid)
-                consensus = metagraph.C.cpu().numpy()
-                cpu_weights = self.weights.cpu().numpy()
+                consensus = metagraph.C
+                cpu_weights = self.weights
                 adjusted_weights = self.adjust_for_vtrust(cpu_weights, consensus)
                 self.weights = torch.tensor(adjusted_weights, dtype=torch.float32)
                 self.weights.nan_to_num(0.0)
@@ -426,7 +441,7 @@ class Validator:
                     weights_report["weights"][uid] = score
                 wandb_logger.safe_log(weights_report)
                 self._event_log("set_weights_complete", weights=weights_report)
-                bt.logging.info(f"successfully_set_weights")
+                bt.logging.warning(f"successfully_set_weights")
                 weights_success = True
             except Exception as e:
                 bt.logging.error(f"failed_set_weights {e}")
@@ -445,7 +460,8 @@ class Validator:
             status_table.add_column("Status", style="cyan")
             status_table.add_column("Value", style="magenta")
             status_table.add_row("successfully_set_weights", str(weights_success))
-            status_table.add_row("failed_set_weights", str(not weights_success))
+            weights_failed = not weights_success
+            status_table.add_row("failed_set_weights", str(weights_failed))
             status_table.add_row("wait_for_inclusion", str(wait_for_inclusion))
             console.print(status_table)
             return weights_success
@@ -455,7 +471,7 @@ class Validator:
             bt.logging.debug("Setting weights.")
             weights_set_success = await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
             payload = {
-                "time": dt.datetime.utcnow(),
+                "time": str(dt.datetime.now(dt.timezone.utc)),
                 "weights_set_success": weights_set_success,
                 "wait_for_inclusion": wait_for_inclusion,
             }
@@ -466,35 +482,125 @@ class Validator:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")
         except Exception as e:
             bt.logging.error(f"Error setting weights: {e}")
+        return weights_set_success
+
+        
+    async def build_registry(self, all_uids: List[int], current_block: int, max_concurrent: int = 32) -> Tuple[int, MinerEntry]:
+        miner_registry: Dict[int, MinerEntry] = {uid: MinerEntry() for uid in all_uids}
+        
+        invalid_uids = []
+        async def process_uid(uid):
+            hotkey = self.metagraph.hotkeys[uid]
+            miner_registry[uid].hotkey = hotkey
+            bt.logging.debug(f"now checking for uid {uid} and hotkey {hotkey}")
+            try:
+                model_data = self.fetch_model_data(uid, hotkey)
+                if model_data is None:
+                    invalid_uids.append(uid)
+                    bt.logging.error(f"skip {uid} no model_data")
+                    return
+                # Skip model submitted after run step has begun
+                if model_data.block > current_block:
+                    invalid_uids.append(uid)
+                    bt.logging.info(f"skip {uid} submitted on {model_data.block} after {current_block}")
+                    return
+
+                hotkey_hash_passes = self.model_id_matches_hotkey(model_data.miner_model_id, hotkey)
+                
+                if not hotkey_hash_passes:
+                    invalid_uids.append(uid)
+                    bt.logging.info(f"{uid} submitted on {model_data.miner_model_id.hash} does not include same hotkey")
+                    return
+                
+                if model_data.miner_model_id is None:
+                    invalid_uids.append(uid)
+                    bt.logging.info(f"skip {uid} no model_id available")
+                    return
+
+                miner_registry[uid].block = model_data.block
+                miner_registry[uid].miner_model_id = model_data.miner_model_id
+
+                signed_payload = sign_request(
+                    self.wallet.hotkey,
+                    hotkey,
+                )
+                _score_data = _get_model_score(
+                    miner_registry[uid].miner_model_id,
+                    self.config,
+                    self.local_metadata,
+                    signed_payload,
+                )
+
+                if _score_data.status != StatusEnum.COMPLETED:
+                    _score_data = _get_model_score(
+                        miner_registry[uid].miner_model_id,
+                        self.config,
+                        self.local_metadata,
+                        signed_payload,
+                        True,
+                    )
+                bt.logging.debug(
+                    f"_score_data for {uid} on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id} {_score_data}"
+                )
+                
+                if _score_data.status == StatusEnum.QUEUED or _score_data.status == StatusEnum.RUNNING:
+                    invalid_uids.append(uid)
+                    bt.logging.info(f"skip {uid} status is {_score_data.status}")
+                    return
+                if _score_data.status == StatusEnum.COMPLETED:
+                    miner_registry[uid].total_score = _score_data.calculate_total_score()
+                elif _score_data.status == StatusEnum.FAILED:
+                    miner_registry[uid].total_score = 0
+            except Exception as e:
+                bt.logging.error(f"could not update for {uid}:{hotkey} {e}")
+                bt.logging.error(f"Traceback: {traceback.format_exc()}")
+                invalid_uids.append(uid)
+                return
+
+        # Process UIDs in batches of max_concurrent size
+        for i in range(0, len(miner_registry), max_concurrent):
+            batch_uids = list(miner_registry.keys())[i:i + max_concurrent]
+            batch_tasks = [process_uid(uid) for uid in batch_uids]
+            await asyncio.gather(*batch_tasks)
+
+        return invalid_uids, miner_registry
+
+
 
     async def try_sync_metagraph(self, ttl: int) -> bool:
-        def sync_metagraph(endpoint):
-            # Update self.metagraph
-            self.metagraph = self.subtensor.metagraph(self.config.netuid)
-
-        process = multiprocessing.Process(target=sync_metagraph, args=(self.subtensor.chain_endpoint,))
-        process.start()
-        process.join(timeout=ttl)
-        if process.is_alive():
-            process.terminate()
-            process.join()
-            bt.logging.error(f"Failed to sync metagraph after {ttl} seconds")
-            return False
-
-        bt.logging.info("Synced metagraph")
-        self._event_log("metagraph_sync_success")
-
+        def sync_metagraph(_):
+            try:
+                # self.metagraph.sync(lite=False)
+                self.metagraph = self.subtensor.metagraph(netuid=self.config.netuid, lite=False)
+            except Exception as e:
+                bt.logging.error(f"{e}")
+                # self.subtensor = Subtensor(config=self.config)
+                self.subtensor = bt.subtensor(config=self.config)
+        for attempt in range(3):
+            process = multiprocessing.Process(target=sync_metagraph, args=(self.subtensor.chain_endpoint,))
+            process.start()
+            process.join(timeout=ttl)
+            if process.is_alive():
+                process.terminate() 
+                process.join()
+                bt.logging.error(f"Failed to sync metagraph after {ttl} seconds (attempt {attempt + 1}/3)")
+                if attempt == 2:
+                    return False
+            else:
+                break              
+        bt.logging.success("Synced metagraph")
+        self._event_log("metagraph_sync_success")              
         return True
 
     async def try_run_step(self, ttl: int) -> Optional[bool]:
         async def _try_run_step():
             success = await self.run_step()
-            logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey,{"success": success})
+            logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey,{"run_step_success": success})
             self._remote_log(logged_payload)
             return success
 
         try:
-            bt.logging.warning("Running step.")
+            bt.logging.warning(f"Running step with ttl {ttl}")
             step_success = await asyncio.wait_for(_try_run_step(), ttl)
             bt.logging.warning("Finished running step.")
             return step_success
@@ -505,23 +611,37 @@ class Validator:
             bt.logging.error(f"Failed to run step : {e} {traceback.format_exc()}")
             return False
 
-    def model_id_matches_hotkey(self, model_id: ModelId, hotkey: str, block) -> bool:
+    def model_id_matches_hotkey(self, model_id: ModelId, hotkey: str) -> bool:
         original_hash = model_id.hash or ""
         hotkey_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, hotkey)
-        hotkey_matches = original_hash == hotkey_hash
+        hotkey_matches = str(original_hash) == str(hotkey_hash)
         
         return hotkey_matches
 
 
-    def fetch_model_data(self, hotkey: str) -> Optional[MinerEntry]:
+    def fetch_model_data(self, uid: int, hotkey:str) -> Optional[MinerEntry]:
         try:
-            metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.config.netuid, hotkey)
+            # metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.config.netuid, hotkey)
+            # metadata = bt.core.extrinsics.serving.get_metadata(self.config.netuid, hotkey)
+            bt.logging.warning(f"get_metadata for uid={uid} hotkey={hotkey} netuid={self.config.netuid}")
+            metadata = bt.core.extrinsics.serving.get_metadata(self=self.subtensor, netuid=self.config.netuid, hotkey=hotkey)
+            # if metadata is None or len(metadata) < 1:
+            #     return None
             if metadata is None:
                 return None
             
             commitment = metadata["info"]["fields"][0]
             hex_data = commitment[list(commitment.keys())[0]][2:]
             chain_str = bytes.fromhex(hex_data).decode()
+            # chain_str = ""
+            # try:
+            #     chain_str = self.subtensor.get_commitment(netuid=self.config.netuid, uid=uid)
+            #     bt.logging.warning(f"chain_str {chain_str}")
+            # except Exception as e:
+            #     bt.logging.error(f"error fetching commit data {e}")
+            
+            # if chain_str is None or len(chain_str) < 1:
+            #     return None
      
             model_id = ModelId.from_compressed_str(chain_str)
             model_id.hotkey = hotkey
@@ -529,7 +649,7 @@ class Validator:
             block = metadata["block"]
             entry = MinerEntry()
             entry.block = block
-            entry.model_id = model_id
+            entry.miner_model_id = model_id
             return entry
         except Exception as e:
             bt.logging.error(f"could not fetch data for {hotkey} : {e}")
@@ -560,90 +680,92 @@ class Validator:
         bt.logging.debug(
             f"Computing metrics on {len(all_uids)} for competition {competition_parameters.competition_id}"
         )
-        miner_registry: Dict[int, MinerEntry] = {uid: MinerEntry() for uid in all_uids}
-        invalid_uids = []
-        for uid in miner_registry.keys():
-            hotkey = self.metagraph.hotkeys[uid]
-            miner_registry[uid].hotkey = hotkey
-            try:
-                model_data = self.fetch_model_data(hotkey)
-                if model_data is None:
-                    invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} no model_data")
-                    continue
-                
-                # Skip model submitted after run step has begun
-                if model_data.block > current_block:
-                    invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} submitted on {model_data.block} after {current_block}")
-                    continue
+        # miner_registry: Dict[int, MinerEntry] = {uid: MinerEntry() for uid in all_uids}
+        # invalid_uids = []
 
-                if model_data.block < NEW_EPOCH_BLOCK:
-                    invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} submitted on {model_data.block} which is before {NEW_EPOCH_BLOCK}")
-                    continue
-                hotkey_hash_passes = self.model_id_matches_hotkey(model_data.model_id, hotkey, model_data.block)
+        invalid_uids, miner_registry = await self.build_registry(all_uids=all_uids, current_block=current_block)
+        # for uid in miner_registry.keys():
+        #     hotkey = self.metagraph.hotkeys[uid]
+        #     miner_registry[uid].hotkey = hotkey
+        #     try:
+        #         model_data = self.fetch_model_data(hotkey)
+        #         if model_data is None:
+        #             invalid_uids.append(uid)
+        #             bt.logging.warning(f"skip {uid} no model_data")
+        #             continue
                 
-                if not hotkey_hash_passes:
-                    invalid_uids.append(uid)
-                    bt.logging.info(f"{uid} submitted on {model_data.model_id.hash} does not include same hotkey")
-                    continue
+        #         # Skip model submitted after run step has begun
+        #         if model_data.block > current_block:
+        #             invalid_uids.append(uid)
+        #             bt.logging.warning(f"skip {uid} submitted on {model_data.block} after {current_block}")
+        #             continue
+
+        #         if model_data.block < NEW_EPOCH_BLOCK:
+        #             invalid_uids.append(uid)
+        #             bt.logging.warning(f"skip {uid} submitted on {model_data.block} which is before {NEW_EPOCH_BLOCK}")
+        #             continue
+        #         hotkey_hash_passes = self.model_id_matches_hotkey(model_data.miner_model_id, hotkey, model_data.block)
                 
-                if model_data.model_id is None:
-                    invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} no model_id available")
-                    continue
+        #         if not hotkey_hash_passes:
+        #             invalid_uids.append(uid)
+        #             bt.logging.warning(f"{uid} submitted on {model_data.miner_model_id.hash} does not include same hotkey")
+        #             continue
+                
+        #         if model_data.miner_model_id is None:
+        #             invalid_uids.append(uid)
+        #             bt.logging.warning(f"skip {uid} no model_id available")
+        #             continue
 
-                miner_registry[uid].block = model_data.block
-                miner_registry[uid].model_id = model_data.model_id
+        #         miner_registry[uid].block = model_data.block
+        #         miner_registry[uid].miner_model_id = model_data.miner_model_id
 
-                signed_payload = sign_request(
-                    self.wallet.hotkey,
-                    hotkey,
-                )
-                _score_data = _get_model_score(
-                    miner_registry[uid].model_id,
-                    self.config,
-                    self.local_metadata,
-                    signed_payload,
-                )
-                if _score_data.status != StatusEnum.COMPLETED:
-                    _score_data = _get_model_score(
-                        miner_registry[uid].model_id,
-                        self.config,
-                        self.local_metadata,
-                        signed_payload,
-                        True,
-                    )
-                bt.logging.info(
-                    f"_score_data for {uid} on block {miner_registry[uid].block} : {miner_registry[uid].model_id} {_score_data}"
-                )
-                if _score_data.status == StatusEnum.QUEUED or _score_data.status == StatusEnum.RUNNING:
-                    invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} status is {_score_data.status}")
-                    continue
-                if _score_data.status == StatusEnum.COMPLETED:
-                    miner_registry[uid].total_score = _score_data.calculate_total_score()
-                elif _score_data.status == StatusEnum.FAILED:
-                    miner_registry[uid].total_score = 0
-            except Exception as e:
-                bt.logging.error(f"could not update for {uid}:{hotkey} {e}")
-                bt.logging.error(f"Traceback: {traceback.format_exc()}")
-                invalid_uids.append(uid)
-                continue
+        #         signed_payload = sign_request(
+        #             self.wallet.hotkey,
+        #             hotkey,
+        #         )
+        #         _score_data = _get_model_score(
+        #             miner_registry[uid].miner_model_id,
+        #             self.config,
+        #             self.local_metadata,
+        #             signed_payload,
+        #         )
+        #         if _score_data.status != StatusEnum.COMPLETED:
+        #             _score_data = _get_model_score(
+        #                 miner_registry[uid].miner_model_id,
+        #                 self.config,
+        #                 self.local_metadata,
+        #                 signed_payload,
+        #                 True,
+        #             )
+        #         bt.logging.warning(
+        #             f"_score_data for {uid} on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id} {_score_data}"
+        #         )
+        #         if _score_data.status == StatusEnum.QUEUED or _score_data.status == StatusEnum.RUNNING:
+        #             invalid_uids.append(uid)
+        #             bt.logging.warning(f"skip {uid} status is {_score_data.status}")
+        #             continue
+        #         if _score_data.status == StatusEnum.COMPLETED:
+        #             miner_registry[uid].total_score = _score_data.calculate_total_score()
+        #         elif _score_data.status == StatusEnum.FAILED:
+        #             miner_registry[uid].total_score = 0
+        #     except Exception as e:
+        #         bt.logging.error(f"could not update for {uid}:{hotkey} {e}")
+        #         bt.logging.error(f"Traceback: {traceback.format_exc()}")
+        #         invalid_uids.append(uid)
+        #         continue
 
 
         try:
             for uid1, entry1 in miner_registry.items():
-                if entry1.invalid or entry1.model_id is None:
+                if entry1.invalid or entry1.miner_model_id is None:
                     continue
                 for uid2, entry2 in miner_registry.items():
-                    if uid1 == uid2 or entry2.invalid or entry2.model_id is None:
+                    if uid1 == uid2 or entry2.invalid or entry2.miner_model_id is None:
                         continue
-                    entry1_repo_id = f"{entry1.model_id.namespace}/{entry1.model_id.name}"
-                    entry2_repo_id = f"{entry2.model_id.namespace}/{entry2.model_id.name}"
+                    entry1_repo_id = f"{entry1.miner_model_id.namespace}/{entry1.miner_model_id.name}"
+                    entry2_repo_id = f"{entry2.miner_model_id.namespace}/{entry2.miner_model_id.name}"
 
-                    hash_matches = entry1.model_id.hash == entry2.model_id.hash
+                    hash_matches = entry1.miner_model_id.hash == entry2.miner_model_id.hash
                     repo_details_matches = entry1_repo_id == entry2_repo_id
 
                     # Check if the model hashes are the same
@@ -651,16 +773,16 @@ class Validator:
                         # If blocks are different, mark the one with greater block as invalid
                         if entry1.block > entry2.block:
                             invalid_uids.append(uid1)
-                            bt.logging.info(f"Marked uid {uid1} as invalid due to duplicate model with newer block")
+                            bt.logging.warning(f"Marked uid {uid1} as invalid due to duplicate model with newer block")
 
                             break
                         elif entry2.block > entry1.block:
                             invalid_uids.append(uid2)
-                            bt.logging.info(f"Marked uid {uid2} as invalid due to duplicate model with newer block")
+                            bt.logging.warning(f"Marked uid {uid2} as invalid due to duplicate model with newer block")
         except Exception as e:
             bt.logging.error(f"could not perform hash check {e}")
 
-        bt.logging.info(
+        bt.logging.warning(
             f"all_uids : {len(miner_registry)} invalid uids: {len(invalid_uids)} cutoff_block : {current_block}"
         )
         # Mark uids that do not have a proper score
@@ -668,17 +790,21 @@ class Validator:
             miner_registry[uid].invalid = True
             miner_registry[uid].total_score = 0
 
+
         # Compute wins and win rates per uid.
         wins, win_rate = compute_wins(miner_registry)
         sorted_uids = sorted(miner_registry.keys())
 
         # Compute softmaxed weights based on win rate.
         model_weights = torch.tensor([win_rate[uid] for uid in sorted_uids], dtype=torch.float32)
+
+        
         step_weights = torch.softmax(model_weights / constants.temperature, dim=0)
 
         # Update weights based on moving average.
-        self.weights = torch.zeros_like(self.metagraph.S)
-        new_weights = torch.zeros_like(self.metagraph.S)
+        torch_metagraph = torch.from_numpy(self.metagraph.S)
+        self.weights = torch.zeros_like(torch_metagraph)
+        new_weights = torch.zeros_like(torch_metagraph)
         for i, uid_i in enumerate(sorted_uids):
             new_weights[uid_i] = step_weights[i]
         new_weights *= 1 / new_weights.sum()
@@ -775,10 +901,13 @@ class Validator:
                 if minutes % 20 == 0 or self.config.immediate:
                     bt.logging.success(f"Running step at {current_time.strftime('%H:%M')}")
                     success = await self.try_run_step(ttl=60 * 20)
+                    weights_set_success = False
                     self.global_step += 1
                     if success:
-                        await self.try_set_weights(ttl=120)
-                    await self.try_sync_metagraph(ttl=120)
+                        weights_set_success = await self.try_set_weights(ttl=120)
+                    bt.logging.warning(f"weights_set_success {weights_set_success}")
+                    metagraph_synced = await self.try_sync_metagraph(ttl=120)
+                    bt.logging.warning(f"metagraph_synced {metagraph_synced}")
                     if self.config.immediate:
                         await asyncio.sleep(100)
                     # Wait for 1 minute to avoid running multiple times within the same minute
@@ -795,7 +924,7 @@ class Validator:
                     await asyncio.sleep(60)
 
             except KeyboardInterrupt:
-                bt.logging.info("KeyboardInterrupt caught")
+                bt.logging.warning("KeyboardInterrupt caught")
                 exit()
             except Exception as e:
                 bt.logging.error(f"Error in validator loop \n {e} \n {traceback.format_exc()}")
@@ -899,7 +1028,7 @@ def get_model_score(
         payload["admin_key"] = os.environ["ADMIN_KEY"]
 
     score_data = Scores()
-    # Make the POST request to the validation endpoint
+
     try:
         response = requests.post(validation_endpoint, json=payload, headers=headers)
         response.raise_for_status()  # Raise an exception for HTTP errors

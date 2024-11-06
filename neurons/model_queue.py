@@ -163,7 +163,7 @@ class ModelQueue:
             sleep_time = (next_epoch_minute_mark - now).total_seconds()
             self.logger.info(f"sleeping for {sleep_time}")
             time.sleep(sleep_time)
-            # time.sleep(1)
+            
             try:
                 self.load_latest_metagraph()
             except Exception as e:
@@ -203,7 +203,7 @@ class ModelQueue:
                     config=self.config,
                     retryWithRemote=True,
                 )
-                stats = f"{result.status} : uid: {uid} hotkey : {hotkey} block: {block} model_metadata : {model_id}"
+                stats = f"{result.status} : uid: {uid} hotkey : {hotkey} block: {block} model_metadata : {model_id} score: {result.total_score}"
                 self.logger.info(stats)
                 if result.status == StatusEnum.FAILED:
                     failed += 1
@@ -277,6 +277,7 @@ class ModelQueue:
                 raise RuntimeError(f"no leaderboard entry exists at this time for {payload}")
                 
             status = StatusEnum.from_string(result["status"])
+            score_data.total_score = result["total_score"]
             score_data.status = status
         except Exception as e:
             self.logger.error(e)

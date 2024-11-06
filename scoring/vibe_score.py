@@ -24,8 +24,12 @@ from typing import List, Any
 
 
 def calculate_vibe_match_score(
-    model: LLM, contexts: List[Any], last_user_messages: List[Any], expected_outputs: List[Any], verbose: bool = False
+    model: LLM, 
+    sampled_data: list[tuple],
+    verbose: bool = False
 ):
+    
+    contexts, last_user_messages, expected_outputs = zip(*sampled_data)
 
     decoded_messages = []
     BATCH_SIZE_VIBE_SCORE = 8
@@ -94,15 +98,12 @@ def get_vibe_match_score(
         vibe_score_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 
         # Unzip the sampled data
-        vibe_contexts, vibe_target_texts, vibe_last_user_messages = zip(
-            *vibe_score_dataset.sample_dataset(SAMPLE_SIZE_VIBE_SCORE)
-        )
+        sampled_data = vibe_score_dataset.sample_dataset(SAMPLE_SIZE_VIBE_SCORE)
+        
 
         vibe_score = calculate_vibe_match_score(
             model,
-            vibe_contexts,
-            vibe_last_user_messages,
-            vibe_target_texts,
+            vibe_data
         )
 
         return {"vibe_score": vibe_score}
