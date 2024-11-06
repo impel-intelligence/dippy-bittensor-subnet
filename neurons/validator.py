@@ -658,7 +658,22 @@ class Validator:
         except Exception as e:
             bt.logging.error(f"could not fetch data for {hotkey} : {e}")
             return None
+        
 
+
+    @staticmethod
+    def adjusted_temperature_multipler(block: int) -> float:
+        diff = block - NEW_EPOCH_BLOCK
+        # Map block difference to temperature value between 1-15
+        # Scale linearly up to NEW_EPOCH_BLOCK
+        if diff <= 50400:
+            return 1.0
+        
+        # Linear scaling: (diff / max_diff) * (max_temp - min_temp) + min_temp
+        temp = (diff / NEW_EPOCH_BLOCK) * 14.0 + 1.0
+        
+        # Cap at max temperature of 15
+        return min(temp, 15.0)
     async def run_step(self):
         """
         Executes a step in the evaluation process of models. This function performs several key tasks:
@@ -684,80 +699,9 @@ class Validator:
         bt.logging.debug(
             f"Computing metrics on {len(all_uids)} for competition {competition_parameters.competition_id}"
         )
-        # miner_registry: Dict[int, MinerEntry] = {uid: MinerEntry() for uid in all_uids}
-        # invalid_uids = []
 
         invalid_uids, miner_registry = await self.build_registry(all_uids=all_uids, current_block=current_block)
-        # for uid in miner_registry.keys():
-        #     hotkey = self.metagraph.hotkeys[uid]
-        #     miner_registry[uid].hotkey = hotkey
-        #     try:
-        #         model_data = self.fetch_model_data(hotkey)
-        #         if model_data is None:
-        #             invalid_uids.append(uid)
-        #             bt.logging.warning(f"skip {uid} no model_data")
-        #             continue
-                
-        #         # Skip model submitted after run step has begun
-        #         if model_data.block > current_block:
-        #             invalid_uids.append(uid)
-        #             bt.logging.warning(f"skip {uid} submitted on {model_data.block} after {current_block}")
-        #             continue
-
-        #         if model_data.block < NEW_EPOCH_BLOCK:
-        #             invalid_uids.append(uid)
-        #             bt.logging.warning(f"skip {uid} submitted on {model_data.block} which is before {NEW_EPOCH_BLOCK}")
-        #             continue
-        #         hotkey_hash_passes = self.model_id_matches_hotkey(model_data.miner_model_id, hotkey, model_data.block)
-                
-        #         if not hotkey_hash_passes:
-        #             invalid_uids.append(uid)
-        #             bt.logging.warning(f"{uid} submitted on {model_data.miner_model_id.hash} does not include same hotkey")
-        #             continue
-                
-        #         if model_data.miner_model_id is None:
-        #             invalid_uids.append(uid)
-        #             bt.logging.warning(f"skip {uid} no model_id available")
-        #             continue
-
-        #         miner_registry[uid].block = model_data.block
-        #         miner_registry[uid].miner_model_id = model_data.miner_model_id
-
-        #         signed_payload = sign_request(
-        #             self.wallet.hotkey,
-        #             hotkey,
-        #         )
-        #         _score_data = _get_model_score(
-        #             miner_registry[uid].miner_model_id,
-        #             self.config,
-        #             self.local_metadata,
-        #             signed_payload,
-        #         )
-        #         if _score_data.status != StatusEnum.COMPLETED:
-        #             _score_data = _get_model_score(
-        #                 miner_registry[uid].miner_model_id,
-        #                 self.config,
-        #                 self.local_metadata,
-        #                 signed_payload,
-        #                 True,
-        #             )
-        #         bt.logging.warning(
-        #             f"_score_data for {uid} on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id} {_score_data}"
-        #         )
-        #         if _score_data.status == StatusEnum.QUEUED or _score_data.status == StatusEnum.RUNNING:
-        #             invalid_uids.append(uid)
-        #             bt.logging.warning(f"skip {uid} status is {_score_data.status}")
-        #             continue
-        #         if _score_data.status == StatusEnum.COMPLETED:
-        #             miner_registry[uid].total_score = _score_data.calculate_total_score()
-        #         elif _score_data.status == StatusEnum.FAILED:
-        #             miner_registry[uid].total_score = 0
-        #     except Exception as e:
-        #         bt.logging.error(f"could not update for {uid}:{hotkey} {e}")
-        #         bt.logging.error(f"Traceback: {traceback.format_exc()}")
-        #         invalid_uids.append(uid)
-        #         continue
-
+       
 
         try:
             for uid1, entry1 in miner_registry.items():
@@ -802,6 +746,8 @@ class Validator:
         # Compute softmaxed weights based on win rate.
         model_weights = torch.tensor([win_rate[uid] for uid in sorted_uids], dtype=torch.float32)
 
+
+        temperature = constants.temperature * self.adjusted_temperature_multipler(current_block)
         
         step_weights = torch.softmax(model_weights / constants.temperature, dim=0)
 
