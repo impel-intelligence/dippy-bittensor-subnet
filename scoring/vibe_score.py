@@ -103,7 +103,7 @@ def get_vibe_match_score(
 
         vibe_score = calculate_vibe_match_score(
             model,
-            vibe_data
+            sampled_data
         )
 
         return {"vibe_score": vibe_score}

@@ -49,7 +49,9 @@ def wrap_inference_score(request: EvaluateModelRequest):
     )
 
     vibe_result = get_vibe_match_score(request, model)
+    coherence_result = {}
     coherence_result = get_coherence_score(request, model)
+    
     inference_result = vibe_result | coherence_result
 
     print("=============inference_result===================")

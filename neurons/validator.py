@@ -504,6 +504,10 @@ class Validator:
                     invalid_uids.append(uid)
                     bt.logging.info(f"skip {uid} submitted on {model_data.block} after {current_block}")
                     return
+                if model_data.block < NEW_EPOCH_BLOCK:
+                    invalid_uids.append(uid)
+                    bt.logging.warning(f"skip {uid} submitted on {model_data.block} which is before {NEW_EPOCH_BLOCK}")
+                    return
 
                 hotkey_hash_passes = self.model_id_matches_hotkey(model_data.miner_model_id, hotkey)
                 
