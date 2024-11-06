@@ -304,17 +304,21 @@ class Validator:
         if self.config.wandb_key:
             wandb_logger.safe_login(api_key=self.config.wandb_key)
             bt.logging.warning(f"wandb locked in")
-        wandb_logger.safe_init(
+        try:
+            wandb_logger.safe_init(
             "Validator",
             self.wallet,
             self.metagraph,
             self.config,
         )
-        wandb_logger.safe_log(
+            wandb_logger.safe_log(
             {
                 "log_success": 1,
             }
         )
+        except Exception as e:
+            bt.logging.warning("continuing without wandb. this is fine")
+
         # eventlog_path = "/tmp/sn11_event_logs/event_{time}.log"
         eventlog_path = "/dev/null"
         self.use_event_logger = False
@@ -337,8 +341,13 @@ class Validator:
         self.subtensor.close()
 
     def _event_log(self, msg: str, **kwargs):
-        if self.use_event_logger:
-            self.event_logger.warning(msg, **kwargs)
+        try:
+            if self.use_event_logger:
+                self.event_logger.warn(msg, **kwargs)
+        except Exception as e:
+            
+            bt.logging.error(e)
+        
         return
 
     def _with_decoration(self, metadata: LocalMetadata, keypair, payload):
