@@ -10,7 +10,7 @@ python-dotenv
 supabase
 tiktoken
 threadpoolctl
-wandb
+wandb >= 0.17.2
 loguru
 scipy
 numpy
