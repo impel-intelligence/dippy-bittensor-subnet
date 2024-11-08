@@ -671,18 +671,21 @@ class Validator:
 
 
     @staticmethod
-    def adjusted_temperature_multipler(block: int) -> float:
-        diff = block - NEW_EPOCH_BLOCK
+    def adjusted_temperature_multipler(current_block: int) -> float:
+        CHANGE_BLOCK = 4283000
+        if current_block < CHANGE_BLOCK:
+            return 1
+        diff = current_block - CHANGE_BLOCK
         # Map block difference to temperature value between 1-15
         # Scale linearly up to NEW_EPOCH_BLOCK
         if diff <= 50400:
             return 1.0
         
         # Linear scaling: (diff / max_diff) * (max_temp - min_temp) + min_temp
-        temp = (diff / NEW_EPOCH_BLOCK) * 14.0 + 1.0
+        temp = (diff / CHANGE_BLOCK) * 0.14 + 0.01
         
-        # Cap at max temperature of 15
-        return min(temp, 15.0)
+        # Cap at max temperature of 0.15
+        return min(temp, 0.15)
     async def run_step(self):
         """
         Executes a step in the evaluation process of models. This function performs several key tasks:
@@ -758,7 +761,7 @@ class Validator:
 
         temperature = constants.temperature * self.adjusted_temperature_multipler(current_block)
         
-        step_weights = torch.softmax(model_weights / constants.temperature, dim=0)
+        step_weights = torch.softmax(model_weights / temperature, dim=0)
 
         # Update weights based on moving average.
         torch_metagraph = torch.from_numpy(self.metagraph.S)
