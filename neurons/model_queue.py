@@ -31,7 +31,7 @@ import traceback
 import bittensor as bt
 
 from model.scores import StatusEnum, Scores
-from neurons.validator import LocalMetadata
+from utilities.local_metadata import LocalMetadata
 import os
 
 from utilities.event_logger import EventLogger
@@ -110,12 +110,6 @@ class ModelQueue:
     @staticmethod
     def config():
         parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "--device",
-            type=str,
-            default="cuda",
-            help="Device name.",
-        )
         parser.add_argument("--netuid", type=str, default=constants.SUBNET_UID, help="The subnet UID.")
         parser.add_argument(
             "--use-local-validation-api",
@@ -129,7 +123,6 @@ class ModelQueue:
             help="Port for local validation api",
         )
 
-        bt.logging.off()
 
         bt.subtensor.add_args(parser)
         bt.wallet.add_args(parser)
@@ -180,8 +173,10 @@ class ModelQueue:
         for uid in all_uids:
             try:
                 hotkey = metagraph.hotkeys[uid]
-                metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.netuid, hotkey)
+                # metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.netuid, hotkey)
+                metadata = bt.core.extrinsics.serving.get_metadata(self=self.subtensor, netuid=self.config.netuid, hotkey=hotkey)
                 if metadata is None:
+
                     no_metadata += 1
                     self.logger.info(f"NO_METADATA : uid: {uid} hotkey : {hotkey}")
                     continue
