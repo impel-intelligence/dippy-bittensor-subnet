@@ -380,9 +380,8 @@ class Validator:
         vtrust does not fall below vturst_min, assuming the consensus does not change.
         """
         vtrust_loss_desired = 1 - vtrust_min
-
         # If the predicted vtrust is already above vtrust_min, then just return the current weights.
-        orig_vtrust_loss = np.maximum(0.0, weights - consensus).sum()
+        orig_vtrust_loss = float(np.sum(np.maximum(weights - consensus, 0.0)))
         if orig_vtrust_loss <= vtrust_loss_desired:
             bt.logging.warning("Weights already satisfy vtrust_min. {} >= {}.".format(1 - orig_vtrust_loss, vtrust_min))
             return weights
@@ -427,7 +426,7 @@ class Validator:
         except Exception as e:
             bt.logging.warning(f"wait_for_inclusion not set: {wait_for_inclusion}")
 
-        async def _try_set_weights(wait_for_inclusion=False):
+        async def _try_set_weights(wait_for_inclusion: bool=False, debug:bool= False):
             weights_success = False
             try:
                 # Fetch latest metagraph
@@ -435,7 +434,56 @@ class Validator:
                 consensus = metagraph.C
                 cpu_weights = self.weights
                 adjusted_weights = self.adjust_for_vtrust(cpu_weights, consensus)
-                self.weights = torch.tensor(adjusted_weights, dtype=torch.float32)
+                
+                if debug:
+                    # Compare weights before and after vtrust adjustment
+                    comparison_table = Table(title="Weights Comparison")
+                    comparison_table.add_column("uid", justify="right", style="cyan", no_wrap=True)
+                    comparison_table.add_column("original", style="magenta")
+                    comparison_table.add_column("adjusted", style="green")
+                    comparison_table.add_column("diff", style="yellow")
+                    
+                    # Dump details about consensus and cpu_weights
+                    bt.logging.warning("=== Consensus details ===")
+                    bt.logging.warning(f"Type: {type(consensus)}")
+                    if isinstance(consensus, np.ndarray):
+                        bt.logging.warning(f"Shape: {consensus.shape}")
+                        bt.logging.warning(f"Dtype: {consensus.dtype}")
+                        bt.logging.warning(f"Min value: {np.min(consensus)}")
+                        bt.logging.warning(f"Max value: {np.max(consensus)}")
+                        bt.logging.warning(f"Mean value: {np.mean(consensus)}")
+                        bt.logging.warning(f"Sum: {np.sum(consensus)}")
+                        bt.logging.warning(f"Has NaN: {np.isnan(consensus).any()}")
+                        bt.logging.warning(f"Has Inf: {np.isinf(consensus).any()}")
+
+                    bt.logging.warning("\n=== CPU Weights details ===") 
+                    bt.logging.warning(f"Type: {type(cpu_weights)}")
+                    if isinstance(cpu_weights, (np.ndarray, torch.Tensor)):
+                        if isinstance(cpu_weights, torch.Tensor):
+                            cpu_weights = cpu_weights.detach().cpu().numpy()
+                        bt.logging.warning(f"Shape: {cpu_weights.shape}")
+                        bt.logging.warning(f"Dtype: {cpu_weights.dtype}")
+                        bt.logging.warning(f"Min value: {np.min(cpu_weights)}")
+                        bt.logging.warning(f"Max value: {np.max(cpu_weights)}")
+                        bt.logging.warning(f"Mean value: {np.mean(cpu_weights)}")
+                        bt.logging.warning(f"Sum: {np.sum(cpu_weights)}")
+                        bt.logging.warning(f"Has NaN: {np.isnan(cpu_weights).any()}")
+                        bt.logging.warning(f"Has Inf: {np.isinf(cpu_weights).any()}")
+                
+                    for uid in range(len(cpu_weights)):
+                        original = round(float(cpu_weights[uid]), 4)
+                        adjusted = round(float(adjusted_weights[uid]), 4) 
+                        diff = round(adjusted - original, 4)
+                        comparison_table.add_row(
+                            str(uid),
+                            str(original),
+                            str(adjusted),
+                            str(diff)
+                        )
+                
+                    console = Console()
+                    console.print(comparison_table)
+                self.weights = torch.from_numpy(adjusted_weights).clone().detach()
                 self.weights.nan_to_num(0.0)
                 self.subtensor.set_weights(
                     netuid=self.config.netuid,
@@ -453,7 +501,9 @@ class Validator:
                 bt.logging.warning(f"successfully_set_weights")
                 weights_success = True
             except Exception as e:
-                bt.logging.error(f"failed_set_weights {e}")
+                bt.logging.error(f"failed_set_weights error={e}\n{traceback.format_exc()}")
+                return weights_success
+                
             # Only dump weight state to console
             ws, ui = self.weights.topk(len(self.weights))
             table = Table(title="All Weights")
@@ -501,34 +551,35 @@ class Validator:
         async def process_uid(uid):
             hotkey = self.metagraph.hotkeys[uid]
             miner_registry[uid].hotkey = hotkey
-            bt.logging.debug(f"now checking for uid {uid} and hotkey {hotkey}")
+            bt.logging.debug(f"now checking for uid={uid} and hotkey {hotkey}")
             try:
                 model_data = self.fetch_model_data(uid, hotkey)
                 if model_data is None:
                     invalid_uids.append(uid)
-                    bt.logging.error(f"skip {uid} no model_data")
+                    bt.logging.error(f"skip uid={uid} no model_data")
+                    return
+                if model_data.miner_model_id is None:
+                    invalid_uids.append(uid)
+                    bt.logging.warning(f"skip uid={uid} no model_id available")
                     return
                 # Skip model submitted after run step has begun
                 if model_data.block > current_block:
                     invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} submitted on {model_data.block} after {current_block}")
+                    bt.logging.info(f"skip uid={uid} submitted on {model_data.block} after {current_block}")
                     return
                 if model_data.block < NEW_EPOCH_BLOCK:
                     invalid_uids.append(uid)
-                    bt.logging.warning(f"skip {uid} submitted on {model_data.block} which is before {NEW_EPOCH_BLOCK}")
+                    bt.logging.warning(f"skip uid={uid} submitted on {model_data.block} which is before {NEW_EPOCH_BLOCK}")
                     return
 
                 hotkey_hash_passes = self.model_id_matches_hotkey(model_data.miner_model_id, hotkey)
                 
                 if not hotkey_hash_passes:
                     invalid_uids.append(uid)
-                    bt.logging.info(f"{uid} submitted on {model_data.miner_model_id.hash} does not include same hotkey")
+                    bt.logging.warning(f"uid={uid} submitted on {model_data.miner_model_id.hash} does not include same hotkey")
                     return
                 
-                if model_data.miner_model_id is None:
-                    invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} no model_id available")
-                    return
+                
 
                 miner_registry[uid].block = model_data.block
                 miner_registry[uid].miner_model_id = model_data.miner_model_id
@@ -552,20 +603,20 @@ class Validator:
                         signed_payload,
                         True,
                     )
-                bt.logging.debug(
-                    f"_score_data for {uid} on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id} {_score_data}"
+                bt.logging.warning(
+                    f"_score_data for uid={uid} on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id} {_score_data}"
                 )
                 
                 if _score_data.status == StatusEnum.QUEUED or _score_data.status == StatusEnum.RUNNING:
                     invalid_uids.append(uid)
-                    bt.logging.info(f"skip {uid} status is {_score_data.status}")
+                    bt.logging.info(f"skip uid={uid} status is {_score_data.status}")
                     return
                 if _score_data.status == StatusEnum.COMPLETED:
                     miner_registry[uid].total_score = _score_data.calculate_total_score()
                 elif _score_data.status == StatusEnum.FAILED:
                     miner_registry[uid].total_score = 0
             except Exception as e:
-                bt.logging.error(f"could not update for {uid}:{hotkey} {e}")
+                bt.logging.error(f"could not update for uid={uid}:{hotkey} {e}")
                 bt.logging.error(f"Traceback: {traceback.format_exc()}")
                 invalid_uids.append(uid)
                 return
@@ -626,7 +677,11 @@ class Validator:
 
     def model_id_matches_hotkey(self, model_id: ModelId, hotkey: str) -> bool:
         original_hash = model_id.hash or ""
-        hotkey_hash = regenerate_hash(model_id.namespace, model_id.name, model_id.chat_template, hotkey)
+        hotkey_hash = regenerate_hash(
+            namespace=model_id.namespace, 
+            name=model_id.name, 
+            chat_template=model_id.chat_template, 
+            hotkey=hotkey)
         hotkey_matches = str(original_hash) == str(hotkey_hash)
         
         return hotkey_matches
@@ -634,12 +689,8 @@ class Validator:
 
     def fetch_model_data(self, uid: int, hotkey:str) -> Optional[MinerEntry]:
         try:
-            # metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.config.netuid, hotkey)
-            # metadata = bt.core.extrinsics.serving.get_metadata(self.config.netuid, hotkey)
             bt.logging.warning(f"get_metadata for uid={uid} hotkey={hotkey} netuid={self.config.netuid}")
             metadata = bt.core.extrinsics.serving.get_metadata(self=self.subtensor, netuid=self.config.netuid, hotkey=hotkey)
-            # if metadata is None or len(metadata) < 1:
-            #     return None
             if metadata is None:
                 return None
             
@@ -713,7 +764,8 @@ class Validator:
         )
 
         invalid_uids, miner_registry = await self.build_registry(all_uids=all_uids, current_block=current_block)
-       
+        bt.logging.warning(f"invalid_uids : {invalid_uids}")
+        
 
         try:
             for uid1, entry1 in miner_registry.items():
@@ -733,12 +785,12 @@ class Validator:
                         # If blocks are different, mark the one with greater block as invalid
                         if entry1.block > entry2.block:
                             invalid_uids.append(uid1)
-                            bt.logging.warning(f"Marked uid {uid1} as invalid due to duplicate model with newer block")
+                            bt.logging.warning(f"Marked uid={uid1} as invalid due to duplicate model with newer block")
 
                             break
                         elif entry2.block > entry1.block:
                             invalid_uids.append(uid2)
-                            bt.logging.warning(f"Marked uid {uid2} as invalid due to duplicate model with newer block")
+                            bt.logging.warning(f"Marked uid={uid2} as invalid due to duplicate model with newer block")
         except Exception as e:
             bt.logging.error(f"could not perform hash check {e}")
 
@@ -747,9 +799,10 @@ class Validator:
         )
         # Mark uids that do not have a proper score
         for uid in invalid_uids:
+            if uid not in miner_registry:
+                miner_registry[uid] = MinerEntry()
             miner_registry[uid].invalid = True
             miner_registry[uid].total_score = 0
-
 
         # Compute wins and win rates per uid.
         wins, win_rate = compute_wins(miner_registry)

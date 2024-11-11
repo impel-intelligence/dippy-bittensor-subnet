@@ -2,7 +2,7 @@ bittensor==8.2.1
 bittensor[torch]
 pydantic
 transformers
-torch
+torch >=2.5.1
 pandas
 sentencepiece
 protobuf
@@ -13,4 +13,4 @@ threadpoolctl
 wandb >= 0.17.2
 loguru
 scipy
-numpy
+numpy >= 2.0.2
