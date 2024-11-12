@@ -262,7 +262,8 @@ class Validator:
         # self.subtensor = bt.subtensor(config=self.config)
         self.subtensor = Subtensor(config=self.config)
 
-        self.metagraph = Metagraph(netuid=netuid, network=network_name, lite=False, sync=True)
+        # self.metagraph = Metagraph(netuid=netuid, network=network_name, lite=False, sync=True)
+        self.metagraph = self.subtensor.metagraph(netuid=self.config.netuid, lite=False)
         # self.metagraph.sync(subtensor=self.subtensor)
 
         # Dont check registration status if offline.
@@ -345,7 +346,6 @@ class Validator:
             if self.use_event_logger:
                 self.event_logger.warn(msg, **kwargs)
         except Exception as e:
-            
             bt.logging.error(e)
         
         return
@@ -370,6 +370,7 @@ class Validator:
         try:
             response = requests.post(event_report_endpoint, json=payload)
             response.raise_for_status()  # Raise an exception for HTTP errors
+            bt.logging.warning(f"successfully sent event_report with payload {payload}")
         except Exception as e:
             bt.logging.error(f"could not remote log: {e}. This error is ok to ignore if you are a validator")
 
@@ -426,8 +427,9 @@ class Validator:
         except Exception as e:
             bt.logging.warning(f"wait_for_inclusion not set: {wait_for_inclusion}")
 
-        async def _try_set_weights(wait_for_inclusion: bool=False, debug:bool= False):
+        async def _try_set_weights(wait_for_inclusion: bool=False, debug:bool= False) -> Tuple[bool, Optional[str]]:
             weights_success = False
+            error_str = None
             try:
                 # Fetch latest metagraph
                 metagraph = self.subtensor.metagraph(self.config.netuid)
@@ -502,7 +504,8 @@ class Validator:
                 weights_success = True
             except Exception as e:
                 bt.logging.error(f"failed_set_weights error={e}\n{traceback.format_exc()}")
-                return weights_success
+                error_str = f"failed_set_weights error={e}\n{traceback.format_exc()}"
+                return weights_success, error_str
                 
             # Only dump weight state to console
             ws, ui = self.weights.topk(len(self.weights))
@@ -523,25 +526,29 @@ class Validator:
             status_table.add_row("failed_set_weights", str(weights_failed))
             status_table.add_row("wait_for_inclusion", str(wait_for_inclusion))
             console.print(status_table)
-            return weights_success
+            return weights_success, error_str
 
         weights_set_success = False
+        error_msg = None
         try:
             bt.logging.debug("Setting weights.")
-            weights_set_success = await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
+            weights_set_success, error_msg = await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
             payload = {
                 "time": str(dt.datetime.now(dt.timezone.utc)),
                 "weights_set_success": weights_set_success,
                 "wait_for_inclusion": wait_for_inclusion,
+                "error": error_msg
             }
             bt.logging.debug("Finished setting weights.")
             logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey,payload)
             self._remote_log(logged_payload)
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to set weights after {ttl} seconds")
+            error_msg = f"Failed to set weights after {ttl} seconds"
         except Exception as e:
             bt.logging.error(f"Error setting weights: {e}")
-        return weights_set_success
+            error_msg = f"Error setting weights: {e}\n{traceback.format_exc()}"
+        return weights_set_success, error_msg
 
         
     async def build_registry(self, all_uids: List[int], current_block: int, max_concurrent: int = 32) -> Tuple[int, MinerEntry]:
@@ -723,20 +730,21 @@ class Validator:
 
     @staticmethod
     def adjusted_temperature_multipler(current_block: int) -> float:
-        CHANGE_BLOCK = 4283000
-        if current_block < CHANGE_BLOCK:
-            return 1
+        CHANGE_BLOCK = 4247000
+        # currently force static 0.15 temperature 
+        if current_block > CHANGE_BLOCK:
+            return 15
         diff = current_block - CHANGE_BLOCK
         # Map block difference to temperature value between 1-15
         # Scale linearly up to NEW_EPOCH_BLOCK
-        if diff <= 50400:
+        if diff <= 7200:
             return 1.0
         
         # Linear scaling: (diff / max_diff) * (max_temp - min_temp) + min_temp
-        temp = (diff / CHANGE_BLOCK) * 0.14 + 0.01
+        temp = (diff / CHANGE_BLOCK) * 14 + 1
         
         # Cap at max temperature of 0.15
-        return min(temp, 0.15)
+        return min(temp, 15)
     async def run_step(self):
         """
         Executes a step in the evaluation process of models. This function performs several key tasks:

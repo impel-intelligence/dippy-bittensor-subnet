@@ -5,13 +5,14 @@ Safe methods for WandB logging
 import bittensor as bt
 import psutil
 import torch
-import wandb
+
 
 ENTITY_NAME = "dippyai"
 PROJECT_NAME = "dippy"
 
 
 def safe_login(api_key):
+    import wandb
     """
     Attempts to log into WandB using a provided API key
     """
@@ -26,6 +27,7 @@ def safe_login(api_key):
 
 
 def safe_init(name, wallet, metagraph, config):
+    import wandb
     """
     Attempts to initialize WandB, and logs if unsuccessful
     """
@@ -93,6 +95,7 @@ def safe_init(name, wallet, metagraph, config):
 
 
 def safe_log(data):
+    import wandb
     """
     Safely log data to WandB
     - Ignores request to log if WandB isn't configured

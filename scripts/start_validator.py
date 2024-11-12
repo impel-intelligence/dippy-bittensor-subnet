@@ -23,6 +23,7 @@ from datetime import timedelta
 from shlex import split
 from typing import List
 import constants
+import datetime
 
 log = logging.getLogger(__name__)
 UPDATES_CHECK_TIME = timedelta(minutes=1)
@@ -41,7 +42,7 @@ def get_version() -> str:
     return commit[:8]
 
 
-def start_validator_process(pm2_name: str, args: List[str]) -> subprocess.Popen:
+def start_validator_process(pm2_name: str, args: List[str], current_version: str = "0") -> subprocess.Popen:
     """
     Spawn a new python process running neurons.validator.
     `sys.executable` ensures thet the same python interpreter is used as the one
@@ -65,10 +66,19 @@ def start_validator_process(pm2_name: str, args: List[str]) -> subprocess.Popen:
         cwd=constants.ROOT_DIR,
     )
     process.pm2_name = pm2_name
-    log.info("Started validator process with pm2, name: %s", pm2_name)
+    log.info("Started validator process with pm2, name: %s, version: %s", pm2_name, current_version)
 
     return process
-
+import requests
+from typing import Dict, Any
+def _remote_log(payload: Dict[str, Any]):
+        event_report_endpoint = f"{constants.VALIDATION_SERVER}/event_report"
+        try:
+            response = requests.post(event_report_endpoint, json=payload)
+            response.raise_for_status()  # Raise an exception for HTTP errors
+            log.info(f"successfully sent event_report with payload {payload}")
+        except Exception as e:
+            log.error(f"could not remote log: {e}. This error is ok to ignore if you are a validator")
 
 def stop_validator_process(process: subprocess.Popen) -> None:
     """Stop the validator process"""
@@ -89,6 +99,8 @@ def pull_latest_version() -> None:
         subprocess.run(split("git pull --rebase --autostash"), check=True, cwd=constants.ROOT_DIR)
     except subprocess.CalledProcessError as exc:
         log.error("Failed to pull, reverting: %s", exc)
+        _remote_log({"error": str(exc), "message": "Failed to pull from git, reverting"})
+        
         subprocess.run(split("git rebase --abort"), check=True, cwd=constants.ROOT_DIR)
 
 
@@ -136,6 +148,11 @@ def main(pm2_name: str, args: List[str]) -> None:
             pull_latest_version()
             latest_version = get_version()
             log.info("Latest version: %s", latest_version)
+            _remote_log({
+                "current_version": str(current_version),
+                "latest_version": str(latest_version),
+                "message": "Checking for updates"
+            })
 
             if latest_version != current_version:
                 log.info(
@@ -144,9 +161,16 @@ def main(pm2_name: str, args: List[str]) -> None:
                     latest_version,
                 )
                 upgrade_packages()
-
+                current_version = get_version()
+                _remote_log({
+                    "current_version": str(current_version),
+                    "latest_version": str(latest_version),
+                    "message": "Upgrading to new version",
+                    "upgrade_status": "started",
+                    "time": str(datetime.datetime.now(datetime.timezone.utc))
+                })
                 stop_validator_process(validator)
-                validator = start_validator_process(pm2_name, args)
+                validator = start_validator_process(pm2_name, args, current_version)
                 current_version = latest_version
 
             time.sleep(UPDATES_CHECK_TIME.total_seconds())
