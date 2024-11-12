@@ -344,7 +344,7 @@ class Validator:
     def _event_log(self, msg: str, **kwargs):
         try:
             if self.use_event_logger:
-                self.event_logger.warn(msg, **kwargs)
+                self.event_logger.info(msg, **kwargs)
         except Exception as e:
             bt.logging.error(e)
         
@@ -381,7 +381,9 @@ class Validator:
         """
         if not isinstance(weights, np.ndarray):
             return weights
+        
         vtrust_loss_desired = 1 - vtrust_min
+
         # If the predicted vtrust is already above vtrust_min, then just return the current weights.
         orig_vtrust_loss = float(np.sum(np.maximum(weights - consensus, 0.0)))
         if orig_vtrust_loss <= vtrust_loss_desired:
@@ -417,9 +419,9 @@ class Validator:
         )
         return new_weights
 
-    async def try_set_weights(self, ttl: int) -> bool:
+    async def try_set_weights(self, ttl: int) -> Tuple[bool, Optional[str]]:
         if self.config.dont_set_weights or self.config.offline:
-            return
+            return False, None
 
         wait_for_inclusion = False
         try:
@@ -436,19 +438,20 @@ class Validator:
                 metagraph = self.subtensor.metagraph(self.config.netuid)
                 consensus = metagraph.C
                 cpu_weights = self.weights
-
                 # Save types for reporting
                 type_report = {
-                    'metagraph': str(type(metagraph)),
-                    'consensus': str(type(consensus)),
-                    'cpu_weights': str(type(cpu_weights))
+                    'metagraph': str(type(metagraph)),    # bittensor.core.metagraph.NonTorchMetagraph
+                    'consensus': str(type(consensus)),     # numpy.ndarray
+                    'cpu_weights': str(type(cpu_weights))  # torch.Tensor
                 }
-                bt.logging.warning(f"data_dump: {type_report}")
+                bt.logging.debug(f"data_dump: {type_report}")
                 try:
                     adjusted_weights = self.adjust_for_vtrust(cpu_weights, consensus)
+                    self.weights = torch.from_numpy(adjusted_weights).clone().detach()
                 except Exception as e:
                     bt.logging.error(f"error adjusting for vtrust: {e}")
-                    adjusted_weights = cpu_weights
+                    adjusted_weights = torch.tensor(cpu_weights)
+                    self.weights = adjusted_weights.clone().detach()
                 
                 if debug:
                     # Compare weights before and after vtrust adjustment
@@ -498,7 +501,7 @@ class Validator:
                 
                     console = Console()
                     console.print(comparison_table)
-                self.weights = torch.from_numpy(adjusted_weights).clone().detach()
+                
                 self.weights.nan_to_num(0.0)
                 self.subtensor.set_weights(
                     netuid=self.config.netuid,
@@ -940,8 +943,8 @@ class Validator:
                     weights_set_success = False
                     self.global_step += 1
                     if success:
-                        weights_set_success = await self.try_set_weights(ttl=120)
-                    bt.logging.warning(f"weights_set_success {weights_set_success}")
+                        weights_set_success, error_msg = await self.try_set_weights(ttl=120)
+                        bt.logging.warning(f"weights_set_success {weights_set_success} error_msg {error_msg}")
                     metagraph_synced = await self.try_sync_metagraph(ttl=120)
                     bt.logging.warning(f"metagraph_synced {metagraph_synced}")
                     if self.config.immediate:
