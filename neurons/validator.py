@@ -381,7 +381,7 @@ class Validator:
         """
         vtrust_loss_desired = 1 - vtrust_min
         # If the predicted vtrust is already above vtrust_min, then just return the current weights.
-        orig_vtrust_loss = float(np.sum(np.maximum(weights - consensus, 0.0)))
+        orig_vtrust_loss = torch.sum(torch.maximum(weights - consensus, torch.tensor(0.0))).item()
         if orig_vtrust_loss <= vtrust_loss_desired:
             bt.logging.warning("Weights already satisfy vtrust_min. {} >= {}.".format(1 - orig_vtrust_loss, vtrust_min))
             return weights
@@ -402,7 +402,7 @@ class Validator:
 
         def fn(lam: float):
             new_weights = (1 - lam) * weights + lam * consensus_normalized
-            vtrust_loss = np.maximum(0.0, new_weights - consensus).sum()
+            vtrust_loss = torch.sum(torch.maximum(new_weights - consensus, torch.tensor(0.0))).item()
             return vtrust_loss - vtrust_loss_desired
 
         sol = optimize.root_scalar(fn, bracket=[0, 1], method="brentq")
