@@ -258,12 +258,21 @@ class Validator:
         netuid = self.config.netuid or 11
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
-        
-        # self.subtensor = bt.subtensor(config=self.config)
-        self.subtensor = Subtensor(config=self.config)
+        try:
+            subtensor = bt.subtensor(config=self.config)
+            self.subtensor = subtensor
+        except Exception as e:
+            bt.logging.error(f"could not initialize subtensor: {e}")
+            self.subtensor = Subtensor()
 
         # self.metagraph = Metagraph(netuid=netuid, network=network_name, lite=False, sync=True)
-        self.metagraph = self.subtensor.metagraph(netuid=self.config.netuid, lite=False)
+        try:
+            self.metagraph = self.subtensor.metagraph(netuid=self.config.netuid, lite=False)
+        except Exception as e:
+            bt.logging.error(f"could not initialize metagraph: {e}")
+            self.subtensor = Subtensor(network="subvortex")
+            self.metagraph = Metagraph(netuid=netuid, network=network_name, lite=False)
+            self.metagraph.sync(subtensor=self.subtensor)
         # self.metagraph.sync(subtensor=self.subtensor)
 
         # Dont check registration status if offline.
@@ -430,86 +439,117 @@ class Validator:
         except Exception as e:
             bt.logging.warning(f"wait_for_inclusion not set: {wait_for_inclusion}")
 
+        def set_weights_with_wait(subtensor: Subtensor, weights, netuid, wallet, uids):
+            retries = 5
+            backoff = 1.5
+            for attempt in range(retries):
+                try:
+                    success, msg = subtensor.set_weights(
+                        netuid=netuid,
+                        wallet=wallet,
+                        uids=uids,
+                        weights=weights,
+                        wait_for_inclusion=True,
+                        wait_for_finalization=True,
+                        version_key=constants.weights_version_key,
+                    )
+                    if success:
+                        return True
+                except Exception as e:
+                    if attempt == retries - 1:
+                        raise e
+                    wait_time = backoff ** attempt
+                    bt.logging.error(f"Failed to set weights {msg} (attempt {attempt+1}/{retries}). Retrying in {wait_time:.1f}s...")
+                    time.sleep(wait_time)
+            return False
+
+
         async def _try_set_weights(wait_for_inclusion: bool=False, debug:bool= False) -> Tuple[bool, Optional[str]]:
             weights_success = False
             error_str = None
             try:
                 # Fetch latest metagraph
-                metagraph = self.subtensor.metagraph(self.config.netuid)
-                consensus = metagraph.C
+                # try:
+                #     metagraph = self.subtensor.metagraph(self.config.netuid)
+                # except Exception as e:
+                #     bt.logging.error(f"could not fetch metagraph: {e}")
+                #     metagraph = Metagraph(netuid=self.config.netuid, network=self.config.subtensor.network, lite=False)
+                # consensus = metagraph.C
                 cpu_weights = self.weights
                 # Save types for reporting
-                type_report = {
-                    'metagraph': str(type(metagraph)),    # bittensor.core.metagraph.NonTorchMetagraph
-                    'consensus': str(type(consensus)),     # numpy.ndarray
-                    'cpu_weights': str(type(cpu_weights))  # torch.Tensor
-                }
-                bt.logging.debug(f"data_dump: {type_report}")
-                try:
-                    adjusted_weights = self.adjust_for_vtrust(cpu_weights, consensus)
-                    self.weights = torch.from_numpy(adjusted_weights).clone().detach()
-                except Exception as e:
-                    bt.logging.error(f"error adjusting for vtrust: {e}")
-                    adjusted_weights = torch.tensor(cpu_weights)
-                    self.weights = adjusted_weights.clone().detach()
-                
-                if debug:
-                    # Compare weights before and after vtrust adjustment
-                    comparison_table = Table(title="Weights Comparison")
-                    comparison_table.add_column("uid", justify="right", style="cyan", no_wrap=True)
-                    comparison_table.add_column("original", style="magenta")
-                    comparison_table.add_column("adjusted", style="green")
-                    comparison_table.add_column("diff", style="yellow")
+                # type_report = {
+                #     'metagraph': str(type(metagraph)),    # bittensor.core.metagraph.NonTorchMetagraph
+                #     'consensus': str(type(consensus)),     # numpy.ndarray
+                #     'cpu_weights': str(type(cpu_weights))  # torch.Tensor
+                # }
+                # bt.logging.debug(f"data_dump: {type_report}")
+                adjusted_weights = cpu_weights
+                # try:
+                #     adjusted_weights = self.adjust_for_vtrust(cpu_weights, consensus)
+                #     self.weights = torch.from_numpy(adjusted_weights).clone().detach()
+                # except Exception as e:
+                #     bt.logging.error(f"error adjusting for vtrust: {e}")
+                #     adjusted_weights = torch.tensor(cpu_weights)
+                #     self.weights = adjusted_weights.clone().detach()
                     
-                    # Dump details about consensus and cpu_weights
-                    bt.logging.warning("=== Consensus details ===")
-                    bt.logging.warning(f"Type: {type(consensus)}")
-                    if isinstance(consensus, np.ndarray):
-                        bt.logging.warning(f"Shape: {consensus.shape}")
-                        bt.logging.warning(f"Dtype: {consensus.dtype}")
-                        bt.logging.warning(f"Min value: {np.min(consensus)}")
-                        bt.logging.warning(f"Max value: {np.max(consensus)}")
-                        bt.logging.warning(f"Mean value: {np.mean(consensus)}")
-                        bt.logging.warning(f"Sum: {np.sum(consensus)}")
-                        bt.logging.warning(f"Has NaN: {np.isnan(consensus).any()}")
-                        bt.logging.warning(f"Has Inf: {np.isinf(consensus).any()}")
+                
+                # if debug:
+                #     # Compare weights before and after vtrust adjustment
+                #     comparison_table = Table(title="Weights Comparison")
+                #     comparison_table.add_column("uid", justify="right", style="cyan", no_wrap=True)
+                #     comparison_table.add_column("original", style="magenta")
+                #     comparison_table.add_column("adjusted", style="green")
+                #     comparison_table.add_column("diff", style="yellow")
+                    
+                #     # Dump details about consensus and cpu_weights
+                #     bt.logging.warning("=== Consensus details ===")
+                #     bt.logging.warning(f"Type: {type(consensus)}")
+                #     if isinstance(consensus, np.ndarray):
+                #         bt.logging.warning(f"Shape: {consensus.shape}")
+                #         bt.logging.warning(f"Dtype: {consensus.dtype}")
+                #         bt.logging.warning(f"Min value: {np.min(consensus)}")
+                #         bt.logging.warning(f"Max value: {np.max(consensus)}")
+                #         bt.logging.warning(f"Mean value: {np.mean(consensus)}")
+                #         bt.logging.warning(f"Sum: {np.sum(consensus)}")
+                #         bt.logging.warning(f"Has NaN: {np.isnan(consensus).any()}")
+                #         bt.logging.warning(f"Has Inf: {np.isinf(consensus).any()}")
 
-                    bt.logging.warning("\n=== CPU Weights details ===") 
-                    bt.logging.warning(f"Type: {type(cpu_weights)}")
-                    if isinstance(cpu_weights, (np.ndarray, torch.Tensor)):
-                        if isinstance(cpu_weights, torch.Tensor):
-                            cpu_weights = cpu_weights.detach().cpu().numpy()
-                        bt.logging.warning(f"Shape: {cpu_weights.shape}")
-                        bt.logging.warning(f"Dtype: {cpu_weights.dtype}")
-                        bt.logging.warning(f"Min value: {np.min(cpu_weights)}")
-                        bt.logging.warning(f"Max value: {np.max(cpu_weights)}")
-                        bt.logging.warning(f"Mean value: {np.mean(cpu_weights)}")
-                        bt.logging.warning(f"Sum: {np.sum(cpu_weights)}")
-                        bt.logging.warning(f"Has NaN: {np.isnan(cpu_weights).any()}")
-                        bt.logging.warning(f"Has Inf: {np.isinf(cpu_weights).any()}")
+                #     bt.logging.warning("\n=== CPU Weights details ===") 
+                #     bt.logging.warning(f"Type: {type(cpu_weights)}")
+                #     if isinstance(cpu_weights, (np.ndarray, torch.Tensor)):
+                #         if isinstance(cpu_weights, torch.Tensor):
+                #             cpu_weights = cpu_weights.detach().cpu().numpy()
+                #         bt.logging.warning(f"Shape: {cpu_weights.shape}")
+                #         bt.logging.warning(f"Dtype: {cpu_weights.dtype}")
+                #         bt.logging.warning(f"Min value: {np.min(cpu_weights)}")
+                #         bt.logging.warning(f"Max value: {np.max(cpu_weights)}")
+                #         bt.logging.warning(f"Mean value: {np.mean(cpu_weights)}")
+                #         bt.logging.warning(f"Sum: {np.sum(cpu_weights)}")
+                #         bt.logging.warning(f"Has NaN: {np.isnan(cpu_weights).any()}")
+                #         bt.logging.warning(f"Has Inf: {np.isinf(cpu_weights).any()}")
                 
-                    for uid in range(len(cpu_weights)):
-                        original = round(float(cpu_weights[uid]), 4)
-                        adjusted = round(float(adjusted_weights[uid]), 4) 
-                        diff = round(adjusted - original, 4)
-                        comparison_table.add_row(
-                            str(uid),
-                            str(original),
-                            str(adjusted),
-                            str(diff)
-                        )
+                #     for uid in range(len(cpu_weights)):
+                #         original = round(float(cpu_weights[uid]), 4)
+                #         adjusted = round(float(adjusted_weights[uid]), 4) 
+                #         diff = round(adjusted - original, 4)
+                #         comparison_table.add_row(
+                #             str(uid),
+                #             str(original),
+                #             str(adjusted),
+                #             str(diff)
+                #         )
                 
-                    console = Console()
-                    console.print(comparison_table)
+                #     console = Console()
+                #     console.print(comparison_table)
+                
                 
                 self.weights.nan_to_num(0.0)
-                self.subtensor.set_weights(
+                weights_success = set_weights_with_wait(
+                    subtensor=self.subtensor,
+                    weights=adjusted_weights,
                     netuid=self.config.netuid,
                     wallet=self.wallet,
                     uids=self.metagraph.uids,
-                    weights=adjusted_weights,
-                    wait_for_inclusion=wait_for_inclusion,
-                    version_key=constants.weights_version_key,
                 )
                 weights_report = {"weights": {}}
                 for uid, score in enumerate(self.weights):
@@ -661,8 +701,7 @@ class Validator:
                 self.metagraph = self.subtensor.metagraph(netuid=self.config.netuid, lite=False)
             except Exception as e:
                 bt.logging.error(f"{e}")
-                # self.subtensor = Subtensor(config=self.config)
-                self.subtensor = bt.subtensor(config=self.config)
+                self.subtensor = Subtensor(network="subvortex")
         for attempt in range(3):
             process = multiprocessing.Process(target=sync_metagraph, args=(self.subtensor.chain_endpoint,))
             process.start()
