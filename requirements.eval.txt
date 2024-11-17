@@ -1,11 +1,10 @@
+setuptools
 torch >= 2.3.1
 tqdm
-vllm==0.5.4
+vllm==0.6.4
 pydantic >= 2.0
 accelerate
-bitsandbytes
-vllm-flash-attn
-supabase
+bitsandbytes == 0.44.1
 pandas
 threadpoolctl
 loguru

@@ -1,5 +1,5 @@
 FROM python:3.12
-COPY --from=ghcr.io/astral-sh/uv:0.4 /uv /bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /bin/uv
 # RUN uv venv /opt/venv
 # # Use the virtual environment automatically
 # ENV VIRTUAL_ENV=/opt/venv

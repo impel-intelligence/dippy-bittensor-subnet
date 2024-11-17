@@ -3,6 +3,7 @@ import time
 import os
 import multiprocessing
 import logging
+import traceback
 from typing import List, Optional
 
 import uvicorn
@@ -148,7 +149,6 @@ GPU_ID_MAP = {
     1: "1",
     2: "2",
     3: "3",
-    # 4: "8,9"
 }
 
 
@@ -281,7 +281,14 @@ async def telemetry_report(
             request_details = {**payload, **request_details}
         except Exception as e:
             if app.state.event_logger_enabled:
-                app.state.event_logger.info("failed_telemetry_request", extra=request_details)
+                app.state.event_logger.info(
+                    "failed_telemetry_request", 
+                    extra={
+                        **request_details,
+                        "error": str(e),
+                        "traceback": traceback.format_exc()
+                    }
+                )
 
     # log incoming request details
     if app.state.event_logger_enabled:
@@ -343,21 +350,13 @@ def get_minerboard():
     return results
 
 def hash_check(request: EvaluateModelRequest) -> bool:
-    hash_matches = int(request.hash) == regenerate_hash(
-        request.repo_namespace,
-        request.repo_name,
-        request.chat_template_type,
-        request.competition_id,
-    )
     hotkey_hash_matches = int(request.hash) == regenerate_hash(
         request.repo_namespace,
         request.repo_name,
         request.chat_template_type,
         request.hotkey,
     )
-    if hash_matches or hotkey_hash_matches:
-        return True
-    return False
+    return hotkey_hash_matches
 
 
 @app.post("/evaluate_model")
@@ -380,11 +379,36 @@ def evaluate_model(
         "signed_payload": signed_payload,
         "miner_hotkey": miner_hotkey,
     }
-    # log incoming request details
-    if app.state.event_logger_enabled:
-        app.state.event_logger.info("incoming_evaluate_request", extra=request_details)
     # verify hash
     hash_verified =  hash_check(request)
+    if not hash_verified:
+        raise HTTPException(status_code=400, detail="Hash does not match the model details")
+
+    return supabaser.get_json_result(request.hash)
+
+"""
+curl -X GET "http://URL.com/model_submission_details?repo_namespace=my-org&repo_name=my-model&chat_template_type=chatml&hash=12345678&competition_id=comp-1"
+Used by validators to get the model details
+"""
+@app.get("/model_submission_details")
+# Example curl request:
+def get_model_submission_details(
+    repo_namespace: str,
+    repo_name: str,
+    chat_template_type: str,
+    hash: str,
+    competition_id: Optional[str] = None,
+    hotkey: Optional[str] = None,
+):
+    request = EvaluateModelRequest(
+        repo_namespace=repo_namespace,
+        repo_name=repo_name,
+        chat_template_type=chat_template_type,
+        hash=hash,
+        hotkey=hotkey,
+    )
+    # verify hash
+    hash_verified = hash_check(request)
     if not hash_verified:
         raise HTTPException(status_code=400, detail="Hash does not match the model details")
 
@@ -404,7 +428,7 @@ INVALID_BLOCK_START = 3840700
 INVALID_BLOCK_END = 3933300
 
 @app.post("/check_model")
-def check_model(
+def check_or_create_model(
     request: EvaluateModelRequest,
 ):
     # verify hash
@@ -571,11 +595,10 @@ def start():
 
     parser = argparse.ArgumentParser(description="Run the server")
     parser.add_argument("--main-api-port", type=int, default=8000, help="Port for the main API")
-    parser.add_argument("--save-remote", action="store_true", default=False, help="Enable remote saving")
     parser.add_argument(
         "--queues",
         type=int,
-        default=1,
+        default=0,
         help="Specify the number of queues to start (default: 1)",
     )
     args = parser.parse_args()

@@ -5,7 +5,7 @@ from transformers import AutoTokenizer
 import gc
 import ray
 from vllm.distributed.parallel_state import destroy_model_parallel
-from scoring.dataset import PippaDataset, StreamedSyntheticDataset
+from scoring.dataset import StreamedSyntheticDataset
 
 # Import necessary modules and functions from the main API file
 from scoring.common import (
@@ -88,7 +88,7 @@ def get_vibe_match_score(
 ):
     try:
         input_tokenizer = AutoTokenizer.from_pretrained(
-            f"{request.repo_namespace}/{request.repo_name}", revision=request.revision
+            f"{request.repo_namespace}/{request.repo_name}"
         )
         
         vibe_score_dataset =  StreamedSyntheticDataset(

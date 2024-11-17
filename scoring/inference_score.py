@@ -1,4 +1,4 @@
-from vllm import LLM, SamplingParams
+from vllm import LLM
 import gc
 import ray
 from vllm.distributed.parallel_state import destroy_model_parallel
@@ -8,12 +8,6 @@ from scoring.common import (
     EvaluateModelRequest,
     MAX_SEQ_LEN_COHERENCE_SCORE,
     MAX_GENERATION_LENGTH,
-    chat_template_mappings,
-    SAMPLE_SIZE_VIBE_SCORE,
-    COHERENCE_BATCH_SIZE,
-    COHERENCE_MAX_TOKENS,
-    COHERENCE_EVAL_MODEL,
-    COHERENCE_NUM_EVALS,
     MODEL_CACHE_DIR,
 )
 import os

@@ -7,10 +7,10 @@ pandas
 sentencepiece
 protobuf
 python-dotenv
-supabase
 tiktoken
 threadpoolctl
 wandb >= 0.17.2
 loguru
 scipy
 numpy >= 2.0.2
+bittensor-wallet>=2.1.0

@@ -222,7 +222,8 @@ class Validator:
             default="",
             help="A WandB API key for logging purposes",
         )
-
+        os.environ["BT_WALLET_PATH"] = os.path.expanduser("~/.bittensor/wallets")
+        
         bt.subtensor.add_args(parser)
         bt.logging.add_args(parser)
         bt.wallet.add_args(parser)
@@ -261,10 +262,11 @@ class Validator:
         try:
             subtensor = bt.subtensor(config=self.config)
             self.subtensor = subtensor
+            bt.logging.warning(f"subtensor initialized with bt.subtensor: {subtensor}")
         except Exception as e:
             bt.logging.error(f"could not initialize subtensor: {e}")
             self.subtensor = Subtensor()
-
+            bt.logging.warning(f"subtensor retry initialized with Subtensor(): {self.subtensor}")
         # self.metagraph = Metagraph(netuid=netuid, network=network_name, lite=False, sync=True)
         try:
             self.metagraph = self.subtensor.metagraph(netuid=self.config.netuid, lite=False)
@@ -432,7 +434,7 @@ class Validator:
         if self.config.dont_set_weights or self.config.offline:
             return False, None
 
-        wait_for_inclusion = False
+        wait_for_inclusion = True
         try:
             if self.config.wait_for_inclusion:
                 wait_for_inclusion = True
@@ -456,6 +458,7 @@ class Validator:
                     if success:
                         return True
                 except Exception as e:
+
                     if attempt == retries - 1:
                         raise e
                     wait_time = backoff ** attempt
@@ -593,7 +596,9 @@ class Validator:
                 "time": str(dt.datetime.now(dt.timezone.utc)),
                 "weights_set_success": weights_set_success,
                 "wait_for_inclusion": wait_for_inclusion,
-                "error": error_msg
+                "error": error_msg,
+                "weights_version": constants.weights_version_key,
+                "validator_hotkey": self.wallet.hotkey,
             }
             bt.logging.debug("Finished setting weights.")
             logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey,payload)
@@ -702,6 +707,10 @@ class Validator:
             except Exception as e:
                 bt.logging.error(f"{e}")
                 self.subtensor = Subtensor(network="subvortex")
+                bt.logging.warning(f"subtensor retry initialized with Subtensor(): {self.subtensor}")
+                # Log failure to sync metagraph
+                logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey, {"metagraph_sync_failure": True})
+                self._remote_log(logged_payload)
         for attempt in range(3):
             process = multiprocessing.Process(target=sync_metagraph, args=(self.subtensor.chain_endpoint,))
             process.start()
@@ -729,6 +738,7 @@ class Validator:
             bt.logging.warning(f"Running step with ttl {ttl}")
             step_success = await asyncio.wait_for(_try_run_step(), ttl)
             bt.logging.warning("Finished running step.")
+            
             return step_success
         except asyncio.TimeoutError:
             bt.logging.error(f"Failed to run step after {ttl} seconds")
@@ -812,7 +822,7 @@ class Validator:
         """
 
         # Update self.metagraph
-        synced = await self.try_sync_metagraph(ttl=60)
+        synced = await self.try_sync_metagraph(ttl=120)
         if not synced:
             return False
         current_block = self.metagraph.block.item()
@@ -994,7 +1004,7 @@ class Validator:
                     # Calculate minutes until next 20-minute mark
                     minutes_until_next = 20 - (minutes % 20)
                     next_run = current_time + dt.timedelta(minutes=minutes_until_next)
-                    bt.logging.success(
+                    bt.logging.warning(
                         f"Waiting {minutes_until_next} minutes until next run at {next_run.strftime('%H:%M')}"
                     )
 

@@ -24,8 +24,8 @@ class EventLogger:
         if not os.access(log_directory, os.W_OK):
             raise PermissionError(f"The directory {log_directory} is not writable")
 
-        # Configure loguru logger for JSON output and file rotation
-        format = "{time} | {level} | {message}"
+        # Configure loguru logger for file output
+        format = "{time} | {level} | {message} | {extra}"
         console_format = (
             "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
             "<level>{level: <8}</level> | "
@@ -38,12 +38,14 @@ class EventLogger:
                 format=console_format,
                 level=level,
             )
+
+        # Add file handler with rotation
         self.logger.add(
             filepath,
-            rotation="100 MB",
-            level=level,
             format=format,
-            serialize=True,  # For JSON output in file with rotation
+            level=level,
+            rotation="100 MB",
+            enqueue=True,  # Makes logging thread-safe
         )
 
     def log(self, level, message, **kwargs):
@@ -70,5 +72,12 @@ def example():
         json_logger.info("This is an info message", extra={"user": "admin", "status": "active"})
         json_logger.error("This is an error essage", extra={"user": "guest", "error_code": 500})
         json_logger.debug("This is a debug message", extra={"user": "developer", "debug_mode": "on"})
+        print("finished")
+
+
+
     except PermissionError as e:
         print(f"Failed to initialize logger: {e}")
+
+if __name__ == "__main__":
+    example()
