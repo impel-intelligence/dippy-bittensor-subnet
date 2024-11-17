@@ -656,7 +656,7 @@ class Validator:
                     self.wallet.hotkey,
                     hotkey,
                 )
-                _score_data = _get_model_score(
+                _score_data = get_model_score(
                     miner_registry[uid].miner_model_id,
                     self.config,
                     self.local_metadata,
@@ -664,25 +664,30 @@ class Validator:
                 )
 
                 if _score_data.status != StatusEnum.COMPLETED:
-                    _score_data = _get_model_score(
+                    _score_data = get_model_score(
                         miner_registry[uid].miner_model_id,
                         self.config,
                         self.local_metadata,
                         signed_payload,
                         True,
                     )
-                bt.logging.warning(
-                    f"_score_data for uid={uid} on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id} {_score_data}"
-                )
+                
                 
                 if _score_data.status == StatusEnum.QUEUED or _score_data.status == StatusEnum.RUNNING:
                     invalid_uids.append(uid)
-                    bt.logging.info(f"skip uid={uid} status is {_score_data.status}")
+                    bt.logging.warning(f"skip uid={uid} status is {_score_data.status}")
                     return
                 if _score_data.status == StatusEnum.COMPLETED:
                     miner_registry[uid].total_score = _score_data.calculate_total_score()
+                    bt.logging.warning(
+                    f"completed_score_data for uid={uid} on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id} {_score_data}"
+                    )
                 elif _score_data.status == StatusEnum.FAILED:
+                    bt.logging.warning(
+                    f"failed_score_data for uid={uid} on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id}"
+                    )
                     miner_registry[uid].total_score = 0
+                
             except Exception as e:
                 bt.logging.error(f"could not update for uid={uid}:{hotkey} {e}")
                 bt.logging.error(f"Traceback: {traceback.format_exc()}")
@@ -709,7 +714,7 @@ class Validator:
                 self.subtensor = Subtensor(network="subvortex")
                 bt.logging.warning(f"subtensor retry initialized with Subtensor(): {self.subtensor}")
                 # Log failure to sync metagraph
-                logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey, {"metagraph_sync_failure": True})
+                logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey, {"metagraph_sync_success": False})
                 self._remote_log(logged_payload)
         for attempt in range(3):
             process = multiprocessing.Process(target=sync_metagraph, args=(self.subtensor.chain_endpoint,))
@@ -827,7 +832,12 @@ class Validator:
             return False
         current_block = self.metagraph.block.item()
         competition_parameters = constants.COMPETITION_SCHEDULE[0]
-        telemetry_report(self.local_metadata)
+        try:
+            payload = {"current_block":current_block, "last_update": str(self.metagraph.last_update)}
+            telemetry_report(local_metadata=self.local_metadata, payload=payload)
+        except Exception as e:
+            bt.logging.error(f"could not report telemetry {e}")
+
         all_uids = self.metagraph.uids.tolist()
         # Avoid biasing lower value uids when making calls
         random.shuffle(all_uids)
@@ -1031,6 +1041,10 @@ def telemetry_report(local_metadata: LocalMetadata, payload=None):
         "Coldkey": str(local_metadata.coldkey),
     }
 
+    if payload is None:
+        payload = {
+            "empty": True
+        }
     # Make the POST request to the validation endpoint
     try:
         response = requests.post(telemetry_endpoint, json=payload, headers=headers)
@@ -1054,56 +1068,45 @@ def sign_request(
         "payload": payload,
     }
 
-
-def _get_model_score(
-    model_id: ModelId,
-    config,
-    local_metadata: LocalMetadata,
-    signatures: Dict[str, str],
-    retryWithRemote: bool = False,
-) -> Scores:
-
-    return get_model_score(
-        namespace=model_id.namespace,
-        name=model_id.name,
-        hash=model_id.hash,
-        template=model_id.chat_template,
-        hotkey=model_id.hotkey,
-        config=config,
-        local_metadata=local_metadata,
-        signatures=signatures,
-        retryWithRemote=retryWithRemote,
-    )
-
-
 def get_model_score(
-    namespace: str,
-    name: str,
-    hash: str,
-    template: str,
-    hotkey: str,
+    model_id: ModelId,
     config,
     local_metadata: LocalMetadata,
     signatures: Dict[str, str],
     retryWithRemote: bool = False,
     debug: bool = False,
 ) -> Scores:
-    # Status:
-    # QUEUED, RUNNING, FAILED, COMPLETED
-    # return (score, status)
+    """
+    Gets the score for a model by querying the validation API.
+    
+    Args:
+        model_id: ModelId object containing model details
+        config: Config object with API settings
+        local_metadata: LocalMetadata with validator details
+        signatures: Dict containing request signatures
+        retryWithRemote: Whether to retry with remote API if local fails
+        debug: Whether to print debug info
+    
+    Returns:
+        Scores object containing model scores and status
+    """
+    # Determine API endpoint
     if config.use_local_validation_api and not retryWithRemote:
-        validation_endpoint = f"http://localhost:{config.local_validation_api_port}/evaluate_model"
+        base_url = f"http://localhost:{config.local_validation_api_port}"
     else:
-        validation_endpoint = f"{constants.VALIDATION_SERVER}/evaluate_model"
+        base_url = constants.VALIDATION_SERVER
 
-    # Construct the payload with the model name and chat template type
-    payload = {
-        "repo_namespace": namespace,
-        "repo_name": name,
-        "hash": hash,
-        "chat_template_type": template,
-        "hotkey": hotkey,
+    # Construct URL with query parameters
+    validation_endpoint = f"{base_url}/model_submission_details"
+    params = {
+        "repo_namespace": model_id.namespace,
+        "repo_name": model_id.name,
+        "chat_template_type": model_id.chat_template,
+        "hash": model_id.hash,
+        "hotkey": model_id.hotkey
     }
+
+    # Set up headers
     headers = {
         "Git-Commit": str(local_metadata.commit),
         "Bittensor-Version": str(local_metadata.btversion),
@@ -1112,32 +1115,36 @@ def get_model_score(
         "Coldkey": str(local_metadata.coldkey),
     }
     headers.update(signatures)
-    if os.environ.get("ADMIN_KEY", None) not in [None, ""]:
-        payload["admin_key"] = os.environ["ADMIN_KEY"]
 
     score_data = Scores()
 
     try:
-        response = requests.post(validation_endpoint, json=payload, headers=headers)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-        # Parse the response JSON
+        # Make GET request
+        response = requests.get(validation_endpoint, params=params, headers=headers)
+        response.raise_for_status()
+        
+        # Parse response
         result = response.json()
         if debug:
             console = Console()
-            console.print(f"Payload: {payload}")
+            console.print(f"Response: {result}")
+            
         if result is None or "status" not in result:
             score_data.status = StatusEnum.FAILED
             return score_data
+            
         status = StatusEnum.from_string(result["status"])
         score_data.status = status
+        
         if "score" in result:
             score_data.from_response(result["score"])
+            
     except Exception as e:
         score_data.status = StatusEnum.FAILED
         bt.logging.error(e)
-        bt.logging.error(f"Failed to get score and status for {namespace}/{name}")
+        bt.logging.error(f"Failed to get score and status for {model_id.namespace}/{model_id.name}")
 
-    bt.logging.debug(f"Model {namespace}/{name} has score data {score_data}")
+    bt.logging.debug(f"Model {model_id.namespace}/{model_id.name} has score data {score_data}")
     return score_data
 
 
