@@ -278,7 +278,19 @@ async def telemetry_report(
     if request is not None:
         try:
             payload = await request.json()
+            if not isinstance(payload, dict):
+                raise ValueError("Invalid JSON payload - must be a dictionary")
             request_details = {**payload, **request_details}
+        except ValueError as e:
+            if app.state.event_logger_enabled:
+                app.state.event_logger.info(
+                    "failed_telemetry_request",
+                    extra={
+                        **request_details,
+                        "error": str(e),
+                        "traceback": "Invalid JSON payload format"
+                    }
+                )
         except Exception as e:
             if app.state.event_logger_enabled:
                 app.state.event_logger.info(
@@ -302,12 +314,53 @@ class EventData(BaseModel):
     coldkey: str
     payload: Dict[Any, Any]
     signature: Dict[str, Any]
+    def _payload_to_dict(self) -> Dict[str, Any]:
+        """Convert payload to a JSON serializable dictionary."""
+        result = {
+            "commit": self.commit,
+            "btversion": self.btversion,
+            "uid": self.uid,
+            "hotkey": self.hotkey,
+            "coldkey": self.coldkey,
+            "payload": {}
+        }
+        
+        # Convert payload dict key by key
+        if isinstance(self.payload, dict):
+            for key, value in self.payload.items():
+                try:
+                    result["payload"][key] = value
+                except Exception as e:
+                    logger.error(f"Error converting payload key {key}: {e}")
+        
+        return result
+
+    def _signature_to_dict(self) -> Dict[str, Any]:
+        """Convert signature to a JSON serializable dictionary."""
+        result = {"signature": {}}
+        
+        # Convert signature dict key by key
+        if isinstance(self.signature, dict):
+            for key, value in self.signature.items():
+                try:
+                    result["signature"][key] = value
+                except Exception as e:
+                    logger.error(f"Error converting signature key {key}: {e}")
+                    
+        return result
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert EventData to a JSON serializable dictionary."""
+        return {
+            **self._payload_to_dict(),
+            **self._signature_to_dict()
+        }
 
 @app.post("/event_report")
 async def event_report(event_data: EventData):
     try:
         if app.state.event_logger_enabled:
-            app.state.event_logger.info("event_request", extra=event_data)
+            app.state.event_logger.info("event_request", extra=event_data.to_dict())
         return Response(status_code=200)
     except Exception as e:
         return Response(status_code=400, content={"error": str(e)})
