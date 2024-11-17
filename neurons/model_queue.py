@@ -275,8 +275,7 @@ class ModelQueue:
             score_data.total_score = result["total_score"]
             score_data.status = status
         except Exception as e:
-            self.logger.error(e)
-            self.logger.error(f"Failed to get score and status for {namespace}/{name}")
+            self.logger.error(f"Failed to get score and status for {namespace}/{name} {e}")
             score_data.status = StatusEnum.FAILED
         return score_data
 
