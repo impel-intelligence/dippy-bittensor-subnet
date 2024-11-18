@@ -362,6 +362,12 @@ async def event_report(event_data: EventData):
             app.state.event_logger.info("event_request", extra=event_data.to_dict())
         return Response(status_code=200)
     except Exception as e:
+        if app.state.event_logger_enabled:
+            error_details = {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+            app.state.event_logger.error("failed_event_request", extra=error_details)
         return Response(status_code=400, content={"error": str(e)})
 
 
