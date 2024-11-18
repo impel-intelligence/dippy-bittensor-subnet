@@ -568,12 +568,19 @@ class Validator:
             status_table.add_row("wait_for_inclusion", str(wait_for_inclusion))
             console.print(status_table)
             return weights_success, error_str
-
         weights_set_success = False
         error_msg = None
         try:
             bt.logging.debug("Setting weights.")
             weights_set_success, error_msg = await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
+            bt.logging.debug("Finished setting weights.")
+        except asyncio.TimeoutError:
+            error_msg = f"Failed to set weights after {ttl} seconds"
+            bt.logging.error(error_msg)
+        except Exception as e:
+            error_msg = f"Error setting weights: {e}\n{traceback.format_exc()}"
+            bt.logging.error(error_msg)
+        finally:
             payload = {
                 "time": str(dt.datetime.now(dt.timezone.utc)),
                 "weights_set_success": weights_set_success,
@@ -582,15 +589,13 @@ class Validator:
                 "weights_version": constants.weights_version_key,
                 "validator_hotkey": self.wallet.hotkey,
             }
-            bt.logging.debug("Finished setting weights.")
+            if isinstance(error_msg, str) and "timeout" in error_msg.lower():
+                payload["error_type"] = "timeout"
+            elif error_msg is not None:
+                payload["error_type"] = "exception"
+                
             logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey, payload)
             self._remote_log(logged_payload)
-        except asyncio.TimeoutError:
-            bt.logging.error(f"Failed to set weights after {ttl} seconds")
-            error_msg = f"Failed to set weights after {ttl} seconds"
-        except Exception as e:
-            bt.logging.error(f"Error setting weights: {e}")
-            error_msg = f"Error setting weights: {e}\n{traceback.format_exc()}"
         return weights_set_success, error_msg
 
     async def build_registry(
@@ -693,10 +698,10 @@ class Validator:
         bt.logging.warning(f"subtensor retry initialized with Subtensor(): {self.subtensor}")
         return
 
-    async def try_sync_metagraph(self, ttl: int) -> bool:
+    async def try_sync_metagraph(self, ttl: int = 120) -> bool:
         def sync_metagraph(attempt):
             try:
-                self.metagraph = self.subtensor.metagraph(netuid=self.config.netuid, lite=False)
+                self.metagraph.sync(block=None, lite=False, subtensor=self.subtensor)
             except Exception as e:
                 bt.logging.error(f"{e}")
                 # Log failure to sync metagraph
@@ -711,19 +716,28 @@ class Validator:
                 )
                 self._remote_log(logged_payload)
                 self._subtensor()
+                raise e
 
         for attempt in range(3):
-            process = multiprocessing.Process(target=sync_metagraph, args=(attempt,))
-            process.start()
-            process.join(timeout=ttl)
-            if process.is_alive():
-                process.terminate()
-                process.join()
-                bt.logging.error(f"Failed to sync metagraph after {ttl} seconds (attempt {attempt + 1}/3)")
+            try:
+                sync_metagraph(attempt)
+            # catch isues with crafting new subtensor
+            except Exception as e:
+                bt.logging.error(f"could not sync metagraph {e}")
+                metagraph_failure_payload = {
+                    "attemped_metagraph_sync_success": False,
+                    "failure_str": str(e),
+                    "attempt": attempt,
+                    "stacktrace": traceback.format_exc(),
+                }
+                logged_payload = self._with_decoration(
+                    self.local_metadata, self.wallet.hotkey, payload=metagraph_failure_payload
+                )
+                self._remote_log(logged_payload)
                 if attempt == 2:
                     return False
-            else:
-                break
+            
+
         bt.logging.success("Synced metagraph")
         self._event_log("metagraph_sync_success")
         return True
@@ -731,10 +745,7 @@ class Validator:
     async def try_run_step(self, ttl: int) -> Optional[bool]:
         async def _try_run_step():
             success = await self.run_step()
-            logged_payload = self._with_decoration(
-                self.local_metadata, self.wallet.hotkey, {"run_step_success": success}
-            )
-            self._remote_log(logged_payload)
+            
             return success
 
         try:
@@ -811,7 +822,7 @@ class Validator:
         # Cap at max temperature of 0.15
         return min(temp, 15)
 
-    async def run_step(self):
+    async def run_step(self) -> bool:
         """
         Executes a step in the evaluation process of models. This function performs several key tasks:
         1. Iterate through blockchain state to find miner entries for models.
@@ -996,6 +1007,10 @@ class Validator:
                     for attempt in range(3):
                         try:
                             success = await self.try_run_step(ttl=60 * 20)
+                            logged_payload = self._with_decoration(
+                            self.local_metadata, self.wallet.hotkey, {"run_step_success": success, "attempt": attempt}
+                            )
+                            self._remote_log(logged_payload)
                             if success:
                                 break
                         except Exception as e:
@@ -1016,6 +1031,8 @@ class Validator:
                         await asyncio.sleep(100)
                     # Wait for 1 minute to avoid running multiple times within the same minute
                     await asyncio.sleep(60)
+                    # attempt to sync metagraph to also try and keep connection alive
+                    await self.try_sync_metagraph()
                 else:
                     # Calculate minutes until next 20-minute mark
                     minutes_until_next = 20 - (minutes % 20)
@@ -1026,6 +1043,8 @@ class Validator:
 
                     # Wait until the next minute before checking again
                     await asyncio.sleep(60)
+                    # attempt to sync metagraph to also try and keep connection alive
+                    await self.try_sync_metagraph()
 
             except KeyboardInterrupt:
                 bt.logging.warning("KeyboardInterrupt caught")

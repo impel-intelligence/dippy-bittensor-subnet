@@ -169,15 +169,16 @@ def main(pm2_name: str, args: List[str]) -> None:
                 )
                 upgrade_packages()
                 current_version = get_version()
-                _remote_log(
-                    {
-                        "current_version": str(current_version),
-                        "latest_version": str(latest_version),
-                        "message": "Upgrading to new version",
-                        "upgrade_status": "started",
-                        "time": str(datetime.datetime.now(datetime.timezone.utc)),
-                    }
-                )
+                payload = {}
+                try:
+                    payload["current_version"] = str(current_version)
+                    payload["latest_version"] = str(latest_version)
+                    payload["time"] = str(datetime.datetime.now(datetime.timezone.utc))
+                except Exception as e:
+                    log.error(f"Failed to create payload: {e}")
+                    payload["error"] = str(e)
+                finally:
+                    _remote_log(payload)
                 stop_validator_process(validator)
                 validator = start_validator_process(pm2_name, args, current_version)
                 current_version = latest_version
