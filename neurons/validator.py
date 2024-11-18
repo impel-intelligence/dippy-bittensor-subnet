@@ -587,7 +587,6 @@ class Validator:
                 "wait_for_inclusion": wait_for_inclusion,
                 "error": error_msg,
                 "weights_version": constants.weights_version_key,
-                "validator_hotkey": self.wallet.hotkey,
             }
             if isinstance(error_msg, str) and "timeout" in error_msg.lower():
                 payload["error_type"] = "timeout"
@@ -1007,8 +1006,9 @@ class Validator:
                     for attempt in range(3):
                         try:
                             success = await self.try_run_step(ttl=60 * 20)
+                            run_step_payload = {"run_step_success": success, "attempt": attempt}
                             logged_payload = self._with_decoration(
-                            self.local_metadata, self.wallet.hotkey, {"run_step_success": success, "attempt": attempt}
+                            self.local_metadata, self.wallet.hotkey, run_step_payload
                             )
                             self._remote_log(logged_payload)
                             if success:
@@ -1024,13 +1024,27 @@ class Validator:
                     weights_set_success = False
                     self.global_step += 1
                     if success:
+                        pre_weights_payload = {
+                            "step":"pre_weights",
+                            "global_step": self.global_step,
+                            "subtensor": str(self.subtensor)}
+                        logged_payload = self._with_decoration(
+                            self.local_metadata, self.wallet.hotkey, pre_weights_payload
+                        )
+                        self._remote_log(logged_payload)
                         weights_set_success, error_msg = await self.try_set_weights(ttl=120)
                         bt.logging.warning(f"weights_set_success {weights_set_success} error_msg {error_msg}")
+                    logged_payload = self._with_decoration(
+                        self.local_metadata, 
+                        self.wallet.hotkey, 
+                        {"try_weights_set_success": weights_set_success, "error_msg": error_msg}
+                    )
+                    self._remote_log(logged_payload)
 
                     if self.config.immediate:
                         await asyncio.sleep(100)
                     # Wait for 1 minute to avoid running multiple times within the same minute
-                    await asyncio.sleep(60)
+                    await asyncio.sleep(45)
                     # attempt to sync metagraph to also try and keep connection alive
                     await self.try_sync_metagraph()
                 else:
@@ -1042,7 +1056,7 @@ class Validator:
                     )
 
                     # Wait until the next minute before checking again
-                    await asyncio.sleep(60)
+                    await asyncio.sleep(45)
                     # attempt to sync metagraph to also try and keep connection alive
                     await self.try_sync_metagraph()
 
@@ -1051,6 +1065,12 @@ class Validator:
                 exit()
             except Exception as e:
                 bt.logging.error(f"Error in validator loop \n {e} \n {traceback.format_exc()}")
+                logged_payload = self._with_decoration(
+                    self.local_metadata,
+                    self.wallet.hotkey,
+                    {"validator_loop_error": str(e), "stacktrace": traceback.format_exc()}
+                )
+                self._remote_log(logged_payload)
                 # Add a small delay before retrying in case of continuous errors
                 await asyncio.sleep(5)
 
