@@ -103,7 +103,7 @@ def get_eval_score(request: EvaluateModelRequest):
     # warm up the model
     num_gpus = torch.cuda.device_count()
     print(f"Warming up model with gpus {num_gpus}")
-    
+
     try:
         avg_latency = warmup_model(model)
         if not avg_latency:  # either 0 or None
@@ -141,12 +141,10 @@ def get_eval_score(request: EvaluateModelRequest):
         cleanup(None, model_downloaded, request)
         raise Exception("Error loading model: " + failure_reason)
 
-    
-
     print("Sampling dataset")
     try:
         dataset = StreamedSyntheticDataset(
-        max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LENGTH - 200,
+            max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LENGTH - 200,
         )
         # set the chat template params
         dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)

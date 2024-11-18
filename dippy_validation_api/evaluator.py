@@ -90,7 +90,7 @@ class Evaluator:
                 "bind": "/app/model_cache_dir",
                 "mode": "rw",
             }
-            
+
         self.device_requests = [docker.types.DeviceRequest(device_ids=[gpu_ids], capabilities=[["gpu"]])]
 
         self.env = {
@@ -254,7 +254,6 @@ def entry():
         print(f"eval_result : {eval_result}")
         if isinstance(eval_result, RunError):
             raise Exception(eval_result.error)
-        
 
         scores_data = Scores()
         scores_data.qualitative_score = eval_result.eval_score

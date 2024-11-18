@@ -7,18 +7,21 @@ import requests
 AUTHENTICATE_ENDPOINT = "https://datasets.dippy-bittensor-subnet.com/authenticate"
 FETCH_ENDPOINT = "https://datasets.dippy-bittensor-subnet.com/dataset"
 
+
 def main():
     auth_flow()
 
+
 def parse_arguments():
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Parse wallet and signer arguments")
     parser.add_argument("--wallet-name", type=str, default="default", help="Name of the wallet")
     parser.add_argument("--wallet-hotkey", type=str, default="default", help="Hotkey of the wallet")
     parser.add_argument("--signer", type=str, choices=["coldkey", "hotkey"], required=True, help="Signer type")
-    
+
     return parser.parse_args()
+
 
 """
 Usage:
@@ -39,11 +42,10 @@ python token_check.py --wallet-name my_wallet --wallet-hotkey my_hotkey --signer
 This will run the authentication flow using the specified wallet and signer information.
 """
 
+
 def get_dataset(jwt: str):
     # Set up the headers with the JWT
-    headers = {
-        "Authorization": f"Bearer {jwt}"
-    }
+    headers = {"Authorization": f"Bearer {jwt}"}
 
     # Make the GET request
     try:
@@ -54,36 +56,32 @@ def get_dataset(jwt: str):
     except requests.exceptions.RequestException as e:
         print(f"GET request failed: {e}")
 
+
 def auth_flow():
     args = parse_arguments()
 
     print(f"Wallet Name: {args.wallet_name}")
     print(f"Wallet Hotkey: {args.wallet_hotkey}")
     print(f"Signer Type: {args.signer}")
-    
+
     wallet = bittensor.wallet(name=args.wallet_name, hotkey=args.wallet_hotkey)
-    
+
     signer = wallet.hotkey
     address = wallet.hotkey.ss58_address
     if args.signer == "coldkey":
         signer = wallet.coldkey
         address = wallet.coldkey.ss58_address
 
-    
     message = str(int(time.time()))
-    
+
     signature = signer.sign(message)
-    signature_base64 = base64.b64encode(signature).decode('utf-8')
+    signature_base64 = base64.b64encode(signature).decode("utf-8")
     print(f"Signed message using {args.signer}: {signature_base64}")
 
     import requests
     import json
 
-    payload = {
-        "key": address,
-        "timestamp": message,
-        "signature": signature_base64
-    }
+    payload = {"key": address, "timestamp": message, "signature": signature_base64}
     access_token = "x"
     try:
         response = requests.post(AUTHENTICATE_ENDPOINT, json=payload)
@@ -91,7 +89,9 @@ def auth_flow():
         response_json = response.json()
         access_token = response_json.get("access_token")
         print(f"POST request successful. Access token: {access_token}")
-        print(f"Use the token to set the env variable DATASET_API_KEY in this format: DATASET_API_KEY=\"Bearer {access_token}\"")
+        print(
+            f'Use the token to set the env variable DATASET_API_KEY in this format: DATASET_API_KEY="Bearer {access_token}"'
+        )
     except requests.exceptions.RequestException as e:
         print(f"POST request failed: {e}")
 

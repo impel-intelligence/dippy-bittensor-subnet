@@ -63,14 +63,14 @@ def get_config():
     config = bt.config(parser)
     return config
 
+
 def register():
-    
     config = get_config()
     bt.logging(config=config)
 
     wallet = bt.wallet(config=config)
     subtensor = bt.subtensor(config=config)
-    
+
     hotkey = wallet.hotkey.ss58_address
     namespace = config.repo_namespace
     repo_name = config.repo_name

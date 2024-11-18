@@ -23,12 +23,7 @@ from scoring.common import (
 from typing import List, Any
 
 
-def calculate_vibe_match_score(
-    model: LLM, 
-    sampled_data: list[tuple],
-    verbose: bool = False
-):
-    
+def calculate_vibe_match_score(model: LLM, sampled_data: list[tuple], verbose: bool = False):
     contexts, last_user_messages, expected_outputs = zip(*sampled_data)
 
     decoded_messages = []
@@ -87,24 +82,18 @@ def get_vibe_match_score(
     model: LLM,
 ):
     try:
-        input_tokenizer = AutoTokenizer.from_pretrained(
-            f"{request.repo_namespace}/{request.repo_name}"
-        )
-        
-        vibe_score_dataset =  StreamedSyntheticDataset(
-        max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
+        input_tokenizer = AutoTokenizer.from_pretrained(f"{request.repo_namespace}/{request.repo_name}")
+
+        vibe_score_dataset = StreamedSyntheticDataset(
+            max_input_len=MAX_SEQ_LEN_VIBE_SCORE - MAX_GENERATION_LENGTH - 200,
         )
         # Set chat template params
         vibe_score_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 
         # Unzip the sampled data
         sampled_data = vibe_score_dataset.sample_dataset(SAMPLE_SIZE_VIBE_SCORE)
-        
 
-        vibe_score = calculate_vibe_match_score(
-            model,
-            sampled_data
-        )
+        vibe_score = calculate_vibe_match_score(model, sampled_data)
 
         return {"vibe_score": vibe_score}
 

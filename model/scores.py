@@ -15,8 +15,6 @@ VIBE_SCORE_WEIGHT = 0.08  # weight of the vibe score in the total score
 COHERENCE_MINIMUM = 0.95
 
 
-
-
 class StrEnum(str, Enum):
     def __str__(self):
         return self.value
@@ -56,18 +54,17 @@ class Scores(BaseModel):
     ):
         adjusted_score = initial_score / (1 + math.exp(-steepness * (creativity_score - threshold)))
         return adjusted_score
-    
+
     @staticmethod
     def model_size_adjuster(
         model_size_score: float, threshold=LLM_MODEL_SIZE_THRESHOLD, steepness=LLM_MODEL_SIZE_STEEPNESS
     ):
         if model_size_score < threshold:
             # Exponential penalty that increases as score drops below threshold
-            penalty_multiplier = pow(model_size_score / threshold, steepness) 
+            penalty_multiplier = pow(model_size_score / threshold, steepness)
             return penalty_multiplier
-    
+
         return 1
-       
 
     def from_response(self, response: Dict[str, Any]):
         if response is None or len(response) < 1:
@@ -80,10 +77,6 @@ class Scores(BaseModel):
         self.coherence_score = response.get("coherence_score", 0)
         self.latency_score = response.get("latency_score", 0)
         return self
-    
-
-
-
 
     def calculate_total_score(self, adjust_coherence: bool = False) -> float:
         q_score = self.adjusted_q_score(self.qualitative_score, self.creativity_score)

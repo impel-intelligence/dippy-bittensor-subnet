@@ -29,26 +29,27 @@ DATASET_URL = "https://datasets.dippy-bittensor-subnet.com/dataset"
 DATASET_API_KEY = os.environ.get("DATASET_API_KEY", "dippy")
 DEFAULT_EPOCH_DATE = "20240930"
 
+
 def get_latest_from_set():
-    
     current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
     url = f"{DATASET_URL}?epoch_date={DEFAULT_EPOCH_DATE}&current_date={current_date}"
-    
-    response = requests.get(url, headers = {"validator-hotkey": DATASET_API_KEY, "Authorization": DATASET_API_KEY})
+
+    response = requests.get(url, headers={"validator-hotkey": DATASET_API_KEY, "Authorization": DATASET_API_KEY})
     response.raise_for_status()  # Raise an error for bad responses
     data = response.json().get("data", [])
     return data
+
 
 def get_latest_from_file(filter: str = "both", filename: str = "/tmp/dataset.json"):
     import json
 
     try:
-        with open(filename, 'r') as file:
+        with open(filename, "r") as file:
             data = json.load(file)
-        
+
         if not isinstance(data, list):
             raise ValueError("The top-level structure in the JSON file is not an array.")
-        
+
         # Ensure each item in the list is a dictionary
         data = [item for item in data]
 
@@ -132,8 +133,7 @@ class StreamedSyntheticDataset(Dataset):
         if self._tokenizer is None:
             raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
 
-
-        messages=self.dataset[idx]["messages"]
+        messages = self.dataset[idx]["messages"]
         if len(messages) < 1:
             raise ValueError("empty messages")
         for m in messages:
@@ -149,7 +149,6 @@ class StreamedSyntheticDataset(Dataset):
         )  # shouldn't end with eos token
         if chat_input is None:
             raise ValueError(f"chat_input could not be rendered")
-        
 
         if self._tokenizer.eos_token is not None and chat_input.endswith(self._tokenizer.eos_token):
             chat_input = chat_input[: -len(self._tokenizer.eos_token)]
@@ -184,7 +183,7 @@ class StreamedSyntheticDataset(Dataset):
             remaining_indices = [i for i in range(len(self.dataset)) if i not in indices]
             random.shuffle(remaining_indices)
             additional_needed = min(error_count, len(remaining_indices))
-            
+
             for i in remaining_indices[:additional_needed]:
                 try:
                     sample_data = self[i]
@@ -192,7 +191,7 @@ class StreamedSyntheticDataset(Dataset):
                 except Exception as e:
                     print(f"Additional sample at index {i} also failed: {str(e)}")
                     continue
-                    
+
             print(f"Added {len(sampled_data) - (n - error_count)} additional valid samples")
         return sampled_data
 
@@ -470,7 +469,6 @@ class JSONLDataset(Dataset):
 
 class PersonaHubDataset(Dataset):
     def __init__(self, max_input_len):
-
         all_data = load_dataset("DippyAI/personahub_augmented_v0", cache_dir=DATASET_CACHE_DIR)
         partitions = []
         for partition in all_data:
@@ -545,7 +543,6 @@ class PersonaHubDataset(Dataset):
             add_generation_prompt=True,
         )  # shouldn't end with eos token
 
-        
         if self._tokenizer.eos_token is not None and chat_input.endswith(self._tokenizer.eos_token):
             chat_input = chat_input[: -len(self._tokenizer.eos_token)]
 
