@@ -6,6 +6,7 @@ from datetime import datetime
 
 from utilities.rotating_logger import RotatingLogSink
 
+
 class EventLogger:
     def __init__(
         self,
@@ -37,7 +38,7 @@ class EventLogger:
         )
 
         self.logger.remove()  # Remove default configuration
-        
+
         if stderr:
             self.logger.add(
                 sys.stderr,
@@ -45,11 +46,9 @@ class EventLogger:
                 level=level,
             )
 
-        sink = RotatingLogSink(
-            base_path="/tmp/vlogs/app_{timestamp}.log"
-        )
+        sink = RotatingLogSink(base_path="/tmp/vlogs/app_{timestamp}.log")
 
-        # Add file sink with custom serializer 
+        # Add file sink with custom serializer
         self.logger.add(
             level=level,
             sink=sink.get_sink_func(),
@@ -73,28 +72,23 @@ class EventLogger:
 # Example of using the EventLogger
 def example():
     import time
+
     current_timestamp = int(time.time())
     try:
         json_logger = EventLogger()
         # Create sample EventData instance
         from dippy_validation_api.validation_api import EventData
+
         event_data = EventData(
             commit="test123",
-            btversion="1.0.0", 
+            btversion="1.0.0",
             uid="12345",
             hotkey="0xabc...",
             coldkey="0xdef...",
-            payload={
-                "event_type": "test_event",
-                "status": "success"
-            },
-            signature={
-                "r": "0x123...",
-                "s": "0x456...", 
-                "v": 27
-            }
+            payload={"event_type": "test_event", "status": "success"},
+            signature={"r": "0x123...", "s": "0x456...", "v": 27},
         )
-        
+
         # Log the EventData instance
         json_logger.info("event_data_test", extra=event_data.to_dict())
         json_logger.info(f"info_message {current_timestamp}", extra={"user": "admin", "status": "active"})
@@ -104,6 +98,7 @@ def example():
 
     except PermissionError as e:
         print(f"Failed to initialize logger: {e}")
+
 
 if __name__ == "__main__":
     example()

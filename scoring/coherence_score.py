@@ -95,7 +95,6 @@ def pretty_convo(dict_list, score):
 
 
 def stringify_convo(dict_list):
-    
     result = []
     for i, item in enumerate(dict_list):
         if item["role"] == "system":
@@ -115,7 +114,6 @@ MAX_ERROR_RATE = 0.1
 
 
 def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=False) -> int:
-
     generated_samples = []
 
     sampling_params = SamplingParams(
@@ -134,7 +132,6 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
 
         for i, (conversation, max_turn) in enumerate(zip(conversations, max_messages)):
             if turn < max_turn:
-
                 new_input = dataset_formatter.new_input(conversation)
 
                 batch_prompts.append(new_input)

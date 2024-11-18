@@ -37,8 +37,10 @@ class SupabaseState:
         self.upsert_row(row)
         self.logger.info(f"upserted row {row}")
         return self.get_json_result(hash)
+
     def upsert_row(self, row):
         self.client.table("leaderboard").upsert(row).execute()
+
     def search_record_with_model_hash(self, model_hash_value: str, block: int):
         if not model_hash_value:  # Check if the provided model_hash_value is empty
             return None
@@ -62,7 +64,7 @@ class SupabaseState:
             exists_in_older_block = block > minerboard_entry[0].get("block", block)
             if model_hash_matches and exists_in_older_block:
                 return record
-            
+
         return None
 
     def last_uploaded_model(self, miner_hotkey: str):
@@ -126,6 +128,7 @@ class SupabaseState:
             self.logger.error(f"Error fetching leaderboard entry from database: {e}")
             raise e
         r
+
     def get_internal_result(self, hash):
         try:
             response = self.client.table("leaderboard").select("*").eq("hash", hash).execute()
@@ -199,7 +202,7 @@ class SupabaseState:
         except Exception as e:
             self.logger.error(f"Error fetching next model to evaluate: {e}")
             return None
-        
+
     def get_failed_model_to_eval(self):
         try:
             response = (
