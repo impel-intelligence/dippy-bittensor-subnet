@@ -1,5 +1,4 @@
-bittensor==8.2.1
-bittensor[torch]
+bittensor==8.3.1
 pydantic
 transformers
 torch >=2.5.1
@@ -7,10 +6,10 @@ pandas
 sentencepiece
 protobuf
 python-dotenv
-supabase
 tiktoken
 threadpoolctl
 wandb >= 0.17.2
 loguru
 scipy
 numpy >= 2.0.2
+bittensor-wallet>=2.1.0

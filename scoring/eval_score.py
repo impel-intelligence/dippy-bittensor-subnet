@@ -1,4 +1,3 @@
-
 import gc
 import os
 from typing import Any
@@ -59,7 +58,7 @@ def warmup_model(model):
     # run the max sequence length input through the model with batch size BATCH_SIZE
     model.eval()
     latencies = []
-    
+
     num_gpus = torch.cuda.device_count()
     for gpu_id in range(num_gpus):
         with torch.cuda.device(gpu_id):
@@ -302,7 +301,6 @@ def eval_score(
         "average_prob": average_prob,
         "average_entropy": average_entropy,
     }
-
 
 
 def eval_score_batch(

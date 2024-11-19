@@ -32,7 +32,7 @@ def parse_size(line):
         return 0
 
 
-def regenerate_hash(namespace: str, name:str, chat_template:str , hotkey: str):
+def regenerate_hash(namespace: str, name: str, chat_template: str, hotkey: str):
     s = " ".join([namespace, name, chat_template, hotkey])
     hash_output = hashlib.sha256(s.encode("utf-8")).hexdigest()
     return int(hash_output[:16], 16)  # Returns a 64-bit integer from the first 16 hexadecimal characters

@@ -65,7 +65,6 @@ def duplicate(repo_namespace: str, repo_name: str):
     return (f"{repo_url}",)
 
 
-
 def push_minerboard(
     hash: str,
     uid: int,
@@ -123,7 +122,6 @@ class ModelQueue:
             help="Port for local validation api",
         )
 
-
         bt.subtensor.add_args(parser)
         bt.wallet.add_args(parser)
         bt.axon.add_args(parser)
@@ -156,7 +154,7 @@ class ModelQueue:
             sleep_time = (next_epoch_minute_mark - now).total_seconds()
             self.logger.info(f"sleeping for {sleep_time}")
             time.sleep(sleep_time)
-            
+
             try:
                 self.load_latest_metagraph()
             except Exception as e:
@@ -174,9 +172,10 @@ class ModelQueue:
             try:
                 hotkey = metagraph.hotkeys[uid]
                 # metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.netuid, hotkey)
-                metadata = bt.core.extrinsics.serving.get_metadata(self=self.subtensor, netuid=self.config.netuid, hotkey=hotkey)
+                metadata = bt.core.extrinsics.serving.get_metadata(
+                    self=self.subtensor, netuid=self.config.netuid, hotkey=hotkey
+                )
                 if metadata is None:
-
                     no_metadata += 1
                     self.logger.info(f"NO_METADATA : uid: {uid} hotkey : {hotkey}")
                     continue
@@ -202,7 +201,7 @@ class ModelQueue:
                 self.logger.info(stats)
                 if result.status == StatusEnum.FAILED:
                     failed += 1
-                
+
                 if result.status == StatusEnum.QUEUED:
                     try:
                         print(f"QUEUED: {hotkey}")
@@ -210,7 +209,7 @@ class ModelQueue:
                     except Exception as e:
                         self.logger.error(f"could not duplicate repo : {e}")
                     queued += 1
-                
+
                 if result.status == StatusEnum.COMPLETED:
                     completed += 1
 
@@ -270,13 +269,12 @@ class ModelQueue:
             result = response.json()
             if result is None:
                 raise RuntimeError(f"no leaderboard entry exists at this time for {payload}")
-                
+
             status = StatusEnum.from_string(result["status"])
             score_data.total_score = result["total_score"]
             score_data.status = status
         except Exception as e:
-            self.logger.error(e)
-            self.logger.error(f"Failed to get score and status for {namespace}/{name}")
+            self.logger.error(f"Failed to get score and status for {namespace}/{name} {e}")
             score_data.status = StatusEnum.FAILED
         return score_data
 

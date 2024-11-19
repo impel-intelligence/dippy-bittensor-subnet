@@ -69,16 +69,21 @@ def start_validator_process(pm2_name: str, args: List[str], current_version: str
     log.info("Started validator process with pm2, name: %s, version: %s", pm2_name, current_version)
 
     return process
+
+
 import requests
 from typing import Dict, Any
+
+
 def _remote_log(payload: Dict[str, Any]):
-        event_report_endpoint = f"{constants.VALIDATION_SERVER}/event_report"
-        try:
-            response = requests.post(event_report_endpoint, json=payload)
-            response.raise_for_status()  # Raise an exception for HTTP errors
-            log.info(f"successfully sent event_report with payload {payload}")
-        except Exception as e:
-            log.error(f"could not remote log: {e}. This error is ok to ignore if you are a validator")
+    event_report_endpoint = f"{constants.VALIDATION_SERVER}/event_report"
+    try:
+        response = requests.post(event_report_endpoint, json=payload)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        log.info(f"successfully sent event_report with payload {payload}")
+    except Exception as e:
+        log.error(f"could not remote log: {e}. This error is ok to ignore if you are a validator")
+
 
 def stop_validator_process(process: subprocess.Popen) -> None:
     """Stop the validator process"""
@@ -100,7 +105,7 @@ def pull_latest_version() -> None:
     except subprocess.CalledProcessError as exc:
         log.error("Failed to pull, reverting: %s", exc)
         _remote_log({"error": str(exc), "message": "Failed to pull from git, reverting"})
-        
+
         subprocess.run(split("git rebase --abort"), check=True, cwd=constants.ROOT_DIR)
 
 
@@ -148,11 +153,13 @@ def main(pm2_name: str, args: List[str]) -> None:
             pull_latest_version()
             latest_version = get_version()
             log.info("Latest version: %s", latest_version)
-            _remote_log({
-                "current_version": str(current_version),
-                "latest_version": str(latest_version),
-                "message": "Checking for updates"
-            })
+            _remote_log(
+                {
+                    "current_version": str(current_version),
+                    "latest_version": str(latest_version),
+                    "message": "Checking for updates",
+                }
+            )
 
             if latest_version != current_version:
                 log.info(
@@ -162,13 +169,16 @@ def main(pm2_name: str, args: List[str]) -> None:
                 )
                 upgrade_packages()
                 current_version = get_version()
-                _remote_log({
-                    "current_version": str(current_version),
-                    "latest_version": str(latest_version),
-                    "message": "Upgrading to new version",
-                    "upgrade_status": "started",
-                    "time": str(datetime.datetime.now(datetime.timezone.utc))
-                })
+                payload = {}
+                try:
+                    payload["current_version"] = str(current_version)
+                    payload["latest_version"] = str(latest_version)
+                    payload["time"] = str(datetime.datetime.now(datetime.timezone.utc))
+                except Exception as e:
+                    log.error(f"Failed to create payload: {e}")
+                    payload["error"] = str(e)
+                finally:
+                    _remote_log(payload)
                 stop_validator_process(validator)
                 validator = start_validator_process(pm2_name, args, current_version)
                 current_version = latest_version

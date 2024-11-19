@@ -3,6 +3,7 @@ import time
 import os
 import multiprocessing
 import logging
+import traceback
 from typing import List, Optional
 
 import uvicorn
@@ -76,6 +77,7 @@ app.state.leaderboard = None
 admin_key = os.environ["ADMIN_KEY"]
 hf_api = HfApi()
 
+
 def model_evaluation_queue(queue_id):
     try:
         while True:
@@ -109,7 +111,7 @@ def _model_evaluation_step(queue_id, duplicate: bool = False):
             _duplicate_model(request)
         result = _evaluate_model(request, queue_id)
         if result is None:
-            result = {"note": "incoherent model"}    
+            result = {"note": "incoherent model"}
         app.state.event_logger.info("model_eval_queue_complete", result=result, request=request)
     except Exception as e:
         logger.error(f"Error during model evaluation: {e}")
@@ -122,7 +124,7 @@ def _model_evaluation_step(queue_id, duplicate: bool = False):
 
 def get_next_model_to_eval():
     response = supabaser.get_next_model_to_eval()
-    
+
     if response is None:
         return None
     return EvaluateModelRequest(
@@ -143,12 +145,12 @@ def _duplicate_model(request: EvaluateModelRequest):
             f"model error : {e}",
         )
 
+
 GPU_ID_MAP = {
     0: "0",
     1: "1",
     2: "2",
     3: "3",
-    # 4: "8,9"
 }
 
 
@@ -174,16 +176,20 @@ def _evaluate_model(
         coherence_score = inference_response.coherence_score
 
         if coherence_score < 0.95:
-            supabaser.update_leaderboard_status(request.hash, StatusEnum.COMPLETED, f"Incoherent model submitted given score {coherence_score} which fails to meet threshold 0.95")
+            supabaser.update_leaderboard_status(
+                request.hash,
+                StatusEnum.COMPLETED,
+                f"Incoherent model submitted given score {coherence_score} which fails to meet threshold 0.95",
+            )
             return None
         upsert_row_supabase(
-        {
-            "hash": request.hash,
-            "vibe_score": vibe_score,
-            "coherence_score": coherence_score,
-            "notes": "Now computing evaluation score",
-        }
-    )
+            {
+                "hash": request.hash,
+                "vibe_score": vibe_score,
+                "coherence_score": coherence_score,
+                "notes": "Now computing evaluation score",
+            }
+        )
     except Exception as e:
         error_string = f"Error calling inference_score job with message: {e}"
         supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, error_string)
@@ -278,15 +284,28 @@ async def telemetry_report(
     if request is not None:
         try:
             payload = await request.json()
+            if not isinstance(payload, dict):
+                raise ValueError("Invalid JSON payload - must be a dictionary")
             request_details = {**payload, **request_details}
+        except ValueError as e:
+            if app.state.event_logger_enabled:
+                app.state.event_logger.info(
+                    "failed_telemetry_request",
+                    extra={**request_details, "error": str(e), "traceback": "Invalid JSON payload format"},
+                )
         except Exception as e:
             if app.state.event_logger_enabled:
-                app.state.event_logger.info("failed_telemetry_request", extra=request_details)
+                app.state.event_logger.info(
+                    "failed_telemetry_request",
+                    extra={**request_details, "error": str(e), "traceback": traceback.format_exc()},
+                )
 
     # log incoming request details
     if app.state.event_logger_enabled:
         app.state.event_logger.info("telemetry_request", extra=request_details)
     return Response(status_code=200)
+
+
 class EventData(BaseModel):
     commit: str
     btversion: str
@@ -296,15 +315,60 @@ class EventData(BaseModel):
     payload: Dict[Any, Any]
     signature: Dict[str, Any]
 
+    def _payload_to_dict(self) -> Dict[str, Any]:
+        """Convert payload to a JSON serializable dictionary."""
+        result = {
+            "commit": self.commit,
+            "btversion": self.btversion,
+            "uid": self.uid,
+            "hotkey": self.hotkey,
+            "coldkey": self.coldkey,
+            "payload": {},
+        }
+
+        # Convert payload dict key by key
+        if isinstance(self.payload, dict):
+            for key, value in self.payload.items():
+                try:
+                    result["payload"][key] = value
+                except Exception as e:
+                    logger.error(f"Error converting payload key {key}: {e}")
+
+        return result
+
+    def _signature_to_dict(self) -> Dict[str, Any]:
+        """Convert signature to a JSON serializable dictionary."""
+        result = {"signature": {}}
+
+        # Convert signature dict key by key
+        if isinstance(self.signature, dict):
+            for key, value in self.signature.items():
+                try:
+                    result["signature"][key] = value
+                except Exception as e:
+                    logger.error(f"Error converting signature key {key}: {e}")
+
+        return result
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert EventData to a JSON serializable dictionary."""
+        return {**self._payload_to_dict(), **self._signature_to_dict()}
+
+
 @app.post("/event_report")
 async def event_report(event_data: EventData):
     try:
         if app.state.event_logger_enabled:
-            app.state.event_logger.info("event_request", extra=event_data)
+            app.state.event_logger.info("event_request", extra=event_data.to_dict())
         return Response(status_code=200)
     except Exception as e:
+        if app.state.event_logger_enabled:
+            error_details = {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+            app.state.event_logger.error("failed_event_request", extra=error_details)
         return Response(status_code=400, content={"error": str(e)})
-
 
 
 class MinerboardRequest(BaseModel):
@@ -342,22 +406,15 @@ def get_minerboard():
         results.append(flattened_entry)
     return results
 
+
 def hash_check(request: EvaluateModelRequest) -> bool:
-    hash_matches = int(request.hash) == regenerate_hash(
-        request.repo_namespace,
-        request.repo_name,
-        request.chat_template_type,
-        request.competition_id,
-    )
     hotkey_hash_matches = int(request.hash) == regenerate_hash(
         request.repo_namespace,
         request.repo_name,
         request.chat_template_type,
         request.hotkey,
     )
-    if hash_matches or hotkey_hash_matches:
-        return True
-    return False
+    return hotkey_hash_matches
 
 
 @app.post("/evaluate_model")
@@ -380,11 +437,39 @@ def evaluate_model(
         "signed_payload": signed_payload,
         "miner_hotkey": miner_hotkey,
     }
-    # log incoming request details
-    if app.state.event_logger_enabled:
-        app.state.event_logger.info("incoming_evaluate_request", extra=request_details)
     # verify hash
-    hash_verified =  hash_check(request)
+    hash_verified = hash_check(request)
+    if not hash_verified:
+        raise HTTPException(status_code=400, detail="Hash does not match the model details")
+
+    return supabaser.get_json_result(request.hash)
+
+
+"""
+curl -X GET "http://URL.com/model_submission_details?repo_namespace=my-org&repo_name=my-model&chat_template_type=chatml&hash=12345678&competition_id=comp-1"
+Used by validators to get the model details
+"""
+
+
+@app.get("/model_submission_details")
+# Example curl request:
+def get_model_submission_details(
+    repo_namespace: str,
+    repo_name: str,
+    chat_template_type: str,
+    hash: str,
+    competition_id: Optional[str] = None,
+    hotkey: Optional[str] = None,
+):
+    request = EvaluateModelRequest(
+        repo_namespace=repo_namespace,
+        repo_name=repo_name,
+        chat_template_type=chat_template_type,
+        hash=hash,
+        hotkey=hotkey,
+    )
+    # verify hash
+    hash_verified = hash_check(request)
     if not hash_verified:
         raise HTTPException(status_code=400, detail="Hash does not match the model details")
 
@@ -403,8 +488,9 @@ def update_failure(new_entry, failure_notes):
 INVALID_BLOCK_START = 3840700
 INVALID_BLOCK_END = 3933300
 
+
 @app.post("/check_model")
-def check_model(
+def check_or_create_model(
     request: EvaluateModelRequest,
 ):
     # verify hash
@@ -422,7 +508,6 @@ def check_model(
         failure_notes = f"Huggingface repo not public: {repo_id}"
         early_failure = True
 
-
     # only check if the model already exists in the leaderboard
     # update state if repo not public
     # This needs to be a virtually atomic operation
@@ -435,7 +520,7 @@ def check_model(
             return supabaser.upsert_and_return(internal_entry, request.hash)
         if current_entry is not None:
             return current_entry
-        
+
     except Exception as e:
         logger.error(f"error while fetching request {request} : {e}")
         return None
@@ -463,7 +548,6 @@ def check_model(
         logger.error(failure_notes)
         updated_entry = update_failure(new_entry_dict, failure_notes)
         return supabaser.upsert_and_return(updated_entry, request.hash)
-        
 
     logger.info("QUEUING: " + str(new_entry_dict))
 
@@ -496,7 +580,7 @@ def check_model(
         logger.error(failure_notes)
         new_entry_dict = update_failure(new_entry_dict, failure_notes)
         return supabaser.upsert_and_return(new_entry_dict, request.hash)
-    
+
     if INVALID_BLOCK_START < request.block < INVALID_BLOCK_END:
         failure_notes = f"{INVALID_BLOCK_START} < {request.block} < {INVALID_BLOCK_END}"
         logger.error(failure_notes)
@@ -544,7 +628,9 @@ def check_model(
     )
 
     if "model_hash" in new_entry_dict and existing_record is not None:
-        failure_notes = f"Given entry {new_entry_dict} has conflicting model_hash with existing record {existing_record}"
+        failure_notes = (
+            f"Given entry {new_entry_dict} has conflicting model_hash with existing record {existing_record}"
+        )
         logger.error(failure_notes)
         new_entry_dict = update_failure(new_entry_dict, failure_notes)
         return supabaser.upsert_and_return(new_entry_dict, request.hash)
@@ -560,6 +646,7 @@ def upsert_row_supabase(row):
 def display_leaderboard():
     return supabaser.get_leaderboard()
 
+
 @app.get("/hc")
 def hc():
     return {"g": True}
@@ -571,11 +658,10 @@ def start():
 
     parser = argparse.ArgumentParser(description="Run the server")
     parser.add_argument("--main-api-port", type=int, default=8000, help="Port for the main API")
-    parser.add_argument("--save-remote", action="store_true", default=False, help="Enable remote saving")
     parser.add_argument(
         "--queues",
         type=int,
-        default=1,
+        default=0,
         help="Specify the number of queues to start (default: 1)",
     )
     args = parser.parse_args()
