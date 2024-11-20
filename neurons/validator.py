@@ -254,8 +254,6 @@ class Validator:
         except Exception as e:
             bt.logging.error(f"could not initialize metagraph: {e}")
             self.subtensor = Subtensor(network="subvortex")
-            self.metagraph = Metagraph(netuid=netuid, network=network_name, lite=False)
-            self.metagraph.sync(subtensor=self.subtensor)
 
         # Dont check registration status if offline.
         if not self.config.offline:
@@ -698,6 +696,24 @@ class Validator:
         return
 
     async def try_sync_metagraph(self, ttl: int = 120) -> bool:
+        network = random.choice(["finney", "subvortex"])
+        try:
+            bt.logging.warning(f"attmpting sync with network {network}")
+            self.metagraph = Metagraph(netuid=self.config.netuid, network=network, lite=False, sync=True)
+            return True
+        except Exception as e:
+            metagraph_failure_payload = {
+                    "initial_metagraph_sync_success": False,
+                    "failure_str": str(e),
+                    "stacktrace": traceback.format_exc(),
+                    "network":network,
+                }
+            logged_payload = self._with_decoration(
+                    self.local_metadata, self.wallet.hotkey, payload=metagraph_failure_payload
+                )
+            self._remote_log(logged_payload)
+
+            bt.logging.error(f"could not sync metgraph {e} using network {network}. Starting retries")
         def sync_metagraph(attempt):
             try:
                 self.metagraph.sync(block=None, lite=False, subtensor=self.subtensor)
@@ -720,19 +736,10 @@ class Validator:
         for attempt in range(3):
             try:
                 sync_metagraph(attempt)
+                return True
             # catch isues with crafting new subtensor
             except Exception as e:
                 bt.logging.error(f"could not sync metagraph {e}")
-                metagraph_failure_payload = {
-                    "attemped_metagraph_sync_success": False,
-                    "failure_str": str(e),
-                    "attempt": attempt,
-                    "stacktrace": traceback.format_exc(),
-                }
-                logged_payload = self._with_decoration(
-                    self.local_metadata, self.wallet.hotkey, payload=metagraph_failure_payload
-                )
-                self._remote_log(logged_payload)
                 if attempt == 2:
                     return False
             
@@ -997,11 +1004,13 @@ class Validator:
     async def run(self):
         while True:
             try:
+                
+                
                 current_time = dt.datetime.now(dt.timezone.utc)
                 minutes = current_time.minute
 
-                # Check if we're at a 20-minute mark
-                if minutes % 20 == 0 or self.config.immediate:
+                # Check if we're at a 20-minute mark (with 2 minute leeway)
+                if minutes % 20 <= 2 or self.config.immediate:
                     bt.logging.success(f"Running step at {current_time.strftime('%H:%M')}")
                     for attempt in range(3):
                         try:
@@ -1045,10 +1054,19 @@ class Validator:
                         await asyncio.sleep(100)
                     # Wait for 1 minute to avoid running multiple times within the same minute
                     await asyncio.sleep(45)
-                    # attempt to sync metagraph to also try and keep connection alive
-                    await self.try_sync_metagraph()
+                    
                 else:
+                    # attempt to sync metagraph to also try and keep connection alive
+                    metagraph_sync_success = await self.try_sync_metagraph()
+                    if not metagraph_sync_success:
+                        try:
+                            self.subtensor = Subtensor()
+                        except Exception as e: 
+                            bt.logging.error(f"Error in initializing subtensor:  {e} \n {traceback.format_exc()}")
+
                     # Calculate minutes until next 20-minute mark
+                    current_time = dt.datetime.now(dt.timezone.utc)
+                    minutes = current_time.minute
                     minutes_until_next = 20 - (minutes % 20)
                     next_run = current_time + dt.timedelta(minutes=minutes_until_next)
                     bt.logging.warning(
@@ -1056,9 +1074,8 @@ class Validator:
                     )
 
                     # Wait until the next minute before checking again
-                    await asyncio.sleep(45)
-                    # attempt to sync metagraph to also try and keep connection alive
-                    await self.try_sync_metagraph()
+                    await asyncio.sleep(minutes_until_next)
+                    
 
             except KeyboardInterrupt:
                 bt.logging.warning("KeyboardInterrupt caught")
