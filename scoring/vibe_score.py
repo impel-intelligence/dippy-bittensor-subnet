@@ -23,7 +23,7 @@ from scoring.common import (
 from typing import List, Any
 
 
-def calculate_vibe_match_score(model: LLM, sampled_data: list[tuple], verbose: bool = True):
+def calculate_vibe_match_score(model: LLM, sampled_data: list[tuple], verbose: bool = False):
     contexts, last_user_messages, expected_outputs = zip(*sampled_data)
 
     decoded_messages = []
