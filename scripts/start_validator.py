@@ -76,11 +76,22 @@ from typing import Dict, Any
 
 
 def _remote_log(payload: Dict[str, Any]):
+
+
+    final_payload = {
+            "signature": "x",
+            "payload": payload,
+            "commit": "x",
+            "btversion": "x",
+            "uid": "0",
+            "hotkey": "x",
+            "coldkey": "x",
+        }
     event_report_endpoint = f"{constants.VALIDATION_SERVER}/event_report"
     try:
-        response = requests.post(event_report_endpoint, json=payload)
+        response = requests.post(event_report_endpoint, json=final_payload)
         response.raise_for_status()  # Raise an exception for HTTP errors
-        log.info(f"successfully sent event_report with payload {payload}")
+        log.info(f"successfully sent event_report with payload {final_payload}")
     except Exception as e:
         log.error(f"could not remote log: {e}. This error is ok to ignore if you are a validator")
 
@@ -157,7 +168,7 @@ def main(pm2_name: str, args: List[str]) -> None:
                 {
                     "current_version": str(current_version),
                     "latest_version": str(latest_version),
-                    "message": "Checking for updates",
+                    "message": "start_validator_check_update",
                 }
             )
 

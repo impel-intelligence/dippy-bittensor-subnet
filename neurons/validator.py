@@ -568,6 +568,7 @@ class Validator:
             return weights_success, error_str
         weights_set_success = False
         error_msg = None
+        exception_msg = None
         try:
             bt.logging.debug("Setting weights.")
             weights_set_success, error_msg = await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
@@ -576,21 +577,17 @@ class Validator:
             error_msg = f"Failed to set weights after {ttl} seconds"
             bt.logging.error(error_msg)
         except Exception as e:
-            error_msg = f"Error setting weights: {e}\n{traceback.format_exc()}"
-            bt.logging.error(error_msg)
+            exception_msg = f"Error setting weights: {e}\n{traceback.format_exc()}"
+            bt.logging.error(exception_msg)
         finally:
             payload = {
                 "time": str(dt.datetime.now(dt.timezone.utc)),
                 "weights_set_success": weights_set_success,
                 "wait_for_inclusion": wait_for_inclusion,
                 "error": error_msg,
+                "exception_msg": exception_msg,
                 "weights_version": constants.weights_version_key,
-            }
-            if isinstance(error_msg, str) and "timeout" in error_msg.lower():
-                payload["error_type"] = "timeout"
-            elif error_msg is not None:
-                payload["error_type"] = "exception"
-                
+            }   
             logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey, payload)
             self._remote_log(logged_payload)
         return weights_set_success, error_msg
@@ -1004,8 +1001,6 @@ class Validator:
     async def run(self):
         while True:
             try:
-                
-                
                 current_time = dt.datetime.now(dt.timezone.utc)
                 minutes = current_time.minute
 
@@ -1031,6 +1026,7 @@ class Validator:
                             bt.logging.warning(f"Attempt {attempt + 1} failed, retrying in {wait_time}s: {e}")
                             await asyncio.sleep(wait_time)
                     weights_set_success = False
+                    error_msg = None
                     self.global_step += 1
                     if success:
                         pre_weights_payload = {
@@ -1046,14 +1042,14 @@ class Validator:
                     logged_payload = self._with_decoration(
                         self.local_metadata, 
                         self.wallet.hotkey, 
-                        {"try_weights_set_success": weights_set_success, "error_msg": error_msg}
+                        {"try_weights_complete": weights_set_success, "error_msg": error_msg}
                     )
                     self._remote_log(logged_payload)
 
                     if self.config.immediate:
                         await asyncio.sleep(100)
                     # Wait for 1 minute to avoid running multiple times within the same minute
-                    await asyncio.sleep(45)
+                    await asyncio.sleep(70)
                     
                 else:
                     # attempt to sync metagraph to also try and keep connection alive
