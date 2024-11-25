@@ -446,6 +446,7 @@ class Validator:
                     bt.logging.error(
                         f"Failed to set weights {msg} (attempt {attempt+1}/{retries}). Retrying in {wait_time:.1f}s..."
                     )
+                    subtensor = Validator.new_subtensor()
                     time.sleep(wait_time)
             return False
 
@@ -544,6 +545,7 @@ class Validator:
             except Exception as e:
                 bt.logging.error(f"failed_set_weights error={e}\n{traceback.format_exc()}")
                 error_str = f"failed_set_weights error={e}\n{traceback.format_exc()}"
+                
                 return weights_success, error_str
 
             # Only dump weight state to console
@@ -686,11 +688,12 @@ class Validator:
 
         return invalid_uids, miner_registry
 
-    def _subtensor(self):
+    @staticmethod
+    def new_subtensor():
         network = random.choice(["finney", "subvortex"])
-        self.subtensor = Subtensor(network=network)
-        bt.logging.warning(f"subtensor retry initialized with Subtensor(): {self.subtensor}")
-        return
+        subtensor = Subtensor(network=network)
+        bt.logging.warning(f"subtensor retry initialized with Subtensor(): {subtensor}")
+        return subtensor
 
     async def try_sync_metagraph(self, ttl: int = 120) -> bool:
         network = random.choice(["finney", "subvortex"])
@@ -727,7 +730,7 @@ class Validator:
                     self.local_metadata, self.wallet.hotkey, payload=metagraph_failure_payload
                 )
                 self._remote_log(logged_payload)
-                self._subtensor()
+                self.subtensor = Validator.new_subtensor()
                 raise e
 
         for attempt in range(3):
@@ -738,7 +741,7 @@ class Validator:
             except Exception as e:
                 bt.logging.error(f"could not sync metagraph {e}")
                 if attempt == 2:
-                    return False
+                    raise e
             
 
         bt.logging.success("Synced metagraph")
@@ -1007,19 +1010,25 @@ class Validator:
                 # Check if we're at a 20-minute mark (with 2 minute leeway)
                 if minutes % 20 <= 2 or self.config.immediate:
                     bt.logging.success(f"Running step at {current_time.strftime('%H:%M')}")
+                    run_step_success = False
                     for attempt in range(3):
                         try:
-                            success = await self.try_run_step(ttl=60 * 20)
-                            run_step_payload = {"run_step_success": success, "attempt": attempt}
+                            run_step_success = await self.try_run_step(ttl=60 * 20)
+                            run_step_payload = {"run_step_success": run_step_success, "attempt": attempt}
                             logged_payload = self._with_decoration(
                             self.local_metadata, self.wallet.hotkey, run_step_payload
                             )
                             self._remote_log(logged_payload)
-                            if success:
+                            if run_step_success:
                                 break
                         except Exception as e:
+                            run_step_payload = {"run_step_success": False, "attempt": attempt}
+                            logged_payload = self._with_decoration(
+                            self.local_metadata, self.wallet.hotkey, run_step_payload
+                            )
+                            self._remote_log(logged_payload)
                             if attempt == 2:  # Last attempt
-                                success = False
+                                run_step_success = False
                                 bt.logging.error(f"Failed all 3 attempts to run step: {e}")
                                 break
                             wait_time = (2 ** attempt) * 5  # 5s, 10s, 20s backoff
@@ -1028,7 +1037,7 @@ class Validator:
                     weights_set_success = False
                     error_msg = None
                     self.global_step += 1
-                    if success:
+                    if run_step_success:
                         pre_weights_payload = {
                             "step":"pre_weights",
                             "global_step": self.global_step,
@@ -1048,12 +1057,12 @@ class Validator:
                     logged_payload = self._with_decoration(
                         self.local_metadata, 
                         self.wallet.hotkey, 
-                        {"try_weights_complete": weights_set_success, "error_msg": error_msg}
+                        {"run_step_success":run_step_success,"try_weights_complete": weights_set_success, "error_msg": error_msg}
                     )
                     self._remote_log(logged_payload)
 
                     if self.config.immediate:
-                        await asyncio.sleep(100)
+                        return
                     # Wait for 1 minute to avoid running multiple times within the same minute
                     await asyncio.sleep(70)
                     
