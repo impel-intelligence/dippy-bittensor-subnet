@@ -1037,8 +1037,14 @@ class Validator:
                             self.local_metadata, self.wallet.hotkey, pre_weights_payload
                         )
                         self._remote_log(logged_payload)
-                        weights_set_success, error_msg = await self.try_set_weights(ttl=120)
-                        bt.logging.warning(f"weights_set_success {weights_set_success} error_msg {error_msg}")
+                        try:
+                            weights_set_success, error_msg = await self.try_set_weights(ttl=120)
+                            bt.logging.warning(f"weights_set_success {weights_set_success} error_msg {error_msg}")
+                        except Exception as e:
+                            bt.logging.error(f"Error setting weights: {e}\n{traceback.format_exc()}")
+                            weights_set_success = False
+                            error_msg = f"{error_msg or ''}\nException: {e}\n{traceback.format_exc()}"
+                            
                     logged_payload = self._with_decoration(
                         self.local_metadata, 
                         self.wallet.hotkey, 
