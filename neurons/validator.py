@@ -436,7 +436,7 @@ class Validator:
                         uids=uids,
                         weights=weights,
                         wait_for_inclusion=True,
-                        wait_for_finalization=True,
+                        wait_for_finalization=False,
                         version_key=constants.weights_version_key,
                     )
                     if success:
@@ -715,8 +715,8 @@ class Validator:
                     self.local_metadata, self.wallet.hotkey, payload=metagraph_failure_payload
                 )
             self._remote_log(logged_payload)
-
-            bt.logging.error(f"could not sync metgraph {e} using network {network}. Starting retries")
+            bt.logging.error(f"could not sync metagraph {e} using network {network}. Starting retries. If this issue persists please restart the valdiator script")
+            self.subtensor = Validator.new_subtensor()
         def sync_metagraph(attempt):
             try:
                 self.metagraph.sync(block=None, lite=False, subtensor=self.subtensor)
@@ -744,19 +744,17 @@ class Validator:
             except Exception as e:
                 bt.logging.error(f"could not sync metagraph {e}")
                 if attempt == 2:
-                    raise e
+                    return False
             
 
         bt.logging.success("Synced metagraph")
         self._event_log("metagraph_sync_success")
         return True
 
-    async def try_run_step(self, ttl: int) -> Optional[bool]:
+    async def try_run_step(self, ttl: int) -> bool:
         async def _try_run_step():
             success = await self.run_step()
-            
             return success
-
         try:
             bt.logging.warning(f"Running step with ttl {ttl}")
             step_success = await asyncio.wait_for(_try_run_step(), ttl)
