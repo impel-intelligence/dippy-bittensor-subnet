@@ -426,6 +426,8 @@ class Validator:
         def set_weights_with_wait(subtensor: Subtensor, weights, netuid, wallet, uids):
             retries = 5
             backoff = 1.5
+            msg = None
+            success = False
             for attempt in range(retries):
                 try:
                     success, msg = subtensor.set_weights(
@@ -443,6 +445,7 @@ class Validator:
                     if attempt == retries - 1:
                         raise e
                     wait_time = backoff**attempt
+
                     bt.logging.error(
                         f"Failed to set weights {msg} (attempt {attempt+1}/{retries}). Retrying in {wait_time:.1f}s..."
                     )
