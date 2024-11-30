@@ -158,8 +158,8 @@ class StreamedSyntheticDataset(Dataset):
 
         return (
             chat_input,  # context
-            self.dataset[idx]["last_user_message"],  # last user message
             f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}",  # target text
+            self.dataset[idx]["last_user_message"],  # last user message
         )
 
     def sample_dataset(self, n: int):
