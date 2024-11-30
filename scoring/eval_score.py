@@ -110,7 +110,7 @@ def eval_score(
         raise ValueError("Model does not have a maximum position embedding set")
 
     # unzip the sampled data
-    sample_contexts, sample_target_texts, _ = zip(*sampled_data)
+    sample_contexts, _ , sample_target_texts = zip(*sampled_data)
 
     total_prob = 0
     total_entropy = 0
