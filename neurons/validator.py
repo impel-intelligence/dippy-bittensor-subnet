@@ -163,9 +163,10 @@ class Validator:
             help="Number of blocks to wait before setting weights.",
         )
         parser.add_argument(
-            "--dont_set_weights",
+            "--no-verify",
             action="store_true",
-            help="Validator does not set weights on the chain.",
+            default=False,
+            help="Do not verify validator on chain",
         )
         parser.add_argument(
             "--wait_for_inclusion",
@@ -175,7 +176,7 @@ class Validator:
         parser.add_argument(
             "--offline",
             action="store_true",
-            help="Does not launch a wandb run, does not set weights, does not check that your key is registered.",
+            help="Does not set weights.",
         )
         parser.add_argument(
             "--immediate",
@@ -237,6 +238,9 @@ class Validator:
 
         bt.logging.warning(f"Starting validator with config: {self.config}")
 
+        # Set verify flag based on --no-verify argument
+        self.verify = not self.config.no_verify
+
         network_name = self.config.subtensor.network or "finney"
         netuid = self.config.netuid or 11
         # === Bittensor objects ====
@@ -256,7 +260,7 @@ class Validator:
             self.subtensor = Subtensor(network="subvortex")
 
         # Dont check registration status if offline.
-        if not self.config.offline:
+        if self.verify:
             self.uid = utils.assert_registered(self.wallet, self.metagraph)
 
         # Track how may run_steps this validator has completed.
@@ -279,7 +283,7 @@ class Validator:
             self.numpy_weights = self.metagraph.C.copy()
 
         validator_uid = 0
-        if not self.config.offline:
+        if self.verify:
             validator_uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
 
         # Set up local metadata for stats collection
@@ -411,31 +415,25 @@ class Validator:
             "Interpolated weights to satisfy vtrust_min. {} -> {}.".format(1 - orig_vtrust_loss, vtrust_pred)
         )
         return new_weights
+    
 
-    async def try_set_weights(self, ttl: int) -> Tuple[bool, Optional[str]]:
-        if self.config.dont_set_weights or self.config.offline:
-            return False, None
 
-        wait_for_inclusion = True
-        try:
-            if self.config.wait_for_inclusion:
-                wait_for_inclusion = True
-        except Exception as e:
-            bt.logging.warning(f"wait_for_inclusion not set: {wait_for_inclusion}")
-
-        def set_weights_with_wait(subtensor: Subtensor, weights, netuid, wallet, uids):
+    def set_weights_with_wait(self, weights, netuid, wallet, uids):
+            wait_for_inclusion = True
+            # wait_for_inclusion = get_validator_flag(self.config,self.local_metadata,)
             retries = 5
             backoff = 1.5
             msg = None
             success = False
             for attempt in range(retries):
                 try:
-                    success, msg = subtensor.set_weights(
+                    
+                    success, msg = self.subtensor.set_weights(
                         netuid=netuid,
                         wallet=wallet,
                         uids=uids,
                         weights=weights,
-                        wait_for_inclusion=True,
+                        wait_for_inclusion=wait_for_inclusion,
                         wait_for_finalization=False,
                         version_key=constants.weights_version_key,
                     )
@@ -449,134 +447,148 @@ class Validator:
                     bt.logging.error(
                         f"Failed to set weights {msg} (attempt {attempt+1}/{retries}). Retrying in {wait_time:.1f}s..."
                     )
-                    subtensor = Validator.new_subtensor()
+                    self.close_subtensor()
+                    self.subtensor = Validator.new_subtensor()
                     time.sleep(wait_time)
             return False
 
-        async def _try_set_weights(wait_for_inclusion: bool = False, debug: bool = False) -> Tuple[bool, Optional[str]]:
-            weights_success = False
-            error_str = None
-            try:
-                # Fetch latest metagraph
-                # try:
-                #     metagraph = self.subtensor.metagraph(self.config.netuid)
-                # except Exception as e:
-                #     bt.logging.error(f"could not fetch metagraph: {e}")
-                #     metagraph = Metagraph(netuid=self.config.netuid, network=self.config.subtensor.network, lite=False)
-                # consensus = metagraph.C
-                cpu_weights = self.weights
-                # Save types for reporting
-                # type_report = {
-                #     'metagraph': str(type(metagraph)),    # bittensor.core.metagraph.NonTorchMetagraph
-                #     'consensus': str(type(consensus)),     # numpy.ndarray
-                #     'cpu_weights': str(type(cpu_weights))  # torch.Tensor
-                # }
-                # bt.logging.debug(f"data_dump: {type_report}")
-                adjusted_weights = cpu_weights
-                # try:
-                #     adjusted_weights = self.adjust_for_vtrust(cpu_weights, consensus)
-                #     self.weights = torch.from_numpy(adjusted_weights).clone().detach()
-                # except Exception as e:
-                #     bt.logging.error(f"error adjusting for vtrust: {e}")
-                #     adjusted_weights = torch.tensor(cpu_weights)
-                #     self.weights = adjusted_weights.clone().detach()
+    async def _try_set_weights(self, wait_for_inclusion: bool = False, debug: bool = False) -> Tuple[bool, Optional[str]]:
+        weights_success = False
+        error_str = None
+        try:
+            # Fetch latest metagraph
+            # try:
+            #     metagraph = self.subtensor.metagraph(self.config.netuid)
+            # except Exception as e:
+            #     bt.logging.error(f"could not fetch metagraph: {e}")
+            #     metagraph = Metagraph(netuid=self.config.netuid, network=self.config.subtensor.network, lite=False)
+            # consensus = metagraph.C
+            cpu_weights = self.weights
+            # Save types for reporting
+            # type_report = {
+            #     'metagraph': str(type(metagraph)),    # bittensor.core.metagraph.NonTorchMetagraph
+            #     'consensus': str(type(consensus)),     # numpy.ndarray
+            #     'cpu_weights': str(type(cpu_weights))  # torch.Tensor
+            # }
+            # bt.logging.debug(f"data_dump: {type_report}")
+            adjusted_weights = cpu_weights
+            # try:
+            #     adjusted_weights = self.adjust_for_vtrust(cpu_weights, consensus)
+            #     self.weights = torch.from_numpy(adjusted_weights).clone().detach()
+            # except Exception as e:
+            #     bt.logging.error(f"error adjusting for vtrust: {e}")
+            #     adjusted_weights = torch.tensor(cpu_weights)
+            #     self.weights = adjusted_weights.clone().detach()
 
-                # if debug:
-                #     # Compare weights before and after vtrust adjustment
-                #     comparison_table = Table(title="Weights Comparison")
-                #     comparison_table.add_column("uid", justify="right", style="cyan", no_wrap=True)
-                #     comparison_table.add_column("original", style="magenta")
-                #     comparison_table.add_column("adjusted", style="green")
-                #     comparison_table.add_column("diff", style="yellow")
+            # if debug:
+            #     # Compare weights before and after vtrust adjustment
+            #     comparison_table = Table(title="Weights Comparison")
+            #     comparison_table.add_column("uid", justify="right", style="cyan", no_wrap=True)
+            #     comparison_table.add_column("original", style="magenta")
+            #     comparison_table.add_column("adjusted", style="green")
+            #     comparison_table.add_column("diff", style="yellow")
 
-                #     # Dump details about consensus and cpu_weights
-                #     bt.logging.warning("=== Consensus details ===")
-                #     bt.logging.warning(f"Type: {type(consensus)}")
-                #     if isinstance(consensus, np.ndarray):
-                #         bt.logging.warning(f"Shape: {consensus.shape}")
-                #         bt.logging.warning(f"Dtype: {consensus.dtype}")
-                #         bt.logging.warning(f"Min value: {np.min(consensus)}")
-                #         bt.logging.warning(f"Max value: {np.max(consensus)}")
-                #         bt.logging.warning(f"Mean value: {np.mean(consensus)}")
-                #         bt.logging.warning(f"Sum: {np.sum(consensus)}")
-                #         bt.logging.warning(f"Has NaN: {np.isnan(consensus).any()}")
-                #         bt.logging.warning(f"Has Inf: {np.isinf(consensus).any()}")
+            #     # Dump details about consensus and cpu_weights
+            #     bt.logging.warning("=== Consensus details ===")
+            #     bt.logging.warning(f"Type: {type(consensus)}")
+            #     if isinstance(consensus, np.ndarray):
+            #         bt.logging.warning(f"Shape: {consensus.shape}")
+            #         bt.logging.warning(f"Dtype: {consensus.dtype}")
+            #         bt.logging.warning(f"Min value: {np.min(consensus)}")
+            #         bt.logging.warning(f"Max value: {np.max(consensus)}")
+            #         bt.logging.warning(f"Mean value: {np.mean(consensus)}")
+            #         bt.logging.warning(f"Sum: {np.sum(consensus)}")
+            #         bt.logging.warning(f"Has NaN: {np.isnan(consensus).any()}")
+            #         bt.logging.warning(f"Has Inf: {np.isinf(consensus).any()}")
 
-                #     bt.logging.warning("\n=== CPU Weights details ===")
-                #     bt.logging.warning(f"Type: {type(cpu_weights)}")
-                #     if isinstance(cpu_weights, (np.ndarray, torch.Tensor)):
-                #         if isinstance(cpu_weights, torch.Tensor):
-                #             cpu_weights = cpu_weights.detach().cpu().numpy()
-                #         bt.logging.warning(f"Shape: {cpu_weights.shape}")
-                #         bt.logging.warning(f"Dtype: {cpu_weights.dtype}")
-                #         bt.logging.warning(f"Min value: {np.min(cpu_weights)}")
-                #         bt.logging.warning(f"Max value: {np.max(cpu_weights)}")
-                #         bt.logging.warning(f"Mean value: {np.mean(cpu_weights)}")
-                #         bt.logging.warning(f"Sum: {np.sum(cpu_weights)}")
-                #         bt.logging.warning(f"Has NaN: {np.isnan(cpu_weights).any()}")
-                #         bt.logging.warning(f"Has Inf: {np.isinf(cpu_weights).any()}")
+            #     bt.logging.warning("\n=== CPU Weights details ===")
+            #     bt.logging.warning(f"Type: {type(cpu_weights)}")
+            #     if isinstance(cpu_weights, (np.ndarray, torch.Tensor)):
+            #         if isinstance(cpu_weights, torch.Tensor):
+            #             cpu_weights = cpu_weights.detach().cpu().numpy()
+            #         bt.logging.warning(f"Shape: {cpu_weights.shape}")
+            #         bt.logging.warning(f"Dtype: {cpu_weights.dtype}")
+            #         bt.logging.warning(f"Min value: {np.min(cpu_weights)}")
+            #         bt.logging.warning(f"Max value: {np.max(cpu_weights)}")
+            #         bt.logging.warning(f"Mean value: {np.mean(cpu_weights)}")
+            #         bt.logging.warning(f"Sum: {np.sum(cpu_weights)}")
+            #         bt.logging.warning(f"Has NaN: {np.isnan(cpu_weights).any()}")
+            #         bt.logging.warning(f"Has Inf: {np.isinf(cpu_weights).any()}")
 
-                #     for uid in range(len(cpu_weights)):
-                #         original = round(float(cpu_weights[uid]), 4)
-                #         adjusted = round(float(adjusted_weights[uid]), 4)
-                #         diff = round(adjusted - original, 4)
-                #         comparison_table.add_row(
-                #             str(uid),
-                #             str(original),
-                #             str(adjusted),
-                #             str(diff)
-                #         )
+            #     for uid in range(len(cpu_weights)):
+            #         original = round(float(cpu_weights[uid]), 4)
+            #         adjusted = round(float(adjusted_weights[uid]), 4)
+            #         diff = round(adjusted - original, 4)
+            #         comparison_table.add_row(
+            #             str(uid),
+            #             str(original),
+            #             str(adjusted),
+            #             str(diff)
+            #         )
 
-                #     console = Console()
-                #     console.print(comparison_table)
+            #     console = Console()
+            #     console.print(comparison_table)
 
-                self.weights.nan_to_num(0.0)
-                weights_success = set_weights_with_wait(
-                    subtensor=self.subtensor,
-                    weights=adjusted_weights,
-                    netuid=self.config.netuid,
-                    wallet=self.wallet,
-                    uids=self.metagraph.uids,
-                )
-                weights_report = {"weights": {}}
-                for uid, score in enumerate(self.weights):
-                    weights_report["weights"][uid] = score
-                wandb_logger.safe_log(weights_report)
-                self._event_log("set_weights_complete", weights=weights_report)
-                bt.logging.warning(f"successfully_set_weights")
-                weights_success = True
-            except Exception as e:
-                bt.logging.error(f"failed_set_weights error={e}\n{traceback.format_exc()}")
-                error_str = f"failed_set_weights error={e}\n{traceback.format_exc()}"
-                
-                return weights_success, error_str
-
-            # Only dump weight state to console
-            ws, ui = self.weights.topk(len(self.weights))
-            table = Table(title="All Weights")
-            table.add_column("uid", justify="right", style="cyan", no_wrap=True)
-            table.add_column("weight", style="magenta")
-            for index, weight in list(zip(ui.tolist(), ws.tolist())):
-                table.add_row(str(index), str(round(weight, 4)))
-            console = Console()
-            console.print(table)
-
-            # Weight setting status
-            status_table = Table(title="Weight Setting Status")
-            status_table.add_column("Status", style="cyan")
-            status_table.add_column("Value", style="magenta")
-            status_table.add_row("successfully_set_weights", str(weights_success))
-            weights_failed = not weights_success
-            status_table.add_row("failed_set_weights", str(weights_failed))
-            status_table.add_row("wait_for_inclusion", str(wait_for_inclusion))
-            console.print(status_table)
+            self.weights.nan_to_num(0.0)
+            weights_success = self.set_weights_with_wait(
+                weights=adjusted_weights,
+                netuid=self.config.netuid,
+                wallet=self.wallet,
+                uids=self.metagraph.uids,
+            )
+            weights_report = {"weights": {}}
+            for uid, score in enumerate(self.weights):
+                weights_report["weights"][uid] = score
+            wandb_logger.safe_log(weights_report)
+            self._event_log("set_weights_complete", weights=weights_report)
+            bt.logging.warning(f"successfully_set_weights")
+            weights_success = True
+        except Exception as e:
+            bt.logging.error(f"failed_set_weights error={e}\n{traceback.format_exc()}")
+            error_str = f"failed_set_weights error={e}\n{traceback.format_exc()}"
+            
             return weights_success, error_str
+
+        # Only dump weight state to console
+        ws, ui = self.weights.topk(len(self.weights))
+        table = Table(title="All Weights")
+        table.add_column("uid", justify="right", style="cyan", no_wrap=True)
+        table.add_column("weight", style="magenta")
+        for index, weight in list(zip(ui.tolist(), ws.tolist())):
+            table.add_row(str(index), str(round(weight, 4)))
+        console = Console()
+        console.print(table)
+
+        # Weight setting status
+        status_table = Table(title="Weight Setting Status")
+        status_table.add_column("Status", style="cyan")
+        status_table.add_column("Value", style="magenta")
+        status_table.add_row("successfully_set_weights", str(weights_success))
+        weights_failed = not weights_success
+        status_table.add_row("failed_set_weights", str(weights_failed))
+        status_table.add_row("wait_for_inclusion", str(wait_for_inclusion))
+        console.print(status_table)
+        return weights_success, error_str
+    
+        
+            
+    async def try_set_weights(self, ttl: int) -> Tuple[bool, Optional[str]]:
+        if self.config.offline:
+            return False, None
+
+        wait_for_inclusion = True
+        try:
+            if self.config.wait_for_inclusion:
+                wait_for_inclusion = True
+        except Exception as e:
+            bt.logging.warning(f"wait_for_inclusion not set: {wait_for_inclusion}")
+
         weights_set_success = False
         error_msg = None
         exception_msg = None
         try:
             bt.logging.debug("Setting weights.")
-            weights_set_success, error_msg = await asyncio.wait_for(_try_set_weights(wait_for_inclusion), ttl)
+            weights_set_success, error_msg = await asyncio.wait_for(self._try_set_weights(wait_for_inclusion), ttl)
             bt.logging.debug("Finished setting weights.")
         except asyncio.TimeoutError:
             error_msg = f"Failed to set weights after {ttl} seconds"
@@ -698,6 +710,19 @@ class Validator:
         bt.logging.warning(f"subtensor retry initialized with Subtensor(): {subtensor}")
         return subtensor
 
+    def close_subtensor(self):
+        status = ""
+        try:
+            self.subtensor.close()
+            status = "subtensor_closed"
+        except Exception as e:
+            status = f"{str(e)}\n{traceback.format_exc()}"
+        payload = {"subtensor_close_status": status}
+        logged_payload = self._with_decoration(
+                    self.local_metadata, self.wallet.hotkey, payload=payload
+                )
+        self._remote_log(logged_payload)
+
     async def try_sync_metagraph(self, ttl: int = 120) -> bool:
         network = random.choice(["finney", "subvortex"])
         try:
@@ -716,6 +741,7 @@ class Validator:
                 )
             self._remote_log(logged_payload)
             bt.logging.error(f"could not sync metagraph {e} using network {network}. Starting retries. If this issue persists please restart the valdiator script")
+            self.close_subtensor()
             self.subtensor = Validator.new_subtensor()
         def sync_metagraph(attempt):
             try:
@@ -733,6 +759,7 @@ class Validator:
                     self.local_metadata, self.wallet.hotkey, payload=metagraph_failure_payload
                 )
                 self._remote_log(logged_payload)
+                self.close_subtensor()
                 self.subtensor = Validator.new_subtensor()
                 raise e
 
@@ -1217,6 +1244,45 @@ def get_model_score(
 
     bt.logging.debug(f"Model {model_id.namespace}/{model_id.name} has score data {score_data}")
     return score_data
+
+def get_validator_flag(
+    config,
+    local_metadata: LocalMetadata,
+    signatures: Dict[str, str],
+    flag: str,
+):
+    base_url = constants.VALIDATION_SERVER
+
+    # Construct URL with query parameters
+    validation_endpoint = f"{base_url}/validator_flag"
+    params = {
+        "flag": flag,
+    }
+
+    # Set up headers
+    headers = {
+        "Git-Commit": str(local_metadata.commit),
+        "Bittensor-Version": str(local_metadata.btversion),
+        "UID": str(local_metadata.uid),
+        "Hotkey": str(local_metadata.hotkey),
+        "Coldkey": str(local_metadata.coldkey),
+    }
+    headers.update(signatures)
+
+    try:
+        # Make GET request
+        response = requests.get(validation_endpoint, params=params, headers=headers)
+        response.raise_for_status()
+
+        # Parse response
+        result = response.json()
+        return result
+
+    except Exception as e:
+        bt.logging.error(e)
+        bt.logging.error(f"Failed to get flag value for {flag}")
+
+    return False
 
 
 if __name__ == "__main__":
