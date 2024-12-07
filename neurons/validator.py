@@ -418,39 +418,36 @@ class Validator:
     
 
 
-    def set_weights_with_wait(self, weights, netuid, wallet, uids):
-            wait_for_inclusion = True
-            # wait_for_inclusion = get_validator_flag(self.config,self.local_metadata,)
-            retries = 5
-            backoff = 1.5
-            msg = None
-            success = False
-            for attempt in range(retries):
-                try:
-                    
-                    success, msg = self.subtensor.set_weights(
+    async def set_weights_with_wait(self, weights, netuid, wallet, uids):
+        retries = 5
+        backoff = 1.5
+        msg = None
+        success = False
+        for attempt in range(retries):
+            try:
+                success, msg = self.subtensor.set_weights(
                         netuid=netuid,
                         wallet=wallet,
                         uids=uids,
                         weights=weights,
-                        wait_for_inclusion=wait_for_inclusion,
+                        wait_for_inclusion=True,
                         wait_for_finalization=False,
                         version_key=constants.weights_version_key,
-                    )
-                    if success:
-                        return True
-                except Exception as e:
-                    if attempt == retries - 1:
-                        raise e
-                    wait_time = backoff**attempt
+                )
+                if success:
+                    return True
+            except Exception as e:
+                if attempt == retries - 1:
+                    raise e
+                wait_time = backoff**attempt
 
-                    bt.logging.error(
-                        f"Failed to set weights {msg} (attempt {attempt+1}/{retries}). Retrying in {wait_time:.1f}s..."
-                    )
-                    self.close_subtensor()
-                    self.subtensor = Validator.new_subtensor()
-                    time.sleep(wait_time)
-            return False
+                bt.logging.error(
+                    f"Failed to set weights {msg} (attempt {attempt+1}/{retries}). Retrying in {wait_time:.1f}s..."
+                )
+                self.close_subtensor()
+                self.subtensor = Validator.new_subtensor()
+                time.sleep(wait_time)
+        return False
 
     async def _try_set_weights(self, wait_for_inclusion: bool = False, debug: bool = False) -> Tuple[bool, Optional[str]]:
         weights_success = False
@@ -530,12 +527,19 @@ class Validator:
             #     console.print(comparison_table)
 
             self.weights.nan_to_num(0.0)
-            weights_success = self.set_weights_with_wait(
-                weights=adjusted_weights,
-                netuid=self.config.netuid,
-                wallet=self.wallet,
-                uids=self.metagraph.uids,
-            )
+            try:
+                weights_success = await asyncio.wait_for(
+                    self.set_weights_with_wait(
+                        weights=adjusted_weights,
+                        netuid=self.config.netuid,
+                        wallet=self.wallet,
+                        uids=self.metagraph.uids,
+                    ),
+                    timeout=600  # 10 minutes
+                )
+            except asyncio.TimeoutError:
+                bt.logging.error("Setting weights timed out after 10 minutes")
+                weights_success = False
             weights_report = {"weights": {}}
             for uid, score in enumerate(self.weights):
                 weights_report["weights"][uid] = score
