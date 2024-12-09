@@ -28,6 +28,8 @@ def safe_login(api_key):
 
 
 def safe_init(name, wallet, metagraph, config):
+    if not config.wandb_key:
+        return
     import wandb
 
     """
