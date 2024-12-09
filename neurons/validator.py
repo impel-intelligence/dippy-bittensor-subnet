@@ -430,7 +430,7 @@ class Validator:
                         wallet=wallet,
                         uids=uids,
                         weights=weights,
-                        wait_for_inclusion=True,
+                        wait_for_inclusion=False,
                         wait_for_finalization=False,
                         version_key=constants.weights_version_key,
                 )
@@ -449,10 +449,11 @@ class Validator:
                 time.sleep(wait_time)
         return False
 
-    async def _try_set_weights(self, wait_for_inclusion: bool = False, debug: bool = False) -> Tuple[bool, Optional[str]]:
+    async def _try_set_weights(self, debug: bool = False) -> Tuple[bool, Optional[str]]:
         weights_success = False
         error_str = None
         try:
+            # TODO: Add back the adjusting of vtrust once full migration to numpy is done
             # Fetch latest metagraph
             # try:
             #     metagraph = self.subtensor.metagraph(self.config.netuid)
@@ -570,7 +571,6 @@ class Validator:
         status_table.add_row("successfully_set_weights", str(weights_success))
         weights_failed = not weights_success
         status_table.add_row("failed_set_weights", str(weights_failed))
-        status_table.add_row("wait_for_inclusion", str(wait_for_inclusion))
         console.print(status_table)
         return weights_success, error_str
     
@@ -580,19 +580,13 @@ class Validator:
         if self.config.offline:
             return False, None
 
-        wait_for_inclusion = True
-        try:
-            if self.config.wait_for_inclusion:
-                wait_for_inclusion = True
-        except Exception as e:
-            bt.logging.warning(f"wait_for_inclusion not set: {wait_for_inclusion}")
 
         weights_set_success = False
         error_msg = None
         exception_msg = None
         try:
             bt.logging.debug("Setting weights.")
-            weights_set_success, error_msg = await asyncio.wait_for(self._try_set_weights(wait_for_inclusion), ttl)
+            weights_set_success, error_msg = await asyncio.wait_for(self._try_set_weights(), ttl)
             bt.logging.debug("Finished setting weights.")
         except asyncio.TimeoutError:
             error_msg = f"Failed to set weights after {ttl} seconds"
@@ -604,7 +598,6 @@ class Validator:
             payload = {
                 "time": str(dt.datetime.now(dt.timezone.utc)),
                 "weights_set_success": weights_set_success,
-                "wait_for_inclusion": wait_for_inclusion,
                 "error": error_msg,
                 "exception_msg": exception_msg,
                 "weights_version": constants.weights_version_key,
