@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Docker
-- Existing validator prerequisites (python, `wandb`)
+- Existing validator prerequisites (python)
 - Access tokens for following services below
 
 ## Environment Setup

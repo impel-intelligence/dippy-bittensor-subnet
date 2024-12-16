@@ -40,7 +40,6 @@ import constants
 from model.data import ModelMetadata, ModelId
 from huggingface_hub import get_safetensors_metadata
 from model.scores import Scores, StatusEnum
-from model import wandb_logger
 import traceback
 import threading
 import multiprocessing
@@ -200,12 +199,6 @@ class Validator:
             default=8000,
             help="Port for local validation api",
         )
-        parser.add_argument(
-            "--wandb-key",
-            type=str,
-            default="",
-            help="A WandB API key for logging purposes",
-        )
         os.environ["BT_WALLET_PATH"] = os.path.expanduser("~/.bittensor/wallets")
 
         bt.subtensor.add_args(parser)
@@ -295,25 +288,6 @@ class Validator:
             uid=validator_uid,
         )
         bt.logging.warning(f"dumping localmetadata: {self.local_metadata}")
-
-        # Initialize wandb
-        if self.config.wandb_key:
-            wandb_logger.safe_login(api_key=self.config.wandb_key)
-            bt.logging.warning(f"wandb locked in")
-        try:
-            wandb_logger.safe_init(
-                "Validator",
-                self.wallet,
-                self.metagraph,
-                self.config,
-            )
-            wandb_logger.safe_log(
-                {
-                    "log_success": 1,
-                }
-            )
-        except Exception as e:
-            bt.logging.warning("continuing without wandb. this is fine")
 
         # eventlog_path = "/tmp/sn11_event_logs/event_{time}.log"
         eventlog_path = "/dev/null"
@@ -544,7 +518,6 @@ class Validator:
             weights_report = {"weights": {}}
             for uid, score in enumerate(self.weights):
                 weights_report["weights"][uid] = score
-            wandb_logger.safe_log(weights_report)
             self._event_log("set_weights_complete", weights=weights_report)
             bt.logging.warning(f"successfully_set_weights")
             weights_success = True
@@ -1023,7 +996,6 @@ class Validator:
         scores_per_uid = {}
         for uid in sorted_uids:
             scores_per_uid[uid] = miner_registry[uid].total_score
-        wandb_logger.safe_log({"miner_scores/scored_per_uid": scores_per_uid})
         self._event_log("log_scores", scores=scores_per_uid, step=self.epoch_step)
 
     async def run(self):
@@ -1038,7 +1010,8 @@ class Validator:
                     run_step_success = False
                     for attempt in range(3):
                         try:
-                            run_step_success = await self.try_run_step(ttl=60 * 20)
+                            # Allow run step to execute for 30m
+                            run_step_success = await self.try_run_step(ttl=60 * 30)
                             run_step_payload = {"run_step_success": run_step_success, "attempt": attempt}
                             logged_payload = self._with_decoration(
                             self.local_metadata, self.wallet.hotkey, run_step_payload

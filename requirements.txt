@@ -8,7 +8,6 @@ protobuf
 python-dotenv
 tiktoken
 threadpoolctl
-wandb >= 0.17.2
 loguru
 scipy
 numpy >= 2.0.2
