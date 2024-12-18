@@ -117,7 +117,7 @@ class StreamedSyntheticDataset(Dataset):
                 {
                     "messages": messages,
                     "last_user_message": last_user_message,  # get the last user message
-                    "character_response": character_response,
+                    "character_response": character_response, # character response
                 }
             )
 
