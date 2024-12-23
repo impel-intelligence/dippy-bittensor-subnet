@@ -133,7 +133,9 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
         for i, (conversation, max_turn) in enumerate(zip(conversations, max_messages)):
             if turn < max_turn:
                 new_input = dataset_formatter.new_input(conversation)
-
+                if conversation[-1]["role"] == "assistant":
+                    new_input = new_input[: -len("assistant\n")]
+                    new_input = f"{new_input}user\n"
                 batch_prompts.append(new_input)
                 active_conversations.append(i)
 
