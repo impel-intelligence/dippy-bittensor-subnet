@@ -33,7 +33,7 @@ import argparse
 from typing import Tuple
 from threadpoolctl import threadpool_limits
 import requests
-from importlib.metadata import version
+from importlib.metadata import version as pkg_version
 from shlex import split
 
 import constants
@@ -138,7 +138,7 @@ def local_metadata() -> LocalMetadata:
     except Exception as e:
         commit_hash = "unknown"
 
-    bittensor_version = version("bittensor")
+    bittensor_version = pkg_version("bittensor")
     return LocalMetadata(
         commit=commit_hash,
         btversion=bittensor_version,
@@ -149,12 +149,6 @@ class Validator:
     @staticmethod
     def config():
         parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "--device",
-            type=str,
-            default="cuda",
-            help="Device name.",
-        )
         parser.add_argument(
             "--blocks_per_epoch",
             type=int,
@@ -229,7 +223,9 @@ class Validator:
         self.config = Validator.config()
         bt.logging(config=self.config)
 
-        bt.logging.warning(f"Starting validator with config: {self.config}")
+        # Get bittensor package version
+        bt_version = pkg_version("bittensor")
+        bt.logging.warning(f"Starting validator with config: {self.config}, bittensor version: {bt_version}")
 
         # Set verify flag based on --no-verify argument
         self.verify = not self.config.no_verify
@@ -775,38 +771,66 @@ class Validator:
         return hotkey_matches
 
     def fetch_model_data(self, uid: int, hotkey: str) -> Optional[MinerEntry]:
-        try:
-            bt.logging.warning(f"get_metadata for uid={uid} hotkey={hotkey} netuid={self.config.netuid}")
-            metadata = bt.core.extrinsics.serving.get_metadata(
-                self=self.subtensor, netuid=self.config.netuid, hotkey=hotkey
-            )
-            if metadata is None:
-                return None
+        max_retries = 10
+        base_delay = 1.5  # seconds
+        for attempt in range(max_retries):
+            try:
+                # First try using self.subtensor
+                try:
+                    metadata = bt.core.extrinsics.serving.get_metadata(
+                        self=self.subtensor,
+                        netuid=self.config.netuid,
+                        hotkey=hotkey
+                    )
+                except Exception as e:
+                    bt.logging.warning(f"Failed to fetch metadata with self.subtensor: {e}, trying dedicated subtensor")
+                    # Fall back to dedicated subtensor
+                    dedicated_subtensor = None
+                    try:
+                        network = "finney"
+                        dedicated_subtensor = Subtensor(network=network)
+                        bt.logging.warning(f"Created dedicated subtensor for metadata fetch: {dedicated_subtensor} for {uid}")
+                        
+                        metadata = bt.core.extrinsics.serving.get_metadata(
+                            self=dedicated_subtensor,
+                            netuid=self.config.netuid,
+                            hotkey=hotkey
+                        )
+                    finally:
+                        # Ensure we close the dedicated subtensor
+                        if dedicated_subtensor is not None:
+                            try:
+                                dedicated_subtensor.close()
+                            except Exception as close_error:
+                                bt.logging.error(f"Error closing dedicated subtensor: {close_error} for {uid}")
 
-            commitment = metadata["info"]["fields"][0]
-            hex_data = commitment[list(commitment.keys())[0]][2:]
-            chain_str = bytes.fromhex(hex_data).decode()
-            # chain_str = ""
-            # try:
-            #     chain_str = self.subtensor.get_commitment(netuid=self.config.netuid, uid=uid)
-            #     bt.logging.warning(f"chain_str {chain_str}")
-            # except Exception as e:
-            #     bt.logging.error(f"error fetching commit data {e}")
+                if metadata is None:
+                    return None
 
-            # if chain_str is None or len(chain_str) < 1:
-            #     return None
+                commitment = metadata["info"]["fields"][0]
+                hex_data = commitment[list(commitment.keys())[0]][2:]
+                chain_str = bytes.fromhex(hex_data).decode()
 
-            model_id = ModelId.from_compressed_str(chain_str)
-            model_id.hotkey = hotkey
+                model_id = ModelId.from_compressed_str(chain_str)
+                model_id.hotkey = hotkey
 
-            block = metadata["block"]
-            entry = MinerEntry()
-            entry.block = block
-            entry.miner_model_id = model_id
-            return entry
-        except Exception as e:
-            bt.logging.error(f"could not fetch data for {hotkey} : {e}")
-            return None
+                block = metadata["block"]
+                entry = MinerEntry()
+                entry.block = block
+                entry.miner_model_id = model_id
+                return entry
+
+            except Exception as e:
+                delay = base_delay ** attempt
+                if attempt < max_retries - 1:  # Don't log "retrying" on the last attempt
+                    bt.logging.error(f"Attempt {attempt + 1}/{max_retries} failed to fetch data for {hotkey}: {e}")
+                    bt.logging.info(f"Retrying in {delay:.1f} seconds...")
+                    time.sleep(delay)
+                else:
+                    bt.logging.error(f"All attempts failed to fetch data for {hotkey}: {e}")
+                    return None
+
+        return None
 
     @staticmethod
     def adjusted_temperature_multipler(current_block: int) -> float:
