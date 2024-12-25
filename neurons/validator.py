@@ -423,79 +423,8 @@ class Validator:
         weights_success = False
         error_str = None
         try:
-            # TODO: Add back the adjusting of vtrust once full migration to numpy is done
-            # Fetch latest metagraph
-            # try:
-            #     metagraph = self.subtensor.metagraph(self.config.netuid)
-            # except Exception as e:
-            #     bt.logging.error(f"could not fetch metagraph: {e}")
-            #     metagraph = Metagraph(netuid=self.config.netuid, network=self.config.subtensor.network, lite=False)
-            # consensus = metagraph.C
             cpu_weights = self.weights
-            # Save types for reporting
-            # type_report = {
-            #     'metagraph': str(type(metagraph)),    # bittensor.core.metagraph.NonTorchMetagraph
-            #     'consensus': str(type(consensus)),     # numpy.ndarray
-            #     'cpu_weights': str(type(cpu_weights))  # torch.Tensor
-            # }
-            # bt.logging.debug(f"data_dump: {type_report}")
             adjusted_weights = cpu_weights
-            # try:
-            #     adjusted_weights = self.adjust_for_vtrust(cpu_weights, consensus)
-            #     self.weights = torch.from_numpy(adjusted_weights).clone().detach()
-            # except Exception as e:
-            #     bt.logging.error(f"error adjusting for vtrust: {e}")
-            #     adjusted_weights = torch.tensor(cpu_weights)
-            #     self.weights = adjusted_weights.clone().detach()
-
-            # if debug:
-            #     # Compare weights before and after vtrust adjustment
-            #     comparison_table = Table(title="Weights Comparison")
-            #     comparison_table.add_column("uid", justify="right", style="cyan", no_wrap=True)
-            #     comparison_table.add_column("original", style="magenta")
-            #     comparison_table.add_column("adjusted", style="green")
-            #     comparison_table.add_column("diff", style="yellow")
-
-            #     # Dump details about consensus and cpu_weights
-            #     bt.logging.warning("=== Consensus details ===")
-            #     bt.logging.warning(f"Type: {type(consensus)}")
-            #     if isinstance(consensus, np.ndarray):
-            #         bt.logging.warning(f"Shape: {consensus.shape}")
-            #         bt.logging.warning(f"Dtype: {consensus.dtype}")
-            #         bt.logging.warning(f"Min value: {np.min(consensus)}")
-            #         bt.logging.warning(f"Max value: {np.max(consensus)}")
-            #         bt.logging.warning(f"Mean value: {np.mean(consensus)}")
-            #         bt.logging.warning(f"Sum: {np.sum(consensus)}")
-            #         bt.logging.warning(f"Has NaN: {np.isnan(consensus).any()}")
-            #         bt.logging.warning(f"Has Inf: {np.isinf(consensus).any()}")
-
-            #     bt.logging.warning("\n=== CPU Weights details ===")
-            #     bt.logging.warning(f"Type: {type(cpu_weights)}")
-            #     if isinstance(cpu_weights, (np.ndarray, torch.Tensor)):
-            #         if isinstance(cpu_weights, torch.Tensor):
-            #             cpu_weights = cpu_weights.detach().cpu().numpy()
-            #         bt.logging.warning(f"Shape: {cpu_weights.shape}")
-            #         bt.logging.warning(f"Dtype: {cpu_weights.dtype}")
-            #         bt.logging.warning(f"Min value: {np.min(cpu_weights)}")
-            #         bt.logging.warning(f"Max value: {np.max(cpu_weights)}")
-            #         bt.logging.warning(f"Mean value: {np.mean(cpu_weights)}")
-            #         bt.logging.warning(f"Sum: {np.sum(cpu_weights)}")
-            #         bt.logging.warning(f"Has NaN: {np.isnan(cpu_weights).any()}")
-            #         bt.logging.warning(f"Has Inf: {np.isinf(cpu_weights).any()}")
-
-            #     for uid in range(len(cpu_weights)):
-            #         original = round(float(cpu_weights[uid]), 4)
-            #         adjusted = round(float(adjusted_weights[uid]), 4)
-            #         diff = round(adjusted - original, 4)
-            #         comparison_table.add_row(
-            #             str(uid),
-            #             str(original),
-            #             str(adjusted),
-            #             str(diff)
-            #         )
-
-            #     console = Console()
-            #     console.print(comparison_table)
 
             self.weights.nan_to_num(0.0)
             try:
@@ -683,6 +612,7 @@ class Validator:
             status = "subtensor_closed"
         except Exception as e:
             status = f"{str(e)}\n{traceback.format_exc()}"
+            self.subtensor = None
         payload = {"subtensor_close_status": status}
         logged_payload = self._with_decoration(
                     self.local_metadata, self.wallet.hotkey, payload=payload
@@ -692,7 +622,7 @@ class Validator:
     async def try_sync_metagraph(self, ttl: int = 120) -> bool:
         network = random.choice(["finney", "subvortex"])
         try:
-            bt.logging.warning(f"attmpting sync with network {network}")
+            bt.logging.warning(f"attempting sync with network {network}")
             self.metagraph = Metagraph(netuid=self.config.netuid, network=network, lite=False, sync=True)
             return True
         except Exception as e:
@@ -1089,13 +1019,15 @@ class Validator:
                     await asyncio.sleep(70)
                     
                 else:
-                    # attempt to sync metagraph to also try and keep connection alive
-                    metagraph_sync_success = await self.try_sync_metagraph()
-                    if not metagraph_sync_success:
-                        try:
-                            self.subtensor = Subtensor()
-                        except Exception as e: 
-                            bt.logging.error(f"Error in initializing subtensor:  {e} \n {traceback.format_exc()}")
+                    # Only sync metagraph every 5 minutes
+                    current_time = dt.datetime.now(dt.timezone.utc)
+                    if current_time.minute % 5 == 0:
+                        metagraph_sync_success = await self.try_sync_metagraph(ttl=300)
+                        if not metagraph_sync_success:
+                            try:
+                                self.subtensor = Subtensor()
+                            except Exception as e:
+                                bt.logging.error(f"Error in initializing subtensor:  {e} \n {traceback.format_exc()}")
 
                     # Calculate minutes until next 20-minute mark
                     current_time = dt.datetime.now(dt.timezone.utc)
