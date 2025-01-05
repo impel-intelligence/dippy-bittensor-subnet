@@ -231,6 +231,8 @@ class Validator:
         self.verify = not self.config.no_verify
 
         network_name = self.config.subtensor.network or "finney"
+        self.config.subtensor.network = network_name
+
         netuid = self.config.netuid or 11
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
@@ -246,7 +248,7 @@ class Validator:
             self.metagraph = self.subtensor.metagraph(netuid=self.config.netuid, lite=False)
         except Exception as e:
             bt.logging.error(f"could not initialize metagraph: {e}")
-            self.subtensor = Subtensor(network="subvortex")
+            raise e
 
         # Dont check registration status if offline.
         if self.verify:
@@ -388,7 +390,7 @@ class Validator:
     
 
 
-    async def set_weights_with_wait(self, weights, netuid, wallet, uids):
+    async def set_weights_with_wait(self, weights, netuid, wallet, uids) -> bool:
         retries = 5
         backoff = 1.5
         msg = None
@@ -415,7 +417,7 @@ class Validator:
                     f"Failed to set weights {msg} (attempt {attempt+1}/{retries}). Retrying in {wait_time:.1f}s..."
                 )
                 self.close_subtensor()
-                self.subtensor = Validator.new_subtensor()
+                self.subtensor = Validator.new_subtensor(self.config.subtensor.network)
                 time.sleep(wait_time)
         return False
 
@@ -599,8 +601,10 @@ class Validator:
         return invalid_uids, miner_registry
 
     @staticmethod
-    def new_subtensor():
+    def new_subtensor(network_name: str = "default"):
         network = random.choice(["finney", "subvortex"])
+        if network_name == "local":
+            network = "local"
         subtensor = Subtensor(network=network)
         bt.logging.warning(f"subtensor retry initialized with Subtensor(): {subtensor}")
         return subtensor
@@ -621,6 +625,8 @@ class Validator:
 
     async def try_sync_metagraph(self, ttl: int = 120) -> bool:
         network = random.choice(["finney", "subvortex"])
+        if self.config.subtensor.network == "local":
+            network = "local"
         try:
             bt.logging.warning(f"attempting sync with network {network}")
             self.metagraph = Metagraph(netuid=self.config.netuid, network=network, lite=False, sync=True)
@@ -637,8 +643,9 @@ class Validator:
                 )
             self._remote_log(logged_payload)
             bt.logging.error(f"could not sync metagraph {e} using network {network}. Starting retries. If this issue persists please restart the valdiator script")
+            
             self.close_subtensor()
-            self.subtensor = Validator.new_subtensor()
+            self.subtensor = Validator.new_subtensor(self.config.subtensor.network)
         def sync_metagraph(attempt):
             try:
                 self.metagraph.sync(block=None, lite=False, subtensor=self.subtensor)
@@ -656,7 +663,7 @@ class Validator:
                 )
                 self._remote_log(logged_payload)
                 self.close_subtensor()
-                self.subtensor = Validator.new_subtensor()
+                self.subtensor = Validator.new_subtensor(self.config.subtensor.network)
                 raise e
 
         for attempt in range(3):
@@ -718,6 +725,8 @@ class Validator:
                     dedicated_subtensor = None
                     try:
                         network = "finney"
+                        if self.config.subtensor.network == "local":
+                            network = "local"
                         dedicated_subtensor = Subtensor(network=network)
                         bt.logging.warning(f"Created dedicated subtensor for metadata fetch: {dedicated_subtensor} for {uid}")
                         
