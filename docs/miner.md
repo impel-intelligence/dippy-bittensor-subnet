@@ -20,9 +20,9 @@ btcli s register --netuid 11
 python3 neurons/miner.py --wallet.name coldkey  --wallet.hotkey hotkey --repo_namespace <your_huggingface_username> --repo_name <your_huggingface_repo> --chat_template <your_chat_template> --online True
 ```
 
-
 ## Running local evaluation
-The same evaluation used by validators can be run locally. 
+
+The evaluation code used by validators can also be run locally by miners. 
 Note that some score results, such as latency, may not be 100% exact given the nature of the scoring.
 
 In the root of this repository, first build the docker image:
@@ -58,6 +58,9 @@ python dippy_validation_api/evaluator.py --image grader:latest \
 --repo_namespace <your-repo-namespace> --repo_name <your-repo-name> \
 --chat_template_type <your-chat-template-type> --hash <your-hash>
 ```
+### Using cached dataset
+Sometimes, when running multiple instances of evaluation, it can help to utilize a cached version of the dataset to prevent issues with rate limits.
+To do so, simply save the results of the dataset endpoint. Afterwards, you can modify the dataset URL in the scoring file to use a locally hosted API. Note that this API is _not_ the same as the `dippy_validation_api` in this project.
 
 ## Comparing validation results
 
