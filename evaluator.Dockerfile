@@ -1,9 +1,6 @@
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+ENV DEBIAN_FRONTEND=noninteractive
 
-## Set environment variables
-#ENV PYTHONUNBUFFERED=1 \
-#    DEBIAN_FRONTEND=noninteractive \
-
-FROM pytorch/pytorch:2.3.1-cuda12.1-cudnn8-devel
 
 # build-essential: installs gcc which is needed to install some deps like rasterio
 # libGL1: needed to avoid following error when using cv2
@@ -17,6 +14,7 @@ RUN python -m pip install --upgrade pip
 
 # env variable required by uv
 ENV CONDA_PREFIX=/opt/conda
+ENV PYTHONUNBUFFERED=1 
 RUN pip install uv
 
 WORKDIR /app
@@ -25,14 +23,17 @@ WORKDIR /app
 COPY requirements.eval.txt requirements.txt
 
 RUN uv pip install --system -r requirements.txt --no-build-isolation
+# Explicitly install to manage breaking changes
+RUN uv pip install --system flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/
+RUN uv pip install --system flash-attn --no-build-isolation
+
 # Create empty directory and file for pyproject
 RUN mkdir ./dippy_validation_api
 RUN mkdir ./model_cache_dir
+
 RUN touch ./dippy_validation_api/__init__.py
 COPY scoring ./scoring
 COPY utilities ./utilities
-COPY template ./template
-COPY model ./model
 COPY constants ./constants
 # Required for self installing module
 COPY README.md .

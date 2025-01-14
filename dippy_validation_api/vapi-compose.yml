@@ -1,6 +1,6 @@
 services:
   vapi:
-    image: vapi:v14
+    image: vapi:v21
     command: ["python", "validation_api.py", "--queues", "0"]
     env_file:
       - .env

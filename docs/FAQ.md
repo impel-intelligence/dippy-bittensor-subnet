@@ -21,11 +21,12 @@ There are three general scoring phases:
    1. The model responses are graded against a streaming dataset. At certain intervals, the previous day data is dumped into https://huggingface.co/datasets/DippyAI/dippy_synthetic_dataset for reference. Note that the dataset if there to provide reference, but the actual evaluation is done on a sample that is generated in realtime. 
    2. Creativity is a score that modifies the above evaluation score. The less creative your model is (aka overfit), the less total score is achievable for evaluation.
    3. A small amount of the total score takes into account model size, latency, etc. The details can be seen in the `scoring` folder
-4. Vibe Score
-   5. A small amount of the total score is based on how well your model's output length matches that of the user
-6. Coherence Score
-   7. Your model will generate a conversation based on augmented data from https://huggingface.co/datasets/proj-persona/PersonaHub. This output is then compared with gpt-4o to evaluate if your model is coherent enough. This is a binary factor, meaning that if your model is not coherent enough, you will automatically be scored 0
-
+4. Vibe Score  
+   - A small amount of the total score is based on how well your model's output length matches that of the user
+6. Coherence Score  
+   - Your model will generate a conversation based on augmented data from https://huggingface.co/datasets/proj-persona/PersonaHub. This output is then compared with gpt-4o to evaluate if your model is coherent enough. This is a binary factor, meaning that if your model is not coherent enough, you will automatically be scored 0
+8. Post Evaluation Score  
+   - As part of efforts to more closely align with industry standard benchmarks, we are introducing a score multiplier that will be run post evaluation. The scoring for this can be considered arbitrary for now, until a more formal score attribute is added
 Once your model is scored, it is compared against other submitted models to create a win rate. Note that to discourage model copying, there is a time penalty for newer models that can reduce your overall win rate.
 
 ## I submitted my model. When will I get my rewards?

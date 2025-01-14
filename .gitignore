@@ -16,6 +16,8 @@ leaderboard.csv
 *playground.ipynb
 dippy/data
 *venv*
+dippy.egg-info
+model_cache_dir
 
 # C extensions
 *.so

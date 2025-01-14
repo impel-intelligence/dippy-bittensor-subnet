@@ -105,7 +105,7 @@ class SupabaseState:
     def get_json_result(self, hash):
         try:
             response = self.client.table("leaderboard").select("*").eq("hash", hash).execute()
-            if len(response.data) > 0:
+            if len(response.data) > 0:                
                 result = {
                     "score": {
                         "model_size_score": response.data[0]["model_size_score"],
@@ -115,6 +115,7 @@ class SupabaseState:
                         "total_score": response.data[0]["total_score"],
                         "coherence_score": response.data[0]["coherence_score"],
                         "creativity_score": response.data[0]["creativity_score"],
+                        "post_eval_score": response.data[0]["post_eval_score"],
                     },
                     "details": {
                         "model_hash": response.data[0]["model_hash"],

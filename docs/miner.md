@@ -2,27 +2,28 @@
 This document will outline advanced steps that miners can utilize for competing in the subnet.
 
 ## Environment Setup
+We recommend [`uv`](https://pypi.org/project/uv/) for managing your python environment. The following instructions will assume that you are running a uv virtual environment.
 
 ```shell
-pip install -r requirements.txt
-pip install -e .
+uv pip install -r requirements.miner.txt
+uv pip install -e .
 ```
 
 
 ## Submitting a model
 
+Register on the subnet
 ```shell
 btcli s register --netuid 11
 ```
 
-
 ```shell
-python3 neurons/miner.py --wallet.name coldkey  --wallet.hotkey hotkey --repo_namespace <your_huggingface_username> --repo_name <your_huggingface_repo> --chat_template <your_chat_template> --online True
+python neurons/miner.py --wallet.name coldkey  --wallet.hotkey hotkey --repo_namespace <your_huggingface_username> --repo_name <your_huggingface_repo> --chat_template <your_chat_template> --online True
 ```
 
-
 ## Running local evaluation
-The same evaluation used by validators can be run locally. 
+
+The evaluation code used by validators can also be run locally by miners. 
 Note that some score results, such as latency, may not be 100% exact given the nature of the scoring.
 
 In the root of this repository, first build the docker image:
@@ -43,10 +44,8 @@ uv pip install -r requirements.miner.txt
 # Install local package
 uv pip install -e .
 
-# You will need access to openai to grade coherence. Will transition to Corcel in a future update
-export OPENAI_API_KEY=x
-# You will also need access to the dataset api to set a token. Be sure to follow the instructions set out in `token_check.py` to set the correct value here
-export DATASET_API_KEY="Bearer YOUR_JWT_HERE"
+# You will need access to openrouter to grade coherence.
+export OPENROUTER_API_KEY=x
 # Build the docker image used to score locally
 docker build -f evaluator.Dockerfile -t grader:latest .
 # In the `dippy_validation_api/evaluator.py` script, there is the following line:
@@ -58,6 +57,16 @@ python dippy_validation_api/evaluator.py --image grader:latest \
 --repo_namespace <your-repo-namespace> --repo_name <your-repo-name> \
 --chat_template_type <your-chat-template-type> --hash <your-hash>
 ```
+
+
+## How to be a competitive miner
+As a miner, you're responsible for leveraging all methods available at your disposal, including but not limited to training new models, merging existing models (we recommend [MergeKit](https://github.com/arcee-ai/mergekit)), finetuning existing models, and so on to push roleplay LLMs forward.
+
+Given that model training can be computationally expensive, we highly recommend exhausting all requisite testing methods before making an official submission. Given a failed model, the subnet will not re-queue or otherwise reassess models for any reason outside of specific reasonable scenarios. Miners can always create new submissions via whichever method of their choice. 
+
+### Using cached dataset
+Sometimes, when running multiple instances of evaluation, it can help to utilize a cached version of the dataset to prevent issues with rate limits.
+To do so, simply save the results of the dataset endpoint. Afterwards, you can modify the dataset URL in the scoring file to use a locally hosted API. Note that this API is _not_ the same as the `dippy_validation_api` in this project.
 
 ## Comparing validation results
 
@@ -72,4 +81,4 @@ https://huggingface.co/datasets/DippyAI/dippy_synthetic_dataset
 This dataset is an archive of previously generated synthetic data. The current evaluation samples from both this and a more recently generated stream of synthetic data.
 
 https://huggingface.co/datasets/DippyAI/personahub_augmented_v0
-This dataset is not meant to be trained on, but rather a reference for how the current implementation of coherence is calculated. 
+This dataset is not meant to be trained on, but rather a reference for how the current implementation of coherence score is calculated. 

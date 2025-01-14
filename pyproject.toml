@@ -27,7 +27,7 @@ Homepage = "https://github.com/impel-intelligence/dippy-bittensor-subnet"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["scoring*", "common*", "constants*", "utilities*", "template*", "model*", "dippy_validation_api*"]
+include = ["scoring*", "common*", "constants*", "utilities*", "dippy_validation_api*"]
 exclude = ["tests*"]
 
 [tool.setuptools]
