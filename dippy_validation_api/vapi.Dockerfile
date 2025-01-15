@@ -22,7 +22,7 @@ RUN uv pip install -r requirements.txt
 COPY scoring ./scoring
 COPY dippy_validation_api ./dippy_validation_api
 COPY utilities ./utilities
-COPY template ./template
+RUN mkdir ./template
 COPY model ./model
 COPY constants ./constants
 # Required for self installing module
