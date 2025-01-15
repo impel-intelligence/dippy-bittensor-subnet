@@ -92,8 +92,8 @@ class Scores(BaseModel):
         total_score += VIBE_SCORE_WEIGHT * self.vibe_score
         self.coherence_score = 1 if self.coherence_score >= COHERENCE_MINIMUM else 0
         total_score = total_score * self.coherence_score
-        multiplier = self.model_size_adjuster(self.llm_size_score)
-        total_score = total_score * multiplier
+        # multiplier = self.model_size_adjuster(self.llm_size_score)
+        # total_score = total_score * multiplier
         total_score = total_score * self.post_eval_score
         return total_score
 
@@ -103,8 +103,7 @@ def main():
     # Create a Scores instance with random values
     scores = Scores(
         qualitative_score=random.uniform(0.25, 0.70),
-        # creativity_score=random.uniform(0, 1), 
-        creativity_score=0.9, 
+        creativity_score=random.uniform(0, 1), 
         vibe_score=random.uniform(0, 1),
         coherence_score=1,
         llm_size_score=random.uniform(0, 1),

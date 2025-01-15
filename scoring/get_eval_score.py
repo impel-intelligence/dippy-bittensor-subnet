@@ -9,7 +9,7 @@ from accelerate.utils import release_memory
 from datetime import datetime, timezone, timedelta
 
 
-from scoring.eval_score import eval_score, cleanup, warmup_model, eval_score_batch
+from scoring.eval_score import cleanup, warmup_model, eval_score_batch
 from scoring.dataset import StreamedSyntheticDataset
 
 # Import necessary modules and functions from the main API file
@@ -29,9 +29,8 @@ max_entropy = math.log(VOCAB_TRUNCATION)
 
 
 def get_eval_score(request: EvaluateModelRequest):
-    torch.cuda.set_device(0)  # Only use first GPU
-
     repo_id = f"{request.repo_namespace}/{request.repo_name}"
+    print(f"CUDA devices: {torch.cuda.device_count()}")
     print(f"Using CUDA device: {torch.cuda.current_device()}")
     print(f"Active GPU: {torch.cuda.get_device_name(0)}")
     print(f"Repo ID: {repo_id}")
@@ -77,6 +76,7 @@ def get_eval_score(request: EvaluateModelRequest):
         except Exception as e:
             raise Exception(f"Error loading model: {str(e)}")
 
+
     model.eval()
 
     print("Downloading tokenizer")
@@ -108,6 +108,7 @@ def get_eval_score(request: EvaluateModelRequest):
 
     # warm up the model
     num_gpus = torch.cuda.device_count()
+    model.to('cuda')
     print(f"Warming up model with gpus {num_gpus}")
 
     try:
