@@ -16,26 +16,30 @@ MAX_NUM_SEQS = 16
 
 
 def get_inference_score(request: EvaluateModelRequest):
-    try:
-        inference_score_result = wrap_inference_score(request)
-        return inference_score_result
-    except Exception as e:
-        raise e
-
+    inference_score_result = wrap_inference_score(request)
+    return inference_score_result
 
 def wrap_inference_score(request: EvaluateModelRequest):
     from scoring.vibe_score import get_vibe_match_score
     from scoring.coherence_score import get_coherence_score
 
-    model_name = f"{request.repo_namespace}/{request.repo_name}"
     # For simplicity, will always look for main branch
-    revision = "main"
-    print(f"modelname : {model_name}")
+    repo_id = f"{request.repo_namespace}/{request.repo_name}"
+    print(f"Using CUDA device: {torch.cuda.current_device()}")
+    print(f"Active GPU: {torch.cuda.get_device_name(0)}")
+    print(f"Repo ID: {repo_id}")
+
+    # Option 2: Using torch.cuda
+    torch.cuda.set_device(0)  # Only use first GPU
+    
+    print(f"Using CUDA device: {torch.cuda.current_device()}")
+    print(f"Active GPU: {torch.cuda.get_device_name(0)}")
+
+
     for i in range(torch.cuda.device_count()):
         print(f"debug_cuda_devices_available : {torch.cuda.get_device_properties(i).name}")
     model = LLM(
-        model=model_name,
-        revision=revision,
+        model=repo_id,
         tensor_parallel_size=torch.cuda.device_count(),
         max_num_seqs=MAX_NUM_SEQS,
         max_model_len=MAX_SEQ_LEN_COHERENCE_SCORE,
@@ -44,7 +48,7 @@ def wrap_inference_score(request: EvaluateModelRequest):
 
     vibe_result = get_vibe_match_score(request, model)
     coherence_result = {}
-    coherence_result = get_coherence_score(request, model)
+    coherence_result = get_coherence_score(request, model, True)
 
     inference_result = vibe_result | coherence_result
 

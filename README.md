@@ -215,3 +215,45 @@ Our codebase is built upon [Nous Research's](https://github.com/NousResearch/fin
 ## License
 
 The Dippy Bittensor subnet is released under the [MIT License](./LICENSE).
+
+
+# Project Structure Overview
+
+## Core Components
+
+### 1. Main Application
+- `neurons/` - Core neural network components
+  - `miner.py` - Mining node implementation
+  - `validator.py` - Validation node implementation
+  - `model_queue.py` - Queue management for model processing
+
+### 2. Model Management
+- `model/` - Model-related functionality
+  - `data.py` - Data structures and model definitions
+  - `scores.py` - Scoring system implementation
+
+### 3. Validation API
+- `dippy_validation_api/` - API for model validation. Only validators and subnet operators require usage of this API. Miners do not need to set this up in 99% of cases
+
+### 4. Utilities
+- `utilities/` - Common utility functions
+  - `repo_details.py` - Repository management utilities
+  - `validation_utils.py` - Validation helper functions
+
+### 5. Documentation
+- `docs/` - Project documentation
+  - `miner.md` - Miner setup and usage guide
+  - `validator.md` - Validator setup and usage guide
+  - `FAQ.md` - Frequently asked questions
+
+## Configuration Files
+- `pyproject.toml` - Project metadata and dependencies
+- `requirements.txt` - Main project dependencies
+- `requirements_val_api.txt` - Validation API dependencies
+- `requirements.miner.txt` - Miner-specific dependencies
+- `requirements.eval.txt` - Evaluation-specific dependencies used for docker based evaluation
+- `min_compute.yml` - Minimum compute requirements specification
+
+## Docker Configuration
+- `evaluator.Dockerfile` - Docker configuration for evaluator
+- `dippy_validation_api/vapi.Dockerfile` - Docker configuration for validation API

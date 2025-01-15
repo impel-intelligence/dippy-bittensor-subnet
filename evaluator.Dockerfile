@@ -25,14 +25,14 @@ WORKDIR /app
 COPY requirements.eval.txt requirements.txt
 
 RUN uv pip install --system -r requirements.txt --no-build-isolation
+RUN uv pip install --system flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/
 # Create empty directory and file for pyproject
 RUN mkdir ./dippy_validation_api
 RUN mkdir ./model_cache_dir
+
 RUN touch ./dippy_validation_api/__init__.py
 COPY scoring ./scoring
 COPY utilities ./utilities
-COPY template ./template
-COPY model ./model
 COPY constants ./constants
 # Required for self installing module
 COPY README.md .

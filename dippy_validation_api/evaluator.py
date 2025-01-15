@@ -10,7 +10,7 @@ from typing import Optional, Union, Dict, Any
 
 from scoring.common import EvaluateModelRequest
 from utilities.event_logger import EventLogger
-from model.scores import Scores
+from common.scores import Scores
 
 DEFAULT_IMAGE_NAME = "grader:latest"
 
@@ -121,6 +121,8 @@ class Evaluator:
         if job_type == "inference":
             env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:False"
             env["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
+            env["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
+            env["VLLM_ATTENTION_BACKEND"] = "FLASHINFER"
 
         self.logger.debug("env", env=env)
 

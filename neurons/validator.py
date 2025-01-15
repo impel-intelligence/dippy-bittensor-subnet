@@ -37,9 +37,9 @@ from importlib.metadata import version as pkg_version
 from shlex import split
 
 import constants
-from model.data import ModelMetadata, ModelId
+from common.data import ModelMetadata, ModelId
 from huggingface_hub import get_safetensors_metadata
-from model.scores import Scores, StatusEnum
+from common.scores import Scores, StatusEnum
 import traceback
 import threading
 import multiprocessing
@@ -764,6 +764,8 @@ class Validator:
 
     @staticmethod
     def adjusted_temperature_multipler(current_block: int) -> float:
+        # to be updated to this value soon
+        # CHANGE_BLOCK = 4800000
         CHANGE_BLOCK = 4247000
         # currently force static 0.15 temperature
         if current_block > CHANGE_BLOCK:

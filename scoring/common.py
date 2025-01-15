@@ -22,7 +22,7 @@ MAX_SEQ_LEN = (
 )
 
 MAX_SEQ_LEN_VIBE_SCORE = 2048  # maximum sequence length that should be allowed for vibe score calculation because it is slow with longer sequences than this
-MAX_SEQ_LEN_COHERENCE_SCORE = 4096
+MAX_SEQ_LEN_COHERENCE_SCORE = 8192
 BATCH_SIZE_VIBE_SCORE = 4  # batch size for vibe score calculation
 SAMPLE_SIZE_VIBE_SCORE = 128  # number of samples to evaluate the model from the dataset for vibe score calculation
 # number of samples to evaluate the model from the dataset for coherence score calculation
@@ -36,7 +36,7 @@ SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 COHERENCE_BATCH_SIZE = 16
 COHERENCE_MAX_TOKENS = 1024
 COHERENCE_NUM_EVALS = 256
-COHERENCE_EVAL_MODEL = "gpt-4o"
+COHERENCE_EVAL_MODEL = "openai/gpt-4o-2024-11-20"
 
 DATASET_DIR = "evalsets"
 MODEL_CACHE_DIR = "./model_cache_dir"
@@ -63,12 +63,11 @@ class EvaluateModelRequest(BaseModel):
 chat_template_mappings = {
     "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
     "chatml": "prompt_templates/chatml_prompt_template.jinja",
-    "mistral": "prompt_templates/mistral_prompt_template.jinja",
     "zephyr": "prompt_templates/zephyr_prompt_template.jinja",
+    "mistral":"prompt_templates/mistral_prompt_template.jinja",
     "alpaca": "prompt_templates/alpaca_prompt_template.jinja",
     "llama2": "prompt_templates/llama2_prompt_template.jinja",
     "llama3": "prompt_templates/llama3_prompt_template.jinja",
     "llama3dot1": "prompt_templates/llama3dot1_prompt_template.jinja",
-    # Currently not supported unti further optimizations are made
     "gemma": "prompt_templates/gemma_it_prompt_template.jinja",
 }

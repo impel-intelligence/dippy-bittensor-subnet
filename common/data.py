@@ -1,5 +1,4 @@
 from typing import Any, ClassVar, Dict, Optional, Type
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from pydantic import BaseModel, Field, PositiveInt
 
 # The maximum bytes for metadata on the chain.

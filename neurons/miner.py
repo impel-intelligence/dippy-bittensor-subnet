@@ -5,7 +5,7 @@ from typing import Optional, Type
 from pydantic import BaseModel, Field, PositiveInt
 import bittensor as bt
 
-from model.data import ModelId
+from common.data import ModelId
 
 from utilities.validation_utils import regenerate_hash
 

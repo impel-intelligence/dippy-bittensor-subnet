@@ -2,7 +2,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 import sys
-from model.data import ModelId
+from common.data import ModelId
 
 
 class MinerEntry(BaseModel):

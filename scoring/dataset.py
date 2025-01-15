@@ -25,18 +25,18 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
 
 import requests
 
-DATASET_URL = "https://datasets.dippy-bittensor-subnet.com/dataset"
+DATASET_URL = "https://conversations.dippy-bittensor-subnet.com/dataset"
 DATASET_API_KEY = os.environ.get("DATASET_API_KEY", "dippy")
-DEFAULT_EPOCH_DATE = "20240930"
+DEFAULT_EPOCH_DATE = "20241201"
 
 
 def get_latest_from_set():
     current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
-    url = f"{DATASET_URL}?epoch_date={DEFAULT_EPOCH_DATE}&current_date={current_date}"
+    url = f"{DATASET_URL}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}"
 
-    response = requests.get(url, headers={"validator-hotkey": DATASET_API_KEY, "Authorization": DATASET_API_KEY})
+    response = requests.get(url, headers={"validator-hotkey": 'someVerysecretKey', "Authorization": DATASET_API_KEY})
     response.raise_for_status()  # Raise an error for bad responses
-    data = response.json().get("data", [])
+    data = response.json().get("all_convos", [])
     return data
 
 
@@ -84,9 +84,6 @@ class StreamedSyntheticDataset(Dataset):
         self._tokenizer = tokenizer
 
     def process_data(self, data, max_input_len):
-        """
-        Convert pippa dataset to a format that can be used downstream.
-        """
         encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")  # to get approx token count
         converted_dataset = []
         for data_point in data:
