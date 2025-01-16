@@ -164,6 +164,33 @@ class ModelQueue:
         metagraph = self.subtensor.metagraph(self.netuid)
         all_uids = metagraph.uids.tolist()
 
+        substrate_client = self.subtensor.substrate
+        all_commitments = substrate_client.query_map(
+                module="Commitments",
+                storage_function="CommitmentOf",
+                params=[self.config.netuid],
+                block_hash=None ,
+            )
+        commitments = {}
+        for key, value in all_commitments:
+                hotkey = key.value
+                commitment_info = value.value.get("info", {})
+                fields = commitment_info.get("fields", [])
+                if not fields or not isinstance(fields[0], dict):
+                    continue
+                field_value = next(iter(fields[0].values()))
+                if field_value.startswith("0x"):
+                    field_value = field_value[2:]
+                try:
+                    chain_str = bytes.fromhex(field_value).decode("utf-8").strip()
+                    commitments[str(hotkey)] = {
+                        "block": value["block"].value,
+                        "chain_str": chain_str
+                    }
+                except Exception as e:
+                    self.logger.error(f"Failed to decode commitment for hotkey {hotkey}: {e}")
+                    continue
+
         queued = 0
         failed = 0
         no_metadata = 0
@@ -171,19 +198,15 @@ class ModelQueue:
         for uid in all_uids:
             try:
                 hotkey = metagraph.hotkeys[uid]
-                # metadata = bt.extrinsics.serving.get_metadata(self.subtensor, self.netuid, hotkey)
-                metadata = bt.core.extrinsics.serving.get_metadata(
-                    self=self.subtensor, netuid=self.config.netuid, hotkey=hotkey
-                )
-                if metadata is None:
+                commit_data = None
+                commit_data = commitments[hotkey] if hotkey in commitments else None
+                if commit_data is None:
                     no_metadata += 1
                     self.logger.info(f"NO_METADATA : uid: {uid} hotkey : {hotkey}")
                     continue
-                commitment = metadata["info"]["fields"][0]
-                hex_data = commitment[list(commitment.keys())[0]][2:]
-                chain_str = bytes.fromhex(hex_data).decode()
-                model_id = ModelId.from_compressed_str(chain_str)
-                block = metadata["block"]
+
+                model_id = ModelId.from_compressed_str(commit_data["chain_str"])
+                block = commit_data["block"]
                 if block < SKIP_BLOCK:
                     continue
 
@@ -197,15 +220,14 @@ class ModelQueue:
                     config=self.config,
                     retryWithRemote=True,
                 )
-                stats = f"{result.status} : uid: {uid} hotkey : {hotkey} block: {block} model_metadata : {model_id} score: {result.total_score}"
+                stats = f"{result.status} : uid: {uid} hotkey : {hotkey} block: {block} model_metadata : {model_id}"
                 self.logger.info(stats)
                 if result.status == StatusEnum.FAILED:
                     failed += 1
 
                 if result.status == StatusEnum.QUEUED:
                     try:
-                        print(f"QUEUED: {hotkey}")
-                        # duplicate(model_id.repo_namespace, model_id.repo_name)
+                        self.logger.info(f"QUEUED: {hotkey}")
                     except Exception as e:
                         self.logger.error(f"could not duplicate repo : {e}")
                     queued += 1
@@ -241,7 +263,6 @@ class ModelQueue:
     ) -> Scores:
         # Status:
         # QUEUED, RUNNING, FAILED, COMPLETED
-        # return (score, status)
         if config.use_local_validation_api and not retryWithRemote:
             validation_endpoint = f"http://localhost:{config.local_validation_api_port}/check_model"
         else:
@@ -260,7 +281,7 @@ class ModelQueue:
 
         if os.environ.get("ADMIN_KEY", None) not in [None, ""]:
             payload["admin_key"] = os.environ["ADMIN_KEY"]
-
+        result = None
         # Make the POST request to the validation endpoint
         try:
             response = requests.post(validation_endpoint, json=payload)
@@ -271,10 +292,10 @@ class ModelQueue:
                 raise RuntimeError(f"no leaderboard entry exists at this time for {payload}")
 
             status = StatusEnum.from_string(result["status"])
-            score_data.total_score = result["total_score"]
             score_data.status = status
+            print(result)
         except Exception as e:
-            self.logger.error(f"Failed to get score and status for {namespace}/{name} {e}")
+            self.logger.error(f"Failed to get score and status from API for {namespace}/{name} {result} {e}")
             score_data.status = StatusEnum.FAILED
         return score_data
 

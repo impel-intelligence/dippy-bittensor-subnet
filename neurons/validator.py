@@ -19,7 +19,7 @@ import copy
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import datetime as dt
 import os
 import math
@@ -418,6 +418,7 @@ class Validator:
                 self.subtensor = Validator.new_subtensor()
                 time.sleep(wait_time)
         return False
+    
 
     async def _try_set_weights(self, debug: bool = False) -> Tuple[bool, Optional[str]]:
         weights_success = False
@@ -504,11 +505,84 @@ class Validator:
             self._remote_log(logged_payload)
         return weights_set_success, error_msg
 
+    def build_commit_data(self) -> Dict[str, Any]:
+        max_retries = 10
+        base_delay = 1.5  # seconds
+        commitments = {}
+        raw_commmitments = None
+        for attempt in range(max_retries):
+            try:
+                # First try using self.subtensor
+                try:
+                    substrate_client = self.subtensor.substrate
+                    raw_commmitments = substrate_client.query_map(
+                    module="Commitments",
+                    storage_function="CommitmentOf",
+                    params=[self.config.netuid],
+                    block_hash=None,
+                    )
+                except Exception as e:
+                    bt.logging.warning(f"Failed to fetch metadata with self.subtensor: {e}, trying dedicated subtensor")
+                    # Fall back to dedicated subtensor
+                    dedicated_subtensor = None
+                    try:
+                        network = "finney"
+                        dedicated_subtensor = Subtensor(network=network)
+                        bt.logging.warning(f"Created dedicated subtensor for metadata fetch: {dedicated_subtensor} ")
+                        substrate_client = dedicated_subtensor.substrate
+                        raw_commmitments = substrate_client.query_map(
+                        module="Commitments",
+                        storage_function="CommitmentOf",
+                        params=[self.config.netuid],
+                        block_hash=None,
+                        )
+                    finally:
+                        # Ensure we close the dedicated subtensor
+                        if dedicated_subtensor is not None:
+                            try:
+                                dedicated_subtensor.close()
+                            except Exception as close_error:
+                                bt.logging.error(f"Error closing dedicated subtensor: {close_error}")
+            except Exception as e:
+                delay = base_delay ** attempt
+                if attempt < max_retries - 1:  # Don't log "retrying" on the last attempt
+                    bt.logging.error(f"Attempt {attempt + 1}/{max_retries} failed to fetch data : {e}")
+                    bt.logging.info(f"Retrying in {delay:.1f} seconds...")
+                    time.sleep(delay)
+                else:
+                    bt.logging.error(f"All attempts failed to fetch data : {e}")
+                    raise e
+        
+        if raw_commmitments is None:
+            raise Exception("Failed to fetch raw commitments from chain")
+        commitments = {}
+        for key, value in raw_commmitments:
+                hotkey = key.value
+                commitment_info = value.value.get("info", {})
+                fields = commitment_info.get("fields", [])
+                if not fields or not isinstance(fields[0], dict):
+                    continue
+                field_value = next(iter(fields[0].values()))
+                if field_value.startswith("0x"):
+                    field_value = field_value[2:]
+                try:
+                    chain_str = bytes.fromhex(field_value).decode("utf-8").strip()
+                    commitments[str(hotkey)] = {
+                        "block": value["block"].value,
+                        "chain_str": chain_str
+                    }
+                except Exception as e:
+                    bt.logging.error(f"Failed to decode commitment for hotkey {hotkey}: {e}")
+                    continue
+        
+        return commitments
+
+
     async def build_registry(
         self, all_uids: List[int], current_block: int, max_concurrent: int = 32
     ) -> Tuple[int, MinerEntry]:
         miner_registry: Dict[int, MinerEntry] = {uid: MinerEntry() for uid in all_uids}
-
+        commitments = self.build_commit_data()
         invalid_uids = []
 
         async def process_uid(uid):
@@ -516,11 +590,17 @@ class Validator:
             miner_registry[uid].hotkey = hotkey
             bt.logging.debug(f"now checking for uid={uid} and hotkey {hotkey}")
             try:
-                model_data = self.fetch_model_data(uid, hotkey)
-                if model_data is None:
+                
+                raw_miner_data = commitments[hotkey] if hotkey in commitments else None
+                if raw_miner_data is None:
                     invalid_uids.append(uid)
                     bt.logging.error(f"skip uid={uid} no model_data")
                     return
+                miner_model_id = ModelId.from_compressed_str(raw_miner_data["chain_str"])
+                miner_block = raw_miner_data["block"]
+                model_data = MinerEntry()
+                model_data.block = miner_block
+                model_data.miner_model_id = miner_model_id
                 if model_data.miner_model_id is None:
                     invalid_uids.append(uid)
                     bt.logging.warning(f"skip uid={uid} no model_id available")
@@ -703,6 +783,7 @@ class Validator:
     def fetch_model_data(self, uid: int, hotkey: str) -> Optional[MinerEntry]:
         max_retries = 10
         base_delay = 1.5  # seconds
+
         for attempt in range(max_retries):
             try:
                 # First try using self.subtensor

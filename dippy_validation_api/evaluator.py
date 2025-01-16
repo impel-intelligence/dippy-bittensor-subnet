@@ -123,6 +123,7 @@ class Evaluator:
             env["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
             env["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
             env["VLLM_ATTENTION_BACKEND"] = "FLASHINFER"
+            env["VLLM_FLASHINFER_FORCE_TENSOR_CORES"] = "1"
 
         self.logger.debug("env", env=env)
 
