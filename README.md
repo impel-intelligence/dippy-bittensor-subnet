@@ -83,20 +83,10 @@ pip install -e .
 #### Submitting a model
 As a miner, you're responsible for leveraging all methods available at your disposal, including but not limited to training new models, merging existing models (we recommend [MergeKit](https://github.com/arcee-ai/mergekit)), finetuning existing models, and so on to push roleplay LLMs forward.
 
-We outline the following criteria for Phase 1:
-
-- Models should be 7B-13B parameters. Current maximum model size is 32GB. 
-- We don't support quantized models at the moment...coming soon!
-- Models MUST be Safetensors Format! Check upload_models.py for how the model upload precheck works.
-- Please test the model by loading model using transformers.AutoModelForCausalLM.from_pretrained
-- (Recommended) Test the model with arbitrary inputs, before submitting, to check for NaNs.
-- Models we are confident will work are of the Mistral-7B and Llama-3 8B family.
-- We support the "alpaca", "chatml", "llama2", "llama3", "mistral", "vicuna" and "zephyr" chat templates.
-
-Once you're happy with the performance of the model for the usecase of Roleplay, you can simply submit it to Hugging Face 🤗 and then use the following command:
+Once you're happy with the performance of the model for the usecase of Roleplay, you can simply upload with the following command:
 
 ```bash
-python3 dippy_subnet/upload_model.py --hf_repo_id HF_REPO --wallet.name WALLET  --wallet.hotkey HOTKEY --chat_template MODEL_CHAT_TEMPLATE --model_dir PATH_TO_MODEL   
+python neurons/miner.py --wallet.name coldkey  --wallet.hotkey hotkey --repo_namespace <your_huggingface_username> --repo_name <your_huggingface_repo> --chat_template <your_chat_template> --online True 
 ```
 
 
@@ -194,7 +184,20 @@ validator_venv/bin/python neurons/validator.py --wallet.name WALLET_NAME --walle
 # Run model queue to push models to validation api to be evaluated
 validator_venv/bin/python neurons/model_queue.py --use-local-validation-api
 ```
-## Model Evaluation Criteria
+
+## Subnet Incentive Mechanism
+
+The general structure of the incentive mechanism is as follows:
+1. Every miner has a model registered per UID
+2. Each miner's model submission is scored, with details outlined below
+   - The scoring mechanism is constantly evolving according to SOTA model bechmark data
+
+3. The validator compares each miner's score against all the other miners, and calculates a win rate
+    - Note that there are some modifiers for a miner's score such as their submission age in relation to other miner submissions (aka time penalty) to combat blatant model copying
+4. Given each miner's win rate, weights are assigned sorted by highest win rate
+
+
+### Model Evaluation Criteria
 ### Model Size
 A smaller model will score higher than a big model. Model size is the disk space occupied by the model repo from HF. The max model size is limited to 72GB.
 
@@ -203,7 +206,7 @@ A smaller model will score higher than a big model. Model size is the disk space
 A faster model will score higher than a slow model.
 
 ### Output Similarity
-Evaluated against datasets, a model that generates similiar resposne to groundtruth will score higher.
+Evaluated against datasets, a model that generates similiar resposne to groundtruth will score higher. There is an additional creativity component that utilizes the 
 
 ### Vibe Matching
 A model that can generate outputs with similiar length to its inputs will score higher.
@@ -215,3 +218,45 @@ Our codebase is built upon [Nous Research's](https://github.com/NousResearch/fin
 ## License
 
 The Dippy Bittensor subnet is released under the [MIT License](./LICENSE).
+
+
+# Project Structure Overview
+
+## Core Components
+
+### 1. Main Application
+- `neurons/` - Core neural network components
+  - `miner.py` - Mining node implementation
+  - `validator.py` - Validation node implementation
+  - `model_queue.py` - Queue management for model processing
+
+### 2. Model Management
+- `model/` - Model-related functionality
+  - `data.py` - Data structures and model definitions
+  - `scores.py` - Scoring system implementation
+
+### 3. Validation API
+- `dippy_validation_api/` - API for model validation. Only validators and subnet operators require usage of this API. Miners do not need to set this up in 99% of cases
+
+### 4. Utilities
+- `utilities/` - Common utility functions
+  - `repo_details.py` - Repository management utilities
+  - `validation_utils.py` - Validation helper functions
+
+### 5. Documentation
+- `docs/` - Project documentation
+  - `miner.md` - Miner setup and usage guide
+  - `validator.md` - Validator setup and usage guide
+  - `FAQ.md` - Frequently asked questions
+
+## Configuration Files
+- `pyproject.toml` - Project metadata and dependencies
+- `requirements.txt` - Main project dependencies
+- `requirements_val_api.txt` - Validation API dependencies
+- `requirements.miner.txt` - Miner-specific dependencies
+- `requirements.eval.txt` - Evaluation-specific dependencies used for docker based evaluation
+- `min_compute.yml` - Minimum compute requirements specification
+
+## Docker Configuration
+- `evaluator.Dockerfile` - Docker configuration for evaluator
+- `dippy_validation_api/vapi.Dockerfile` - Docker configuration for validation API

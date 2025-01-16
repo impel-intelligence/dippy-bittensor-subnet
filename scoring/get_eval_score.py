@@ -8,7 +8,8 @@ from transformers import AutoTokenizer, BitsAndBytesConfig, AutoModelForCausalLM
 from accelerate.utils import release_memory
 from datetime import datetime, timezone, timedelta
 
-from scoring.eval_score import eval_score, cleanup, warmup_model, eval_score_batch
+
+from scoring.eval_score import cleanup, warmup_model, eval_score_batch
 from scoring.dataset import StreamedSyntheticDataset
 
 # Import necessary modules and functions from the main API file
@@ -16,6 +17,7 @@ from scoring.common import (
     MAX_AVG_LATENCY,
     MAX_GENERATION_LENGTH,
     MAX_MODEL_SIZE,
+    MODEL_CACHE_DIR,
     VOCAB_TRUNCATION,
     MAX_SEQ_LEN,
     EVALUATION_DATASET_SAMPLE_SIZE,
@@ -27,8 +29,13 @@ max_entropy = math.log(VOCAB_TRUNCATION)
 
 
 def get_eval_score(request: EvaluateModelRequest):
+    repo_id = f"{request.repo_namespace}/{request.repo_name}"
+    print(f"CUDA devices: {torch.cuda.device_count()}")
+    print(f"Using CUDA device: {torch.cuda.current_device()}")
+    print(f"Active GPU: {torch.cuda.get_device_name(0)}")
+    print(f"Repo ID: {repo_id}")
+    
     print(f"dumping env {os.environ}")
-    print("debug_cuda_devices")
     for i in range(torch.cuda.device_count()):
         print(torch.cuda.get_device_properties(i).name)
 
@@ -38,24 +45,22 @@ def get_eval_score(request: EvaluateModelRequest):
     failure_reason = ""
     # make dir data/hash if not exist
     cache_path = f"{request.hash}_{request.repo_namespace}_{request.repo_name}"
-    if not os.path.exists(f"model_cache_dir/{cache_path}"):
-        os.makedirs(f"model_cache_dir/{cache_path}")
+    if not os.path.exists(f"{MODEL_CACHE_DIR}/{cache_path}"):
+        os.makedirs(f"{MODEL_CACHE_DIR}/{cache_path}")
 
     quant_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True,  # This does not hurt performance much according to
         bnb_4bit_compute_dtype=torch.bfloat16,
     )
-
+    
     try:
         model = AutoModelForCausalLM.from_pretrained(
-            f"{request.repo_namespace}/{request.repo_name}",
-            revision=request.revision,
+            repo_id,
             quantization_config=quant_config,
             attn_implementation="flash_attention_2",
             torch_dtype=torch.bfloat16,
-            device_map="sequential",
-            cache_dir=f"model_cache_dir/{cache_path}",
+            cache_dir=MODEL_CACHE_DIR,
         )
         print(f"loaded model as {type(model)}")
 
@@ -65,28 +70,29 @@ def get_eval_score(request: EvaluateModelRequest):
                 f"Error loading model in 4 bit quant with flash attention.: {e}. Trying vanilla load. This might cause OOM."
             )
             model = AutoModelForCausalLM.from_pretrained(
-                f"{request.repo_namespace}/{request.repo_name}",
-                revision=request.revision,
-                device_map="auto",
-                cache_dir=f"model_cache_dir/{cache_path}",
-                # force_download=True
+                repo_id,
+                cache_dir=MODEL_CACHE_DIR,
             )
         except Exception as e:
             raise Exception(f"Error loading model: {str(e)}")
+
 
     model.eval()
 
     print("Downloading tokenizer")
     try:
         input_tokenizer = AutoTokenizer.from_pretrained(
-            f"{request.repo_namespace}/{request.repo_name}",
+            repo_id,
             padding_side="left",
             force_download=True,
+            cache_dir=MODEL_CACHE_DIR,
+
         )
         output_tokenizer = AutoTokenizer.from_pretrained(
-            f"{request.repo_namespace}/{request.repo_name}",
+            repo_id,
             padding_side="right",
             force_download=True,
+            cache_dir=MODEL_CACHE_DIR,
         )
         if input_tokenizer.pad_token is None:
             input_tokenizer.pad_token = input_tokenizer.eos_token  # add a pad token if not present
@@ -102,6 +108,7 @@ def get_eval_score(request: EvaluateModelRequest):
 
     # warm up the model
     num_gpus = torch.cuda.device_count()
+    model.to('cuda')
     print(f"Warming up model with gpus {num_gpus}")
 
     try:

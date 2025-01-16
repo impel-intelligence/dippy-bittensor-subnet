@@ -10,7 +10,7 @@ from typing import Optional, Union, Dict, Any
 
 from scoring.common import EvaluateModelRequest
 from utilities.event_logger import EventLogger
-from model.scores import Scores
+from common.scores import Scores
 
 DEFAULT_IMAGE_NAME = "grader:latest"
 
@@ -94,7 +94,7 @@ class Evaluator:
         self.device_requests = [docker.types.DeviceRequest(device_ids=[gpu_ids], capabilities=[["gpu"]])]
 
         self.env = {
-            "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY"),
+            "OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY"),
             "HF_TOKEN": os.environ.get("HF_TOKEN"),
             "VLLM_WORKER_MULTIPROC_METHOD": "_",
             "PYTORCH_CUDA_ALLOC_CONF": "_",
@@ -121,6 +121,8 @@ class Evaluator:
         if job_type == "inference":
             env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:False"
             env["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
+            env["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
+            env["VLLM_ATTENTION_BACKEND"] = "FLASHINFER"
 
         self.logger.debug("env", env=env)
 
@@ -243,12 +245,18 @@ def entry():
     print(f"running {image_name} with {req}")
 
     try:
-        evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="0")
+        # evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="0")
+        evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="1")
 
-        infrence_result = evaler.inference_score(req)
-        if isinstance(infrence_result, RunError):
-            raise Exception(infrence_result.error)
-        print(f"infrence_result : {infrence_result}")
+        # infrence_result = evaler.inference_score(req)
+        # if isinstance(infrence_result, RunError):
+        #     raise Exception(infrence_result.error)
+        # print(f"infrence_result : {infrence_result}")
+        # Override inference result with hardcoded values for testing
+        infrence_result  = InferenceScore(
+                vibe_score=0.5,
+                coherence_score=1,
+        )
 
         eval_result = evaler.eval_score(req)
         print(f"eval_result : {eval_result}")

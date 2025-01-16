@@ -9,7 +9,7 @@ import bittensor as bt
 import requests
 from transformers import AutoModelForCausalLM, AutoConfig
 
-from model.data import ModelId
+from common.data import ModelId
 
 
 def assert_registered(wallet: bt.wallet, metagraph: bt.metagraph) -> int:

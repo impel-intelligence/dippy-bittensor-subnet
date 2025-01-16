@@ -20,7 +20,7 @@ from typing import Dict, Any
 
 from dippy_validation_api.evaluator import Evaluator, RunError
 from dippy_validation_api.persistence import SupabaseState
-from model.scores import StatusEnum, Scores
+from common.scores import StatusEnum, Scores
 from utilities.validation_utils import (
     regenerate_hash,
 )

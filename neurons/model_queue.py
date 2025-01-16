@@ -21,7 +21,7 @@ import time
 import argparse
 import requests
 
-from model.data import ModelId
+from common.data import ModelId
 
 import math
 import torch
@@ -30,7 +30,7 @@ import constants
 import traceback
 import bittensor as bt
 
-from model.scores import StatusEnum, Scores
+from common.scores import StatusEnum, Scores
 from utilities.local_metadata import LocalMetadata
 import os
 

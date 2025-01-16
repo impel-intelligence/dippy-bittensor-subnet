@@ -2,22 +2,23 @@
 This document will outline advanced steps that miners can utilize for competing in the subnet.
 
 ## Environment Setup
+We recommend [`uv`](https://pypi.org/project/uv/) for managing your python environment. The following instructions will assume that you are running a uv virtual environment.
 
 ```shell
-pip install -r requirements.txt
-pip install -e .
+uv pip install -r requirements.miner.txt
+uv pip install -e .
 ```
 
 
 ## Submitting a model
 
+Register on the subnet
 ```shell
 btcli s register --netuid 11
 ```
 
-
 ```shell
-python3 neurons/miner.py --wallet.name coldkey  --wallet.hotkey hotkey --repo_namespace <your_huggingface_username> --repo_name <your_huggingface_repo> --chat_template <your_chat_template> --online True
+python neurons/miner.py --wallet.name coldkey  --wallet.hotkey hotkey --repo_namespace <your_huggingface_username> --repo_name <your_huggingface_repo> --chat_template <your_chat_template> --online True
 ```
 
 ## Running local evaluation
@@ -43,10 +44,8 @@ uv pip install -r requirements.miner.txt
 # Install local package
 uv pip install -e .
 
-# You will need access to openai to grade coherence. Will transition to Corcel in a future update
-export OPENAI_API_KEY=x
-# You will also need access to the dataset api to set a token. Be sure to follow the instructions set out in `token_check.py` to set the correct value here
-export DATASET_API_KEY="Bearer YOUR_JWT_HERE"
+# You will need access to openrouter to grade coherence.
+export OPENROUTER_API_KEY=x
 # Build the docker image used to score locally
 docker build -f evaluator.Dockerfile -t grader:latest .
 # In the `dippy_validation_api/evaluator.py` script, there is the following line:
@@ -75,4 +74,4 @@ https://huggingface.co/datasets/DippyAI/dippy_synthetic_dataset
 This dataset is an archive of previously generated synthetic data. The current evaluation samples from both this and a more recently generated stream of synthetic data.
 
 https://huggingface.co/datasets/DippyAI/personahub_augmented_v0
-This dataset is not meant to be trained on, but rather a reference for how the current implementation of coherence is calculated. 
+This dataset is not meant to be trained on, but rather a reference for how the current implementation of coherence score is calculated. 

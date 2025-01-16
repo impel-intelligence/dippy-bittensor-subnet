@@ -20,11 +20,11 @@ coherence_dataset = PersonaHubDataset(
     max_input_len=MAX_SEQ_LEN_COHERENCE_SCORE - MAX_GENERATION_LENGTH - 200,
 )
 
-# TODO: Replace with corcel
 from openai import OpenAI
 
 remote_client = OpenAI(
-    api_key=os.environ.get("OPENAI_API_KEY", "x"),
+  base_url="https://openrouter.ai/api/v1",
+  api_key=os.environ.get("OPENROUTER_API_KEY", "x"),
 )
 
 
@@ -66,10 +66,38 @@ def coherence_evaluator(generated_text: str):
         return 0
 
 
-def get_coherence_score(request: EvaluateModelRequest, model: LLM):
+def generate_user_response(messages) -> str:
+    generate_user_prompt = f'''
+    You are a human having a conversation. Generate a natural, casual response that a typical user might give in this conversation. The response should be brief (1-3 sentences) and conversational in tone.
+
+    Here is the conversation history:
+    """
+    {messages}
+    """
+
+    Generate a user response that naturally continues this conversation:
+    '''
     try:
+        chat_completion = remote_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": generate_user_prompt,
+                }
+            ],
+            model=COHERENCE_EVAL_MODEL,
+            temperature=0.5,
+        )
+        content = str(chat_completion.choices[0].message.content)
+        return content
+    except Exception as e:
+        return ""
+
+def get_coherence_score(request: EvaluateModelRequest, model: LLM, verbose=False):
+    try:
+        repo_id = f"{request.repo_namespace}/{request.repo_name}"
         input_tokenizer = AutoTokenizer.from_pretrained(
-            f"{request.repo_namespace}/{request.repo_name}", revision=request.revision
+            repo_id
         )
         # Set chat template params
         coherence_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
@@ -81,17 +109,23 @@ def get_coherence_score(request: EvaluateModelRequest, model: LLM):
 
         return {"coherence_score": cscore}
     except Exception as e:
+        if verbose:
+            print(e)
         raise e
 
-
-def pretty_convo(dict_list, score):
-    print(f"score: {score}")
-    print(f"convos: {len(dict_list)}")
+def pretty_convo(dict_list, score) -> str:
+    output = []
+    output.append(f"score: {score}")
+    output.append(f"convos: {len(dict_list)}")
     for i, item in enumerate(dict_list):
-        print(f"Entry {i + 1}:")
-        print(f"  Role: {item['role']}")
-        print(f"  Content: {item['content']}")
-        print()
+        output.append(f"Entry {i + 1}:")
+        output.append(f"  Role: {item['role']}")
+        output.append(f"  Content: {item['content']}")
+        output.append("")
+    
+    result = "\n".join(output)
+    print(result)
+    return result
 
 
 def stringify_convo(dict_list):
@@ -122,6 +156,7 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
     )
     # Initialize all conversations
     conversations = [message.copy() for message in messages]
+    
     max_messages = [random.randint(MIN_CONVERSATIONS, MAX_CONVERSATIONS) for _ in messages]
 
     # Generate conversations in batches
@@ -141,30 +176,41 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
             break  # All conversations are complete
 
         # Generate responses for the batch
-        outputs = model.generate(prompts=batch_prompts, sampling_params=sampling_params)
+        outputs = model.generate(
+            prompts=batch_prompts, 
+            sampling_params=sampling_params,
+            use_tqdm=False,
+            )
 
         # Update conversations with generated responses
         for i, output in zip(active_conversations, outputs):
             generated_text = output.outputs[0].text
-            # print(f"generated_text: {generated_text}")
-            role = "assistant" if conversations[i][-1]["role"] == "user" else "user"
-            # Insert synthetic response
-            conversations[i].append({"role": role, "content": generated_text})
+            conversations[i].append({"role": "assistant", "content": generated_text})
+            user_response = generate_user_response(conversations[i])
+            conversations[i].append({"role": "user", "content": user_response})
 
     generated_samples = conversations
 
     evaluation_conversations = [stringify_convo(m) for m in generated_samples]
+    scored_convos = []
     penalty = 0
     exceptions = 0
     for i, convo in enumerate(evaluation_conversations):
         try:
             coherence_score = coherence_evaluator(convo)
-            # pretty_convo(generated_samples[i], coherence_score)
+            scored_convos.append(pretty_convo(generated_samples[i], coherence_score))
             if coherence_score < 1:
                 penalty += 1
         except Exception as e:
             exceptions += 1
             print(e)
+
+    # Write conversations to file for debugging/analysis
+    with open("coherence_evaluation_conversations.txt", "w", encoding="utf-8") as f:
+        for convo in scored_convos:
+            f.write(convo)
+            f.write("\n\n")
+    
 
     if exceptions / COHERENCE_NUM_EVALS > MAX_ERROR_RATE:
         raise RuntimeError("coherence failed due to api issues")
