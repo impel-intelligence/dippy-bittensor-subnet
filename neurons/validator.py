@@ -69,7 +69,9 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 INVALID_BLOCK_START = 4200000
 INVALID_BLOCK_END = 4200000
 NEW_EPOCH_BLOCK = 4200000
-
+# SCORE_RESET_BLOCK = 4720334
+SCORE_RESET_BLOCK = 7720334
+TEMP_SCORE_RESET_PENALTY = 0.5
 
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
@@ -99,8 +101,15 @@ def compute_wins(
             if i == j:
                 continue
             block_j = miner_registry[uid_j].block
+            
             score_i = miner_registry[uid_i].total_score
             score_j = miner_registry[uid_j].total_score
+
+            if block_i < SCORE_RESET_BLOCK:
+                score_i *= TEMP_SCORE_RESET_PENALTY
+            if block_j < SCORE_RESET_BLOCK:
+                score_j *= TEMP_SCORE_RESET_PENALTY
+
             wins[uid_i] += 1 if iswin(score_i, score_j, block_i, block_j) else 0
             total_matches += 1
         # Calculate win rate for uid i
@@ -738,7 +747,7 @@ class Validator:
         CHANGE_BLOCK = 4247000
         # currently force static 0.15 temperature
         if current_block > CHANGE_BLOCK:
-            return 5
+            return 1
         diff = current_block - CHANGE_BLOCK
         # Map block difference to temperature value between 1-15
         # Scale linearly up to NEW_EPOCH_BLOCK

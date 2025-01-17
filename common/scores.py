@@ -82,6 +82,7 @@ class Scores(BaseModel):
         self.vibe_score = response.get("vibe_score", 0)
         self.coherence_score = response.get("coherence_score", 0)
         self.latency_score = response.get("latency_score", 0)
+        self.post_eval_score = response.get("post_eval_score", 1)
         return self
 
     def calculate_total_score(self, adjust_coherence: bool = False) -> float:

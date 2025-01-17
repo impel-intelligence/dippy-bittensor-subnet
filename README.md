@@ -46,7 +46,7 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 - [x] Introduce Coherence and Creativity as a criteria for live model evaluation
 
 **Phase 2:** 
-- [ ] Publicly release front-end powered by top miner submitted model of the week
+- [x] Publicly release front-end powered by top miner submitted model of the week
 - [ ] Segment model submission into different "expert" categories (funny, romantic, therapeutic etc)
 - [ ] Models with the highest score in each personality type are chosen as "expert" models and made publicly available on the front-end
 
@@ -64,30 +64,10 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 **Validators** would evaluate the and assess model performance via our protocol and rank the submissions based on various metrics (empathy, conciseness etc). We will provide a suite of 
 testing and benchmarking protocols with state-of-the-art datasets.
 
-
-
 ## Running Miners and Validators
 ### Running a Miner
+> **Important:** Please carefully read through the [FAQ](docs/FAQ.md) and [Detailed Miner Documentation](docs/miner.md). These contain critical information about model requirements, evaluation criteria, and best practices that will help ensure your submissions are valid and competitive.
 
-#### Requirements
-- Python 3.8+
-- GPU with at least 24 GB of VRAM
-
-#### Setup
-To start, clone the repository and `cd` to it:
-```
-git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
-cd dippy-bittensor-subnet
-pip install -e .
-```
-#### Submitting a model
-As a miner, you're responsible for leveraging all methods available at your disposal, including but not limited to training new models, merging existing models (we recommend [MergeKit](https://github.com/arcee-ai/mergekit)), finetuning existing models, and so on to push roleplay LLMs forward.
-
-Once you're happy with the performance of the model for the usecase of Roleplay, you can simply upload with the following command:
-
-```bash
-python neurons/miner.py --wallet.name coldkey  --wallet.hotkey hotkey --repo_namespace <your_huggingface_username> --repo_name <your_huggingface_repo> --chat_template <your_chat_template> --online True 
-```
 
 
 ### Running a Validator
@@ -113,12 +93,21 @@ To run auto-updating validator with PM2 (recommended):
 pm2 start --name sn11-vali-updater --interpreter python scripts/start_validator.py -- --pm2_name sn11-vali --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME [other vali flags]
 ```
 
+If you wish to use a local subtensor node, the additional flags required are `--local` in additional to the typical arguments. 
+Example:
+```bash
+python neurons/validator.py \
+--wallet.name coldkey \
+--wallet.hotkey hotkey \
+--local \
+--subtensor.network local --subtensor.chain_endpoint ws://chain_endpoint
+```
+
 Please note that this validator will call the model validation service hosted by the dippy subnet owners. If you wish to run the model validation service locally, please follow the instructions below.
 
+### Running the model evaluation API (Optional, not recommended)
 
-### Running the model evaluation API (Optional)
-
-**Note**: Currently (June 17 2024) there are some issues with the local evaluation api. We recommend using the remote validation api temporarily.
+**Note**: Currently (Jan 17 2025) there are some issues with the local evaluation api. We recommend using the remote validation api temporarily.
 
 Starting a validator using your local validator API requires starting validator with `--use-local-validation-api` flag. 
 Additionally, a model queue is required to push models to the validation api.
@@ -138,11 +127,6 @@ curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.s
 sudo apt-get install git-lfs
 ```
 
-If you are running on runpod you might also need to install 'netstat'.
-```bash
-apt-get install net-tools
-```
-
 To start, clone the repository and `cd` into it:
 ```bash
 git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
@@ -150,10 +134,10 @@ cd dippy-bittensor-subnet
 python3 -m venv model_validation_venv
 source model_validation_venv/bin/activate
 model_validation_venv/bin/pip install -e . --no-deps
-model_validation_venv/bin/pip install -r requirements_val_api.txt
+model_validation_venv/bin/pip install -r requirements.api.txt
 ```
 
-#### Run model validation API service (optional)
+#### Run model validation API service (optional, not recommended)
 (Note: there are currently breaking changes that pose challenges to running a local validation API service. Any tasks that require the env vars `ADMIN_KEY` or `DIPPY_KEY` applies here)
 ```bash
 cd dippy_validation_api
@@ -161,21 +145,13 @@ chmod +x start_validation_service.sh
 ./start_validation_service.sh
 ```
 
-### Test that it's working
-```bash
-python3 test_api.py
-```
-And you should see a json showing that the model status is "QUEUED"
-Running the same command again for sanity's sake, you should see the status of the model as "RUNNING".
-
-
 #### Stop model validation API service
 ```bash
 chmod +x kill_validation_api.sh
 ./kill_validation_api.sh
 ```
 
-#### Running the validator with your own validation API service running locally (optional)
+#### Running the validator with your own validation API service running locally (optional, not recommended)
 ```bash
 # Make a separate venv for the validator because of pydantic version conflict
 python -m venv validator_venv
@@ -210,6 +186,10 @@ Evaluated against datasets, a model that generates similiar resposne to groundtr
 
 ### Vibe Matching
 A model that can generate outputs with similiar length to its inputs will score higher.
+
+### Post Evaluation 
+After initial evaluation, a model will be selected for post evaluation after some time. The current process for this is a proprietary solution that is based on judging criteria from SOTA model benchmarking approaches. In the future, the details for this will be available on https://research.dippy.ai
+
 
 ## Acknowledgement
 

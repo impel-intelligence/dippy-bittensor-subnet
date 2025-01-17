@@ -641,12 +641,6 @@ def check_or_create_model(
 def upsert_row_supabase(row):
     app.state.supabase_client.table("leaderboard").upsert(row).execute()
 
-
-@app.get("/leaderboard")
-def display_leaderboard():
-    return supabaser.get_leaderboard()
-
-
 @app.get("/hc")
 def hc():
     return {"g": True}
@@ -663,6 +657,11 @@ def start():
         type=int,
         default=0,
         help="Specify the number of queues to start (default: 1)",
+    )
+    parser.add_argument(
+        "--worker",
+        action="store_true",
+        help="Run only the worker processes without the API server",
     )
     args = parser.parse_args()
     num_queues = args.queues
@@ -686,8 +685,16 @@ def start():
     try:
         logger.info(f"Starting {num_queues} evaluation threads")
         processes = start_staggered_queues(num_queues, stagger_seconds)
-        logger.info("Starting API server")
-        uvicorn.run(app, host="0.0.0.0", port=MAIN_API_PORT)
+        
+        if not args.worker:
+            logger.info("Starting API server")
+            uvicorn.run(app, host="0.0.0.0", port=MAIN_API_PORT)
+        else:
+            logger.info("Running in worker mode - API server disabled")
+            # Keep the main process running
+            while True:
+                time.sleep(60)
+                
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received, stopping...")
     except Exception as e:

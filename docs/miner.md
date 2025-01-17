@@ -57,6 +57,13 @@ python dippy_validation_api/evaluator.py --image grader:latest \
 --repo_namespace <your-repo-namespace> --repo_name <your-repo-name> \
 --chat_template_type <your-chat-template-type> --hash <your-hash>
 ```
+
+
+## How to be a competitive miner
+As a miner, you're responsible for leveraging all methods available at your disposal, including but not limited to training new models, merging existing models (we recommend [MergeKit](https://github.com/arcee-ai/mergekit)), finetuning existing models, and so on to push roleplay LLMs forward.
+
+Given that model training can be computationally expensive, we highly recommend exhausting all requisite testing methods before making an official submission. Given a failed model, the subnet will not re-queue or otherwise reassess models for any reason outside of specific reasonable scenarios. Miners can always create new submissions via whichever method of their choice. 
+
 ### Using cached dataset
 Sometimes, when running multiple instances of evaluation, it can help to utilize a cached version of the dataset to prevent issues with rate limits.
 To do so, simply save the results of the dataset endpoint. Afterwards, you can modify the dataset URL in the scoring file to use a locally hosted API. Note that this API is _not_ the same as the `dippy_validation_api` in this project.
