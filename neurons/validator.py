@@ -176,6 +176,11 @@ class Validator:
             action="store_true",
             help="Triggers run step immediately. NOT RECOMMENDED FOR PRODUCTION",
         )
+        parser.add_argument(
+            "--local",
+            action="store_true",
+            help="Toggles for local subtensor",
+        )
         parser.add_argument("--netuid", type=str, default=constants.SUBNET_UID, help="The subnet UID.")
         parser.add_argument(
             "--genesis",
@@ -202,22 +207,6 @@ class Validator:
         config = bt.config(parser)
         return config
 
-    def state_path(self) -> str:
-        """
-        Constructs a file path for storing validator state.
-
-        Returns:
-        str: A string representing the file path.
-        """
-        return os.path.expanduser(
-            "{}/{}/{}/netuid{}/{}".format(
-                bt.logging.config().logging.logging_dir,
-                self.wallet.name,
-                self.wallet.hotkey_str,
-                self.config.netuid,
-                "vali-state",
-            )
-        )
 
     def __init__(self, local_metadata: LocalMetadata):
         self.config = Validator.config()
@@ -234,19 +223,25 @@ class Validator:
         netuid = self.config.netuid or 11
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
+
         try:
-            subtensor = bt.subtensor(config=self.config)
-            self.subtensor = subtensor
-            bt.logging.warning(f"subtensor initialized with bt.subtensor: {subtensor}")
+            if self.config.local:
+                self.subtensor = Validator.new_subtensor(self.config)
+            else:
+                self.subtensor = Validator.new_subtensor()
+            bt.logging.warning(f"subtensor initialized with Subtensor: {self.subtensor}")
         except Exception as e:
             bt.logging.error(f"could not initialize subtensor: {e}")
-            self.subtensor = Subtensor()
+            if self.config.local:
+                self.subtensor = Validator.new_subtensor(self.config)
+            else:
+                self.subtensor = Validator.new_subtensor()
             bt.logging.warning(f"subtensor retry initialized with Subtensor(): {self.subtensor}")
         try:
             self.metagraph = self.subtensor.metagraph(netuid=self.config.netuid, lite=False)
         except Exception as e:
             bt.logging.error(f"could not initialize metagraph: {e}")
-            self.subtensor = Subtensor(network="subvortex")
+            raise e
 
         # Dont check registration status if offline.
         if self.verify:
@@ -415,7 +410,10 @@ class Validator:
                     f"Failed to set weights {msg} (attempt {attempt+1}/{retries}). Retrying in {wait_time:.1f}s..."
                 )
                 self.close_subtensor()
-                self.subtensor = Validator.new_subtensor()
+                if self.config.local:
+                    self.subtensor = Validator.new_subtensor(self.config)
+                else:
+                    self.subtensor = Validator.new_subtensor()
                 time.sleep(wait_time)
         return False
     
@@ -679,7 +677,10 @@ class Validator:
         return invalid_uids, miner_registry
 
     @staticmethod
-    def new_subtensor():
+    def new_subtensor(config = None):
+        if config is not None:
+            subtensor = Subtensor(config=config)
+            return subtensor
         network = random.choice(["finney", "subvortex"])
         subtensor = Subtensor(network=network)
         bt.logging.warning(f"subtensor retry initialized with Subtensor(): {subtensor}")
@@ -701,8 +702,11 @@ class Validator:
 
     async def try_sync_metagraph(self, ttl: int = 120) -> bool:
         network = random.choice(["finney", "subvortex"])
+        if self.config.local:
+            network = "local"
         try:
             bt.logging.warning(f"attempting sync with network {network}")
+            
             self.metagraph = Metagraph(netuid=self.config.netuid, network=network, lite=False, sync=True)
             return True
         except Exception as e:
@@ -718,7 +722,10 @@ class Validator:
             self._remote_log(logged_payload)
             bt.logging.error(f"could not sync metagraph {e} using network {network}. Starting retries. If this issue persists please restart the valdiator script")
             self.close_subtensor()
-            self.subtensor = Validator.new_subtensor()
+            if self.config.local:
+                self.subtensor = Validator.new_subtensor(self.config)
+            else:
+                self.subtensor = Validator.new_subtensor()
         def sync_metagraph(attempt):
             try:
                 self.metagraph.sync(block=None, lite=False, subtensor=self.subtensor)
@@ -736,7 +743,10 @@ class Validator:
                 )
                 self._remote_log(logged_payload)
                 self.close_subtensor()
-                self.subtensor = Validator.new_subtensor()
+                if self.config.local:
+                    self.subtensor = Validator.new_subtensor(self.config)
+                else:
+                    self.subtensor = Validator.new_subtensor()
                 raise e
 
         for attempt in range(3):
@@ -779,69 +789,6 @@ class Validator:
         hotkey_matches = str(original_hash) == str(hotkey_hash)
 
         return hotkey_matches
-
-    def fetch_model_data(self, uid: int, hotkey: str) -> Optional[MinerEntry]:
-        max_retries = 10
-        base_delay = 1.5  # seconds
-
-        for attempt in range(max_retries):
-            try:
-                # First try using self.subtensor
-                try:
-                    metadata = bt.core.extrinsics.serving.get_metadata(
-                        self=self.subtensor,
-                        netuid=self.config.netuid,
-                        hotkey=hotkey
-                    )
-                except Exception as e:
-                    bt.logging.warning(f"Failed to fetch metadata with self.subtensor: {e}, trying dedicated subtensor")
-                    # Fall back to dedicated subtensor
-                    dedicated_subtensor = None
-                    try:
-                        network = "finney"
-                        dedicated_subtensor = Subtensor(network=network)
-                        bt.logging.warning(f"Created dedicated subtensor for metadata fetch: {dedicated_subtensor} for {uid}")
-                        
-                        metadata = bt.core.extrinsics.serving.get_metadata(
-                            self=dedicated_subtensor,
-                            netuid=self.config.netuid,
-                            hotkey=hotkey
-                        )
-                    finally:
-                        # Ensure we close the dedicated subtensor
-                        if dedicated_subtensor is not None:
-                            try:
-                                dedicated_subtensor.close()
-                            except Exception as close_error:
-                                bt.logging.error(f"Error closing dedicated subtensor: {close_error} for {uid}")
-
-                if metadata is None:
-                    return None
-
-                commitment = metadata["info"]["fields"][0]
-                hex_data = commitment[list(commitment.keys())[0]][2:]
-                chain_str = bytes.fromhex(hex_data).decode()
-
-                model_id = ModelId.from_compressed_str(chain_str)
-                model_id.hotkey = hotkey
-
-                block = metadata["block"]
-                entry = MinerEntry()
-                entry.block = block
-                entry.miner_model_id = model_id
-                return entry
-
-            except Exception as e:
-                delay = base_delay ** attempt
-                if attempt < max_retries - 1:  # Don't log "retrying" on the last attempt
-                    bt.logging.error(f"Attempt {attempt + 1}/{max_retries} failed to fetch data for {hotkey}: {e}")
-                    bt.logging.info(f"Retrying in {delay:.1f} seconds...")
-                    time.sleep(delay)
-                else:
-                    bt.logging.error(f"All attempts failed to fetch data for {hotkey}: {e}")
-                    return None
-
-        return None
 
     @staticmethod
     def adjusted_temperature_multipler(current_block: int) -> float:
@@ -1108,7 +1055,10 @@ class Validator:
                         metagraph_sync_success = await self.try_sync_metagraph(ttl=300)
                         if not metagraph_sync_success:
                             try:
-                                self.subtensor = Subtensor()
+                                if self.config.local:
+                                    self.subtensor = Validator.new_subtensor(self.config)
+                                else:
+                                    self.subtensor = Validator.new_subtensor()
                             except Exception as e:
                                 bt.logging.error(f"Error in initializing subtensor:  {e} \n {traceback.format_exc()}")
 
