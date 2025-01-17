@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 
 DATASET_CACHE_DIR = "evalsets"
 hf_token = os.environ.get("HF_TOKEN")
+DATASET_USERNAME = os.environ.get("DATASET_USERNAME","x")
+DATASET_PASSWORD = os.environ.get("DATASET_PASSWORD","x")
 
 
 def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
@@ -34,7 +36,9 @@ def get_latest_from_set():
     current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
     url = f"{DATASET_URL}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}"
 
-    response = requests.get(url, headers={"validator-hotkey": 'someVerysecretKey', "Authorization": DATASET_API_KEY})
+    response = requests.get(url, 
+    auth=(DATASET_USERNAME, DATASET_PASSWORD),
+    headers={"validator-hotkey": 'someVerysecretKey'})
     response.raise_for_status()  # Raise an error for bad responses
     data = response.json().get("all_convos", [])
     return data
@@ -70,7 +74,6 @@ class StreamedSyntheticDataset(Dataset):
     def __init__(self, max_input_len: int):
         try:
             data = get_latest_from_set()
-            # data = get_latest_from_file(filter)
         except Exception as e:
             print(f"error loading dataset {e}")
             raise e

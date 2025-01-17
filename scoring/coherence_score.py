@@ -68,14 +68,18 @@ def coherence_evaluator(generated_text: str):
 
 def generate_user_response(messages) -> str:
     generate_user_prompt = f'''
-    You are a human having a conversation. Generate a natural, casual response that a typical user might give in this conversation. The response should be brief (1-3 sentences) and conversational in tone.
+    You are a human having a conversation. 
+    Generate a natural, casual response that a typical user might give in this conversation. 
+    The response should be brief (1-3 sentences) and conversational in tone.
+    In the case that the current conversation is incoherent or contains repeating phrases, please explicitly mark that this conversation is incoherent.
+
 
     Here is the conversation history:
     """
     {messages}
     """
 
-    Generate a user response that naturally continues this conversation:
+    Generate a user response that naturally continues this conversation (and please explicitly mark that this conversation is incoherent if applicable):
     '''
     try:
         chat_completion = remote_client.chat.completions.create(

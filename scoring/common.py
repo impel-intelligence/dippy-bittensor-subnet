@@ -70,4 +70,5 @@ chat_template_mappings = {
     "llama3": "prompt_templates/llama3_prompt_template.jinja",
     "llama3dot1": "prompt_templates/llama3dot1_prompt_template.jinja",
     "gemma2": "prompt_templates/gemma_it_prompt_template.jinja",
+    "qwen2dot5": "prompt_templates/qwen2dot5_prompt_template.jinja",
 }
