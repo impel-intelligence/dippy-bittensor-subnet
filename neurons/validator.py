@@ -38,6 +38,7 @@ from shlex import split
 
 import constants
 from common.data import ModelMetadata, ModelId
+from common.local_metadata import LocalMetadata
 from huggingface_hub import get_safetensors_metadata
 from common.scores import Scores, StatusEnum
 import traceback
@@ -109,18 +110,6 @@ def compute_wins(
             win_rate[uid_i] = float("-inf")
 
     return wins, win_rate
-
-
-@dataclass
-class LocalMetadata:
-    """Metadata associated with the local validator instance"""
-
-    commit: str
-    btversion: str
-    uid: int = 0
-    coldkey: str = ""
-    hotkey: str = ""
-
 
 def local_metadata() -> LocalMetadata:
     """Extract the version as current git commit hash"""
@@ -334,54 +323,6 @@ class Validator:
             bt.logging.warning(f"successfully sent event_report with payload {payload}")
         except Exception as e:
             bt.logging.error(f"could not remote log: {e}. This error is ok to ignore if you are a validator")
-
-    @staticmethod
-    def adjust_for_vtrust(weights: np.ndarray, consensus: np.ndarray, vtrust_min: float = 0.5) -> np.ndarray:
-        """
-        Interpolate between the current weight and the normalized consensus weights so that the
-        vtrust does not fall below vturst_min, assuming the consensus does not change.
-        """
-        if not isinstance(weights, np.ndarray):
-            return weights
-
-        vtrust_loss_desired = 1 - vtrust_min
-
-        # If the predicted vtrust is already above vtrust_min, then just return the current weights.
-        orig_vtrust_loss = float(np.sum(np.maximum(weights - consensus, 0.0)))
-        if orig_vtrust_loss <= vtrust_loss_desired:
-            bt.logging.warning("Weights already satisfy vtrust_min. {} >= {}.".format(1 - orig_vtrust_loss, vtrust_min))
-            return weights
-
-        # If maximum vtrust allowable by the current consensus is less that vtrust_min, then choose the smallest lambda
-        # that still maximizes the predicted vtrust. Otherwise, find lambda that achieves vtrust_min.
-        vtrust_loss_min = 1 - np.sum(consensus)
-        if vtrust_loss_min > vtrust_loss_desired:
-            bt.logging.warning(
-                "Maximum possible vtrust with current consensus is less than vtrust_min. {} < {}.".format(
-                    1 - vtrust_loss_min, vtrust_min
-                )
-            )
-            vtrust_loss_desired = 1.05 * vtrust_loss_min
-
-        # We could solve this with a LP, but just do rootfinding with scipy.
-        consensus_normalized = consensus / np.sum(consensus)
-
-        def fn(lam: float):
-            new_weights = (1 - lam) * weights + lam * consensus_normalized
-            vtrust_loss = np.maximum(0.0, new_weights - consensus).sum()
-            return vtrust_loss - vtrust_loss_desired
-
-        sol = optimize.root_scalar(fn, bracket=[0, 1], method="brentq")
-        lam_opt = sol.root
-
-        new_weights = (1 - lam_opt) * weights + lam_opt * consensus_normalized
-        vtrust_pred = np.minimum(weights, consensus).sum()
-        bt.logging.warning(
-            "Interpolated weights to satisfy vtrust_min. {} -> {}.".format(1 - orig_vtrust_loss, vtrust_pred)
-        )
-        return new_weights
-    
-
 
     async def set_weights_with_wait(self, weights, netuid, wallet, uids):
         retries = 5
@@ -637,7 +578,7 @@ class Validator:
                     self.local_metadata,
                     signed_payload,
                 )
-
+                # Retry with remote to ensure status is correct
                 if _score_data.status != StatusEnum.COMPLETED:
                     _score_data = get_model_score(
                         miner_registry[uid].miner_model_id,
@@ -649,16 +590,16 @@ class Validator:
 
                 if _score_data.status == StatusEnum.QUEUED or _score_data.status == StatusEnum.RUNNING:
                     invalid_uids.append(uid)
-                    bt.logging.warning(f"skip uid={uid} status is {_score_data.status}")
+                    bt.logging.warning(f"uid={uid} status_{_score_data.status}")
                     return
                 if _score_data.status == StatusEnum.COMPLETED:
                     miner_registry[uid].total_score = _score_data.calculate_total_score()
                     bt.logging.warning(
-                        f"completed_score_data for uid={uid} on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id} {_score_data}"
+                        f"uid={uid} status_complete on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id} {_score_data}"
                     )
                 elif _score_data.status == StatusEnum.FAILED:
                     bt.logging.warning(
-                        f"failed_score_data for uid={uid} on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id}"
+                        f"uid={uid} status_failed on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id}"
                     )
                     miner_registry[uid].total_score = 0
 
@@ -797,7 +738,7 @@ class Validator:
         CHANGE_BLOCK = 4247000
         # currently force static 0.15 temperature
         if current_block > CHANGE_BLOCK:
-            return 15
+            return 5
         diff = current_block - CHANGE_BLOCK
         # Map block difference to temperature value between 1-15
         # Scale linearly up to NEW_EPOCH_BLOCK

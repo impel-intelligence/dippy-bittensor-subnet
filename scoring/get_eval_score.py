@@ -47,17 +47,10 @@ def get_eval_score(request: EvaluateModelRequest):
     cache_path = f"{request.hash}_{request.repo_namespace}_{request.repo_name}"
     if not os.path.exists(f"{MODEL_CACHE_DIR}/{cache_path}"):
         os.makedirs(f"{MODEL_CACHE_DIR}/{cache_path}")
-
-    quant_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,  # This does not hurt performance much according to
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
     
     try:
         model = AutoModelForCausalLM.from_pretrained(
             repo_id,
-            quantization_config=quant_config,
             attn_implementation="flash_attention_2",
             torch_dtype=torch.bfloat16,
             cache_dir=MODEL_CACHE_DIR,
@@ -67,7 +60,7 @@ def get_eval_score(request: EvaluateModelRequest):
     except Exception as e:
         try:
             print(
-                f"Error loading model in 4 bit quant with flash attention.: {e}. Trying vanilla load. This might cause OOM."
+                f"Error loading model with flash attention.: {e}. Trying vanilla load. This might cause OOM."
             )
             model = AutoModelForCausalLM.from_pretrained(
                 repo_id,
