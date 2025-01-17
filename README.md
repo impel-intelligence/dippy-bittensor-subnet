@@ -232,7 +232,7 @@ The Dippy Bittensor subnet is released under the [MIT License](./LICENSE).
 ## Configuration Files
 - `pyproject.toml` - Project metadata and dependencies
 - `requirements.txt` - Main project dependencies
-- `requirements_val_api.txt` - Validation API dependencies
+- `requirements.api.txt` - Validation API dependencies
 - `requirements.miner.txt` - Miner-specific dependencies
 - `requirements.eval.txt` - Evaluation-specific dependencies used for docker based evaluation
 - `min_compute.yml` - Minimum compute requirements specification

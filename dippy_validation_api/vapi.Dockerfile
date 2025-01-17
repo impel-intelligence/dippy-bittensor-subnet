@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y git git-lfs && rm -rf /var/lib/apt/list
 RUN git lfs install
 
 ## Copy the requirements file into the container
-COPY requirements_val_api.txt requirements.txt
+COPY requirements.api.txt requirements.txt
 
 RUN uv pip install -r requirements.txt
 

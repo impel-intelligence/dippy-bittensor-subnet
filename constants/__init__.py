@@ -50,4 +50,4 @@ weights_version_key = 5
 # validator weight moving average term
 alpha = 0.9
 # validator scoring exponential temperature
-temperature = 0.01
+temperature = 0.005
