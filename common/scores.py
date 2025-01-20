@@ -56,7 +56,7 @@ class Scores(BaseModel):
     ):
         # Calculate exponential scaling factor based on distance from midpoint
         creativity_impact = math.exp(steepness * (initial_score - QUALITATIVE_SCORE_THRESHOLD))
-        
+
         # Combine initial score with creativity adjustment
         adjusted_score = initial_score / (1 + creativity_impact * math.exp(-steepness * (creativity_score - threshold)))
         return adjusted_score
@@ -101,22 +101,23 @@ class Scores(BaseModel):
 
 def main():
     import random
+
     # Create a Scores instance with random values
     scores = Scores(
         qualitative_score=random.uniform(0.25, 0.70),
-        creativity_score=random.uniform(0, 1), 
+        creativity_score=random.uniform(0, 1),
         vibe_score=random.uniform(0, 1),
         coherence_score=1,
         llm_size_score=random.uniform(0, 1),
         latency_score=random.uniform(0, 1),
-        post_eval_score=1.0
+        post_eval_score=1.0,
     )
 
     # Print input scores
     print("\nInput Scores:")
     print(f"Qualitative Score: {scores.qualitative_score:.3f}")
     print(f"Creativity Score: {scores.creativity_score:.3f}")
-    print(f"Vibe Score: {scores.vibe_score:.3f}") 
+    print(f"Vibe Score: {scores.vibe_score:.3f}")
     print(f"Coherence Score: {scores.coherence_score:.3f}")
     print(f"LLM Size Score: {scores.llm_size_score:.3f}")
     print(f"Latency Score: {scores.latency_score:.3f}")
@@ -145,6 +146,6 @@ def main():
     total = scores.calculate_total_score()
     print(f"\nFinal Total Score: {total:.3f}")
 
+
 if __name__ == "__main__":
     main()
-

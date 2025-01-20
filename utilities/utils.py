@@ -7,7 +7,6 @@ import multiprocessing
 from typing import Any, Tuple
 import bittensor as bt
 import requests
-from transformers import AutoModelForCausalLM, AutoConfig
 
 from common.data import ModelId
 
@@ -92,4 +91,3 @@ def run_in_subprocess(func: functools.partial, ttl: int) -> Any:
         raise Exception(f"BaseException raised in subprocess: {str(result)}")
 
     return result
-

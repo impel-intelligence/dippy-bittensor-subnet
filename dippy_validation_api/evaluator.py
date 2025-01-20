@@ -138,7 +138,7 @@ class Evaluator:
         filepath = f"/tmp/{job_type}_output.json"
         filename = f"{job_type}_output.json"
 
-        print("now waiting for container to complete")
+        print(f"container image {self.image_name} with command {command} launched")
         result = container.wait()
         self.logger.debug(f"container_run_complete, {result}")
         print(f"container_run_complete, {result}")
@@ -249,15 +249,10 @@ def entry():
         # evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="0")
         evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="1")
 
-        # infrence_result = evaler.inference_score(req)
-        # if isinstance(infrence_result, RunError):
-        #     raise Exception(infrence_result.error)
-        # print(f"infrence_result : {infrence_result}")
-        # Override inference result with hardcoded values for testing
-        infrence_result  = InferenceScore(
-                vibe_score=0.5,
-                coherence_score=1,
-        )
+        infrence_result = evaler.inference_score(req)
+        if isinstance(infrence_result, RunError):
+            raise Exception(infrence_result.error)
+        print(f"infrence_result : {infrence_result}")
 
         eval_result = evaler.eval_score(req)
         print(f"eval_result : {eval_result}")

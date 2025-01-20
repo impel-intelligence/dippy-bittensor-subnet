@@ -34,7 +34,7 @@ def get_eval_score(request: EvaluateModelRequest):
     print(f"Using CUDA device: {torch.cuda.current_device()}")
     print(f"Active GPU: {torch.cuda.get_device_name(0)}")
     print(f"Repo ID: {repo_id}")
-    
+
     print(f"dumping env {os.environ}")
     for i in range(torch.cuda.device_count()):
         print(torch.cuda.get_device_properties(i).name)
@@ -47,7 +47,7 @@ def get_eval_score(request: EvaluateModelRequest):
     cache_path = f"{request.hash}_{request.repo_namespace}_{request.repo_name}"
     if not os.path.exists(f"{MODEL_CACHE_DIR}/{cache_path}"):
         os.makedirs(f"{MODEL_CACHE_DIR}/{cache_path}")
-    
+
     try:
         model = AutoModelForCausalLM.from_pretrained(
             repo_id,
@@ -59,16 +59,13 @@ def get_eval_score(request: EvaluateModelRequest):
 
     except Exception as e:
         try:
-            print(
-                f"Error loading model with flash attention.: {e}. Trying vanilla load. This might cause OOM."
-            )
+            print(f"Error loading model with flash attention.: {e}. Trying vanilla load. This might cause OOM.")
             model = AutoModelForCausalLM.from_pretrained(
                 repo_id,
                 cache_dir=MODEL_CACHE_DIR,
             )
         except Exception as e:
             raise Exception(f"Error loading model: {str(e)}")
-
 
     model.eval()
 
@@ -79,7 +76,6 @@ def get_eval_score(request: EvaluateModelRequest):
             padding_side="left",
             force_download=True,
             cache_dir=MODEL_CACHE_DIR,
-
         )
         output_tokenizer = AutoTokenizer.from_pretrained(
             repo_id,
@@ -101,7 +97,7 @@ def get_eval_score(request: EvaluateModelRequest):
 
     # warm up the model
     num_gpus = torch.cuda.device_count()
-    model.to('cuda')
+    model.to("cuda")
     print(f"Warming up model with gpus {num_gpus}")
 
     try:

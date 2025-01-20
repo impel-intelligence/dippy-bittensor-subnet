@@ -23,8 +23,8 @@ coherence_dataset = PersonaHubDataset(
 from openai import OpenAI
 
 remote_client = OpenAI(
-  base_url="https://openrouter.ai/api/v1",
-  api_key=os.environ.get("OPENROUTER_API_KEY", "x"),
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.environ.get("OPENROUTER_API_KEY", "x"),
 )
 
 
@@ -97,12 +97,11 @@ def generate_user_response(messages) -> str:
     except Exception as e:
         return ""
 
+
 def get_coherence_score(request: EvaluateModelRequest, model: LLM, verbose=False):
     try:
         repo_id = f"{request.repo_namespace}/{request.repo_name}"
-        input_tokenizer = AutoTokenizer.from_pretrained(
-            repo_id
-        )
+        input_tokenizer = AutoTokenizer.from_pretrained(repo_id)
         # Set chat template params
         coherence_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
 
@@ -117,6 +116,7 @@ def get_coherence_score(request: EvaluateModelRequest, model: LLM, verbose=False
             print(e)
         raise e
 
+
 def pretty_convo(dict_list, score) -> str:
     output = []
     output.append(f"score: {score}")
@@ -126,7 +126,7 @@ def pretty_convo(dict_list, score) -> str:
         output.append(f"  Role: {item['role']}")
         output.append(f"  Content: {item['content']}")
         output.append("")
-    
+
     result = "\n".join(output)
     print(result)
     return result
@@ -160,7 +160,7 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
     )
     # Initialize all conversations
     conversations = [message.copy() for message in messages]
-    
+
     max_messages = [random.randint(MIN_CONVERSATIONS, MAX_CONVERSATIONS) for _ in messages]
 
     # Generate conversations in batches
@@ -181,10 +181,10 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
 
         # Generate responses for the batch
         outputs = model.generate(
-            prompts=batch_prompts, 
+            prompts=batch_prompts,
             sampling_params=sampling_params,
             use_tqdm=False,
-            )
+        )
 
         # Update conversations with generated responses
         for i, output in zip(active_conversations, outputs):
@@ -214,7 +214,6 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
         for convo in scored_convos:
             f.write(convo)
             f.write("\n\n")
-    
 
     if exceptions / COHERENCE_NUM_EVALS > MAX_ERROR_RATE:
         raise RuntimeError("coherence failed due to api issues")

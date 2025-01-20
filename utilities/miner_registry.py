@@ -12,4 +12,3 @@ class MinerEntry(BaseModel):
     miner_model_id: Optional[ModelId] = Field(default=None, description="The model_id of the miner")
     safetensors_model_size: int = Field(default=0, description="The safetensors model size according to huggingface")
     total_score: float = Field(default=0)
-

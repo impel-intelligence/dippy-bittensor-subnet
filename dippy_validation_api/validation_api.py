@@ -363,10 +363,7 @@ async def event_report(event_data: EventData):
         return Response(status_code=200)
     except Exception as e:
         if app.state.event_logger_enabled:
-            error_details = {
-                "error": str(e),
-                "traceback": traceback.format_exc()
-            }
+            error_details = {"error": str(e), "traceback": traceback.format_exc()}
             app.state.event_logger.error("failed_event_request", extra=error_details)
         return Response(status_code=400, content={"error": str(e)})
 
@@ -481,6 +478,15 @@ def update_failure(new_entry, failure_notes):
     if new_entry["status"] == StatusEnum.FAILED:
         return new_entry
     new_entry["status"] = StatusEnum.FAILED
+    new_entry["notes"] = failure_notes
+    return new_entry
+
+
+def update_completed(new_entry, failure_notes):
+    # noop if already marked failed
+    if new_entry["status"] == StatusEnum.FAILED:
+        return new_entry
+    new_entry["status"] = StatusEnum.COMPLETED
     new_entry["notes"] = failure_notes
     return new_entry
 
@@ -632,7 +638,7 @@ def check_or_create_model(
             f"Given entry {new_entry_dict} has conflicting model_hash with existing record {existing_record}"
         )
         logger.error(failure_notes)
-        new_entry_dict = update_failure(new_entry_dict, failure_notes)
+        new_entry_dict = update_completed(new_entry_dict, failure_notes)
         return supabaser.upsert_and_return(new_entry_dict, request.hash)
 
     return supabaser.upsert_and_return(new_entry_dict, request.hash)
@@ -640,6 +646,7 @@ def check_or_create_model(
 
 def upsert_row_supabase(row):
     app.state.supabase_client.table("leaderboard").upsert(row).execute()
+
 
 @app.get("/hc")
 def hc():
@@ -685,7 +692,7 @@ def start():
     try:
         logger.info(f"Starting {num_queues} evaluation threads")
         processes = start_staggered_queues(num_queues, stagger_seconds)
-        
+
         if not args.worker:
             logger.info("Starting API server")
             uvicorn.run(app, host="0.0.0.0", port=MAIN_API_PORT)
@@ -694,7 +701,7 @@ def start():
             # Keep the main process running
             while True:
                 time.sleep(60)
-                
+
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received, stopping...")
     except Exception as e:
