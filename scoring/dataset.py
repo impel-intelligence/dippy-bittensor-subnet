@@ -10,8 +10,8 @@ from datetime import datetime, timezone
 
 DATASET_CACHE_DIR = "evalsets"
 hf_token = os.environ.get("HF_TOKEN")
-DATASET_USERNAME = os.environ.get("DATASET_USERNAME","x")
-DATASET_PASSWORD = os.environ.get("DATASET_PASSWORD","x")
+DATASET_USERNAME = os.environ.get("DATASET_USERNAME", "x")
+DATASET_PASSWORD = os.environ.get("DATASET_PASSWORD", "x")
 
 
 def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
@@ -27,8 +27,10 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
 
 import requests
 
-DATASET_URL = "https://conversations.dippy-bittensor-subnet.com/dataset"
+DATASET_URL = "https://dataset-sn11.dippy-bittensor-subnet.com/dataset"
 DATASET_API_KEY = os.environ.get("DATASET_API_KEY", "dippy")
+DATASET_API_JWT = os.environ.get("DATASET_API_JWT", "dippy")
+
 DEFAULT_EPOCH_DATE = "20241201"
 
 
@@ -36,9 +38,9 @@ def get_latest_from_set():
     current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
     url = f"{DATASET_URL}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}"
 
-    response = requests.get(url, 
-    auth=(DATASET_USERNAME, DATASET_PASSWORD),
-    headers={"validator-hotkey": 'someVerysecretKey'})
+    response = requests.get(
+        url, headers={"Authorization": f"Bearer {DATASET_API_JWT}", "validator-hotkey": DATASET_API_KEY}
+    )
     response.raise_for_status()  # Raise an error for bad responses
     data = response.json().get("all_convos", [])
     return data

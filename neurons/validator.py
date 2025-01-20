@@ -73,6 +73,7 @@ NEW_EPOCH_BLOCK = 4200000
 SCORE_RESET_BLOCK = 7720334
 TEMP_SCORE_RESET_PENALTY = 0.5
 
+
 def compute_wins(
     miner_registry: Dict[int, MinerEntry],
 ) -> Tuple[Dict[int, int], Dict[int, float]]:
@@ -101,7 +102,7 @@ def compute_wins(
             if i == j:
                 continue
             block_j = miner_registry[uid_j].block
-            
+
             score_i = miner_registry[uid_i].total_score
             score_j = miner_registry[uid_j].total_score
 
@@ -119,6 +120,7 @@ def compute_wins(
             win_rate[uid_i] = float("-inf")
 
     return wins, win_rate
+
 
 def local_metadata() -> LocalMetadata:
     """Extract the version as current git commit hash"""
@@ -204,7 +206,6 @@ class Validator:
         bt.axon.add_args(parser)
         config = bt.config(parser)
         return config
-
 
     def __init__(self, local_metadata: LocalMetadata):
         self.config = Validator.config()
@@ -341,13 +342,13 @@ class Validator:
         for attempt in range(retries):
             try:
                 success, msg = self.subtensor.set_weights(
-                        netuid=netuid,
-                        wallet=wallet,
-                        uids=uids,
-                        weights=weights,
-                        wait_for_inclusion=False,
-                        wait_for_finalization=False,
-                        version_key=constants.weights_version_key,
+                    netuid=netuid,
+                    wallet=wallet,
+                    uids=uids,
+                    weights=weights,
+                    wait_for_inclusion=False,
+                    wait_for_finalization=False,
+                    version_key=constants.weights_version_key,
                 )
                 if success:
                     return True
@@ -366,7 +367,6 @@ class Validator:
                     self.subtensor = Validator.new_subtensor()
                 time.sleep(wait_time)
         return False
-    
 
     async def _try_set_weights(self, debug: bool = False) -> Tuple[bool, Optional[str]]:
         weights_success = False
@@ -384,7 +384,7 @@ class Validator:
                         wallet=self.wallet,
                         uids=self.metagraph.uids,
                     ),
-                    timeout=600  # 10 minutes
+                    timeout=600,  # 10 minutes
                 )
             except asyncio.TimeoutError:
                 bt.logging.error("Setting weights timed out after 10 minutes")
@@ -398,7 +398,7 @@ class Validator:
         except Exception as e:
             bt.logging.error(f"failed_set_weights error={e}\n{traceback.format_exc()}")
             error_str = f"failed_set_weights error={e}\n{traceback.format_exc()}"
-            
+
             return weights_success, error_str
 
         # Only dump weight state to console
@@ -420,13 +420,10 @@ class Validator:
         status_table.add_row("failed_set_weights", str(weights_failed))
         console.print(status_table)
         return weights_success, error_str
-    
-        
-            
+
     async def try_set_weights(self, ttl: int) -> Tuple[bool, Optional[str]]:
         if self.config.offline:
             return False, None
-
 
         weights_set_success = False
         error_msg = None
@@ -448,7 +445,7 @@ class Validator:
                 "error": error_msg,
                 "exception_msg": exception_msg,
                 "weights_version": constants.weights_version_key,
-            }   
+            }
             logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey, payload)
             self._remote_log(logged_payload)
         return weights_set_success, error_msg
@@ -464,10 +461,10 @@ class Validator:
                 try:
                     substrate_client = self.subtensor.substrate
                     raw_commmitments = substrate_client.query_map(
-                    module="Commitments",
-                    storage_function="CommitmentOf",
-                    params=[self.config.netuid],
-                    block_hash=None,
+                        module="Commitments",
+                        storage_function="CommitmentOf",
+                        params=[self.config.netuid],
+                        block_hash=None,
                     )
                 except Exception as e:
                     bt.logging.warning(f"Failed to fetch metadata with self.subtensor: {e}, trying dedicated subtensor")
@@ -479,10 +476,10 @@ class Validator:
                         bt.logging.warning(f"Created dedicated subtensor for metadata fetch: {dedicated_subtensor} ")
                         substrate_client = dedicated_subtensor.substrate
                         raw_commmitments = substrate_client.query_map(
-                        module="Commitments",
-                        storage_function="CommitmentOf",
-                        params=[self.config.netuid],
-                        block_hash=None,
+                            module="Commitments",
+                            storage_function="CommitmentOf",
+                            params=[self.config.netuid],
+                            block_hash=None,
                         )
                     finally:
                         # Ensure we close the dedicated subtensor
@@ -492,7 +489,7 @@ class Validator:
                             except Exception as close_error:
                                 bt.logging.error(f"Error closing dedicated subtensor: {close_error}")
             except Exception as e:
-                delay = base_delay ** attempt
+                delay = base_delay**attempt
                 if attempt < max_retries - 1:  # Don't log "retrying" on the last attempt
                     bt.logging.error(f"Attempt {attempt + 1}/{max_retries} failed to fetch data : {e}")
                     bt.logging.info(f"Retrying in {delay:.1f} seconds...")
@@ -500,31 +497,27 @@ class Validator:
                 else:
                     bt.logging.error(f"All attempts failed to fetch data : {e}")
                     raise e
-        
+
         if raw_commmitments is None:
             raise Exception("Failed to fetch raw commitments from chain")
         commitments = {}
         for key, value in raw_commmitments:
-                hotkey = key.value
-                commitment_info = value.value.get("info", {})
-                fields = commitment_info.get("fields", [])
-                if not fields or not isinstance(fields[0], dict):
-                    continue
-                field_value = next(iter(fields[0].values()))
-                if field_value.startswith("0x"):
-                    field_value = field_value[2:]
-                try:
-                    chain_str = bytes.fromhex(field_value).decode("utf-8").strip()
-                    commitments[str(hotkey)] = {
-                        "block": value["block"].value,
-                        "chain_str": chain_str
-                    }
-                except Exception as e:
-                    bt.logging.error(f"Failed to decode commitment for hotkey {hotkey}: {e}")
-                    continue
-        
-        return commitments
+            hotkey = key.value
+            commitment_info = value.value.get("info", {})
+            fields = commitment_info.get("fields", [])
+            if not fields or not isinstance(fields[0], dict):
+                continue
+            field_value = next(iter(fields[0].values()))
+            if field_value.startswith("0x"):
+                field_value = field_value[2:]
+            try:
+                chain_str = bytes.fromhex(field_value).decode("utf-8").strip()
+                commitments[str(hotkey)] = {"block": value["block"].value, "chain_str": chain_str}
+            except Exception as e:
+                bt.logging.error(f"Failed to decode commitment for hotkey {hotkey}: {e}")
+                continue
 
+        return commitments
 
     async def build_registry(
         self, all_uids: List[int], current_block: int, max_concurrent: int = 32
@@ -538,7 +531,7 @@ class Validator:
             miner_registry[uid].hotkey = hotkey
             bt.logging.debug(f"now checking for uid={uid} and hotkey {hotkey}")
             try:
-                
+
                 raw_miner_data = commitments[hotkey] if hotkey in commitments else None
                 if raw_miner_data is None:
                     invalid_uids.append(uid)
@@ -627,7 +620,7 @@ class Validator:
         return invalid_uids, miner_registry
 
     @staticmethod
-    def new_subtensor(config = None):
+    def new_subtensor(config=None):
         if config is not None:
             subtensor = Subtensor(config=config)
             return subtensor
@@ -645,9 +638,7 @@ class Validator:
             status = f"{str(e)}\n{traceback.format_exc()}"
             self.subtensor = None
         payload = {"subtensor_close_status": status}
-        logged_payload = self._with_decoration(
-                    self.local_metadata, self.wallet.hotkey, payload=payload
-                )
+        logged_payload = self._with_decoration(self.local_metadata, self.wallet.hotkey, payload=payload)
         self._remote_log(logged_payload)
 
     async def try_sync_metagraph(self, ttl: int = 120) -> bool:
@@ -656,26 +647,29 @@ class Validator:
             network = "local"
         try:
             bt.logging.warning(f"attempting sync with network {network}")
-            
+
             self.metagraph = Metagraph(netuid=self.config.netuid, network=network, lite=False, sync=True)
             return True
         except Exception as e:
             metagraph_failure_payload = {
-                    "initial_metagraph_sync_success": False,
-                    "failure_str": str(e),
-                    "stacktrace": traceback.format_exc(),
-                    "network":network,
-                }
+                "initial_metagraph_sync_success": False,
+                "failure_str": str(e),
+                "stacktrace": traceback.format_exc(),
+                "network": network,
+            }
             logged_payload = self._with_decoration(
-                    self.local_metadata, self.wallet.hotkey, payload=metagraph_failure_payload
-                )
+                self.local_metadata, self.wallet.hotkey, payload=metagraph_failure_payload
+            )
             self._remote_log(logged_payload)
-            bt.logging.error(f"could not sync metagraph {e} using network {network}. Starting retries. If this issue persists please restart the valdiator script")
+            bt.logging.error(
+                f"could not sync metagraph {e} using network {network}. Starting retries. If this issue persists please restart the valdiator script"
+            )
             self.close_subtensor()
             if self.config.local:
                 self.subtensor = Validator.new_subtensor(self.config)
             else:
                 self.subtensor = Validator.new_subtensor()
+
         def sync_metagraph(attempt):
             try:
                 self.metagraph.sync(block=None, lite=False, subtensor=self.subtensor)
@@ -708,7 +702,6 @@ class Validator:
                 bt.logging.error(f"could not sync metagraph {e}")
                 if attempt == 2:
                     return False
-            
 
         bt.logging.success("Synced metagraph")
         self._event_log("metagraph_sync_success")
@@ -718,6 +711,7 @@ class Validator:
         async def _try_run_step():
             success = await self.run_step()
             return success
+
         try:
             bt.logging.warning(f"Running step with ttl {ttl}")
             step_success = await asyncio.wait_for(_try_run_step(), ttl)
@@ -948,7 +942,7 @@ class Validator:
                             run_step_success = await self.try_run_step(ttl=60 * 30)
                             run_step_payload = {"run_step_success": run_step_success, "attempt": attempt}
                             logged_payload = self._with_decoration(
-                            self.local_metadata, self.wallet.hotkey, run_step_payload
+                                self.local_metadata, self.wallet.hotkey, run_step_payload
                             )
                             self._remote_log(logged_payload)
                             if run_step_success:
@@ -956,14 +950,14 @@ class Validator:
                         except Exception as e:
                             run_step_payload = {"run_step_success": False, "attempt": attempt}
                             logged_payload = self._with_decoration(
-                            self.local_metadata, self.wallet.hotkey, run_step_payload
+                                self.local_metadata, self.wallet.hotkey, run_step_payload
                             )
                             self._remote_log(logged_payload)
                             if attempt == 2:  # Last attempt
                                 run_step_success = False
                                 bt.logging.error(f"Failed all 3 attempts to run step: {e}")
                                 break
-                            wait_time = (2 ** attempt) * 5  # 5s, 10s, 20s backoff
+                            wait_time = (2**attempt) * 5  # 5s, 10s, 20s backoff
                             bt.logging.warning(f"Attempt {attempt + 1} failed, retrying in {wait_time}s: {e}")
                             await asyncio.sleep(wait_time)
                     weights_set_success = False
@@ -971,9 +965,10 @@ class Validator:
                     self.global_step += 1
                     if run_step_success:
                         pre_weights_payload = {
-                            "step":"pre_weights",
+                            "step": "pre_weights",
                             "global_step": self.global_step,
-                            "subtensor": str(self.subtensor)}
+                            "subtensor": str(self.subtensor),
+                        }
                         logged_payload = self._with_decoration(
                             self.local_metadata, self.wallet.hotkey, pre_weights_payload
                         )
@@ -985,11 +980,15 @@ class Validator:
                             bt.logging.error(f"Error setting weights: {e}\n{traceback.format_exc()}")
                             weights_set_success = False
                             error_msg = f"{error_msg or ''}\nException: {e}\n{traceback.format_exc()}"
-                            
+
                     logged_payload = self._with_decoration(
-                        self.local_metadata, 
-                        self.wallet.hotkey, 
-                        {"run_step_success":run_step_success,"try_weights_complete": weights_set_success, "error_msg": error_msg}
+                        self.local_metadata,
+                        self.wallet.hotkey,
+                        {
+                            "run_step_success": run_step_success,
+                            "try_weights_complete": weights_set_success,
+                            "error_msg": error_msg,
+                        },
                     )
                     self._remote_log(logged_payload)
 
@@ -997,7 +996,7 @@ class Validator:
                         return
                     # Wait for 1 minute to avoid running multiple times within the same minute
                     await asyncio.sleep(70)
-                    
+
                 else:
                     # Only sync metagraph every 5 minutes
                     current_time = dt.datetime.now(dt.timezone.utc)
@@ -1023,7 +1022,6 @@ class Validator:
 
                     # Wait until the next minute before checking again
                     await asyncio.sleep(minutes_until_next)
-                    
 
             except KeyboardInterrupt:
                 bt.logging.warning("KeyboardInterrupt caught")
@@ -1033,7 +1031,7 @@ class Validator:
                 logged_payload = self._with_decoration(
                     self.local_metadata,
                     self.wallet.hotkey,
-                    {"validator_loop_error": str(e), "stacktrace": traceback.format_exc()}
+                    {"validator_loop_error": str(e), "stacktrace": traceback.format_exc()},
                 )
                 self._remote_log(logged_payload)
                 # Add a small delay before retrying in case of continuous errors
@@ -1153,6 +1151,7 @@ def get_model_score(
 
     bt.logging.debug(f"Model {model_id.namespace}/{model_id.name} has score data {score_data}")
     return score_data
+
 
 def get_validator_flag(
     config,

@@ -15,6 +15,7 @@ from scoring.common import (
     COHERENCE_NUM_EVALS,
 )
 
+
 def get_post_eval_score(request: EvaluateModelRequest, model: LLM, verbose=False):
     try:
         repo_id = f"{request.repo_namespace}/{request.repo_name}"

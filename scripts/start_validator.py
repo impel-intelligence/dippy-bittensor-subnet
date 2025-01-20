@@ -77,16 +77,15 @@ from typing import Dict, Any
 
 def _remote_log(payload: Dict[str, Any]):
 
-
     final_payload = {
-            "signature": "x",
-            "payload": payload,
-            "commit": "x",
-            "btversion": "x",
-            "uid": "0",
-            "hotkey": "x",
-            "coldkey": "x",
-        }
+        "signature": "x",
+        "payload": payload,
+        "commit": "x",
+        "btversion": "x",
+        "uid": "0",
+        "hotkey": "x",
+        "coldkey": "x",
+    }
     event_report_endpoint = f"{constants.VALIDATION_SERVER}/event_report"
     try:
         response = requests.post(event_report_endpoint, json=final_payload)
