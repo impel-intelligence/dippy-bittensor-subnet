@@ -190,20 +190,18 @@ class SupabaseState:
     def get_next_model_to_eval(self):
         try:
             response = (
-                self.client.table("leaderboard")
-                .select("*, minerboard!inner(*)")
-                .eq("status", "QUEUED")
-                .order("timestamp", desc=False)
-                .limit(1)
+                self.client.table("minerboard")
+                .select("*, leaderboard(*)")
+                .order("block", desc=False)
                 .execute()
             )
             if len(response.data) == 0:
                 return None
-
-            if not response.data[0].get("minerboard"):
+            # Filter for only QUEUED status entries
+            queued_entries = [entry for entry in response.data if entry.get('leaderboard', {}).get('status') == 'QUEUED']
+            if len(queued_entries) == 0:
                 return None
-
-            return response.data[0]
+            return queued_entries[0]['leaderboard']
         except Exception as e:
             self.logger.error(f"Error fetching next model to evaluate: {e}")
             return None

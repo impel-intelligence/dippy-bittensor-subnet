@@ -17,7 +17,6 @@ DEFAULT_IMAGE_NAME = "grader:latest"
 DEFAULT_HOME_DIR = os.environ.get("EVALUATOR_HOME_DIR", "/home/new_prod_user/dippy-bittensor-subnet")
 DEFAULT_MODEL_CACHE_DIR = os.environ.get("EVALUATOR_MODEL_CACHE_DIR", "/workdir/model_cache_dir")
 
-
 class EvaluationScore(BaseModel):
     eval_score: float
     latency_score: float
@@ -98,6 +97,7 @@ class Evaluator:
             "HF_TOKEN": os.environ.get("HF_TOKEN"),
             "VLLM_WORKER_MULTIPROC_METHOD": "_",
             "PYTORCH_CUDA_ALLOC_CONF": "_",
+            "DATASET_API_JWT": os.environ.get("DATASET_API_JWT"),
             "DATASET_API_KEY": os.environ.get("DATASET_API_KEY"),
         }
         self.trace = trace
@@ -138,7 +138,7 @@ class Evaluator:
         filepath = f"/tmp/{job_type}_output.json"
         filename = f"{job_type}_output.json"
 
-        print(f"container image {self.image_name} with command {command} launched")
+        print(f"now waiting for container image {self.image_name} with command {command} to complete")
         result = container.wait()
         self.logger.debug(f"container_run_complete, {result}")
         print(f"container_run_complete, {result}")

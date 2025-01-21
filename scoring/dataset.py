@@ -28,18 +28,16 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
 import requests
 
 DATASET_URL = "https://dataset-sn11.dippy-bittensor-subnet.com/dataset"
-DATASET_API_KEY = os.environ.get("DATASET_API_KEY", "dippy")
 DATASET_API_JWT = os.environ.get("DATASET_API_JWT", "dippy")
 
 DEFAULT_EPOCH_DATE = "20241201"
-
 
 def get_latest_from_set():
     current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
     url = f"{DATASET_URL}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}"
 
     response = requests.get(
-        url, headers={"Authorization": f"Bearer {DATASET_API_JWT}", "validator-hotkey": DATASET_API_KEY}
+        url, headers={"Authorization": f"Bearer {DATASET_API_JWT}"}
     )
     response.raise_for_status()  # Raise an error for bad responses
     data = response.json().get("all_convos", [])
