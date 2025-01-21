@@ -105,10 +105,10 @@ def _model_evaluation_step(queue_id, duplicate: bool = False):
     if request is None:  # Sentinel value to exit the process
         logger.info("No more models to evaluate. Sleep for 15 seconds before checking again.")
         return
-    app.state.event_logger.info(f"Model evaluation queued: {request} {queue_id}")
+    queued_message = f"Model evaluation queued: {request} {queue_id}"
+    print(queued_message)
+    app.state.event_logger.info(queued_message)
     try:
-        if duplicate:
-            _duplicate_model(request)
         result = _evaluate_model(request, queue_id)
         if result is None:
             result = {"note": "incoherent model"}
@@ -127,23 +127,15 @@ def get_next_model_to_eval():
 
     if response is None:
         return None
-    return EvaluateModelRequest(
+    request = EvaluateModelRequest(
         repo_namespace=response["repo_namespace"],
         repo_name=response["repo_name"],
         chat_template_type=response["chat_template_type"],
         hash=response["hash"],
     )
+    return request
 
 
-def _duplicate_model(request: EvaluateModelRequest):
-    try:
-        duplicate(request.repo_namespace, request.repo_name)
-    except Exception as e:
-        supabaser.update_leaderboard_status(
-            request.hash,
-            "FAILED",
-            f"model error : {e}",
-        )
 
 
 GPU_ID_MAP = {
@@ -692,15 +684,8 @@ def start():
     try:
         logger.info(f"Starting {num_queues} evaluation threads")
         processes = start_staggered_queues(num_queues, stagger_seconds)
-
-        if not args.worker:
-            logger.info("Starting API server")
-            uvicorn.run(app, host="0.0.0.0", port=MAIN_API_PORT)
-        else:
-            logger.info("Running in worker mode - API server disabled")
-            # Keep the main process running
-            while True:
-                time.sleep(60)
+        uvicorn.run(app, host="0.0.0.0", port=MAIN_API_PORT)
+        
 
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received, stopping...")
