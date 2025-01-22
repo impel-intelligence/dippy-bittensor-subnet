@@ -741,12 +741,12 @@ class Validator:
         CHANGE_BLOCK = 4247000
         # currently force static 0.15 temperature
         if current_block > CHANGE_BLOCK:
-            return 1
+            return 15
         diff = current_block - CHANGE_BLOCK
         # Map block difference to temperature value between 1-15
         # Scale linearly up to NEW_EPOCH_BLOCK
         if diff <= 7200:
-            return 1.0
+            return 15
 
         # Linear scaling: (diff / max_diff) * (max_temp - min_temp) + min_temp
         temp = (diff / CHANGE_BLOCK) * 14 + 1
