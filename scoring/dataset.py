@@ -27,7 +27,7 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
 
 import requests
 
-DATASET_URL = "https://dataset-sn11.dippy-bittensor-subnet.com/dataset"
+DATASET_URL = "https://temp-miner-dataset-sn11.dippy-bittensor-subnet.com/dataset"
 DATASET_API_JWT = os.environ.get("DATASET_API_JWT", "dippy")
 
 DEFAULT_EPOCH_DATE = "20241201"
