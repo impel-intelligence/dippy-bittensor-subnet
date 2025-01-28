@@ -569,6 +569,7 @@ class Validator:
 
                 miner_registry[uid].block = model_data.block
                 miner_registry[uid].miner_model_id = model_data.miner_model_id
+                miner_registry[uid].epoch_penalty = (current_block - model_data.block)
 
                 signed_payload = sign_request(
                     self.wallet.hotkey,
