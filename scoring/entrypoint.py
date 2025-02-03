@@ -31,9 +31,10 @@ def _run(
     result = {"completed": False}
     try:
         if run_type == "eval":
+            result = get_eval_score(request, use_lora=False)
             result = get_eval_score(request)
         if run_type == "inference":
-            result = get_inference_score(request)
+            result = get_inference_score(request, use_lora=False)
         result["completed"] = True
         typer.echo(f"Evaluated with parameters: {result}")
     except Exception as e:

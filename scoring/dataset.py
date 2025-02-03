@@ -78,9 +78,12 @@ class StreamedSyntheticDataset(Dataset):
             print(f"error loading dataset {e}")
             raise e
         self.dataset = self.process_data(data, max_input_len)
+        current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
+        self.eval_period = f"{DEFAULT_EPOCH_DATE} to {current_date}"
 
         self._chat_template = None
         self._tokenizer = None
+        self._last_sampled_indices = None
 
     def set_chat_template_params(self, template_path: str, tokenizer: AutoTokenizer):
         self._chat_template = jinja2.Template(open(template_path).read())
@@ -169,10 +172,12 @@ class StreamedSyntheticDataset(Dataset):
         indices = indices[:n]
         error_count = 0
         sampled_data = []
+        valid_indices = []
         for i in indices:
             try:
                 sample_data = self[i]
                 sampled_data.append(sample_data)
+                valid_indices.append(i)
             except Exception as e:
                 error_count += 1
                 print(f"Skipping index {i} due to error: {str(e)}")
@@ -188,12 +193,29 @@ class StreamedSyntheticDataset(Dataset):
                 try:
                     sample_data = self[i]
                     sampled_data.append(sample_data)
+                    valid_indices.append(i)
                 except Exception as e:
                     print(f"Additional sample at index {i} also failed: {str(e)}")
                     continue
 
             print(f"Added {len(sampled_data) - (n - error_count)} additional valid samples")
+        
+        self._last_sampled_indices = valid_indices
         return sampled_data
+
+    def get_original_messages(self):
+        """Returns the original messages for the last sampled dataset."""
+        if self._last_sampled_indices is None:
+            raise ValueError("No samples have been generated yet. Call sample_dataset() first.")
+            
+        original_messages = []
+        for idx in self._last_sampled_indices:
+            original_messages.append({
+                "messages": self.dataset[idx]["messages"],
+                "last_user_message": self.dataset[idx]["last_user_message"],
+                "character_response": self.dataset[idx]["character_response"]
+            })
+        return original_messages
 
 
 class PromptDataset(Dataset):
@@ -561,3 +583,153 @@ class PersonaHubDataset(Dataset):
         indices = indices[:n]
 
         return [self[i] for i in indices]
+
+
+
+
+class StreamedSyntheticPartialDataset(Dataset):
+    def __init__(self, max_input_len: int, cut_message_chain_early: float = 0.5):
+        try:
+            data = get_latest_from_set()
+        except Exception as e:
+            print(f"error loading dataset {e}")
+            raise e
+        self.dataset = self.process_data(data, max_input_len)
+        current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
+        self.eval_period = f"{DEFAULT_EPOCH_DATE} to {current_date}"
+
+        self._chat_template = None
+        self._tokenizer = None
+        self._last_sampled_indices = None
+        self._cut_message_chain_early = cut_message_chain_early
+
+    def set_chat_template_params(self, template_path: str, tokenizer: AutoTokenizer):
+        self._chat_template = jinja2.Template(open(template_path).read())
+        self._tokenizer = tokenizer
+
+    def process_data(self, data, max_input_len):
+        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")  # to get approx token count
+        converted_dataset = []
+        for data_point in data:
+            system_prompt = data_point["system_prompt"]
+            messages = [{"role": "system", "content": system_prompt}]
+            # get index of the last message from the chatbot
+            input_len_so_far = 0
+            limit_reached = False
+            for chat_message in data_point["messages"]:
+                input_len_so_far += len(encoding.encode(chat_message["content"]))
+                if input_len_so_far > max_input_len:
+                    limit_reached = True
+                    break
+
+                entry = {
+                    "role": chat_message["role"],
+                    "content": chat_message["content"],
+                }
+                messages.append(entry)
+            if limit_reached:
+                continue
+
+            character_response = messages.pop()["content"]
+            last_user_message = next((msg["content"] for msg in reversed(messages) if msg["role"] == "user"), None)
+            if last_user_message is None:
+                continue
+            converted_dataset.append(
+                {
+                    "messages": messages,
+                    "last_user_message": last_user_message,  # get the last user message
+                    "character_response": character_response,
+                }
+            )
+
+        return converted_dataset
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        if self._chat_template is None:
+            raise ValueError("Chat template is not set. Please set the chat template before generating chat.")
+        if self._tokenizer is None:
+            raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
+
+        full_messages = self.dataset[idx]["messages"]
+        if len(full_messages) < 1:
+            raise ValueError("empty messages")
+        for m in full_messages:
+            if len(m["content"]) < 1:
+                raise ValueError("empty message content")
+
+        # Determine whether to apply early cut on a per-item basis (e.g., 50% chance)
+        if random.random() < self._cut_message_chain_early:
+            # Find the last message with role 'user'
+            last_user_index = None
+            for i in range(len(full_messages) - 1, -1, -1):
+                if full_messages[i].get("role") == "user":
+                    last_user_index = i
+                    break
+            if last_user_index is None:
+                raise ValueError("No user message found in the conversation for early cut.")
+            truncated_messages = full_messages[:last_user_index + 1]
+            messages_to_render = truncated_messages
+        else:
+            messages_to_render = full_messages
+
+        rendered = self._chat_template.render(
+            bos_token=self._tokenizer.bos_token,
+            eos_token=self._tokenizer.eos_token,
+            messages=messages_to_render,
+            include_beginning_of_conversation=True,
+            add_generation_prompt=True,
+        )
+        if rendered is None:
+            raise ValueError("chat_input could not be rendered")
+        if self._tokenizer.eos_token is not None and rendered.endswith(self._tokenizer.eos_token):
+            rendered = rendered[: -len(self._tokenizer.eos_token)]
+        if self._tokenizer.bos_token is not None and not rendered.startswith(self._tokenizer.bos_token):
+            rendered = f"{self._tokenizer.bos_token}{rendered}"
+
+        # The next assistant message is stored as 'character_response'
+        next_assistant = f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}"
+        # Return both the rendered message history and original message history along with the next assistant message
+        return (rendered, messages_to_render, next_assistant)
+
+    def sample_dataset(self, n: int):
+        # get indices of the dataset
+        indices = list(range(len(self.dataset)))
+        random.shuffle(indices)
+        indices = indices[:n]
+        error_count = 0
+        sampled_data = []
+        valid_indices = []
+        for i in indices:
+            try:
+                sample_data = self[i]
+                sampled_data.append(sample_data)
+                valid_indices.append(i)
+            except Exception as e:
+                error_count += 1
+                print(f"Skipping index {i} due to error: {str(e)}")
+                continue
+        if error_count > 0:
+            print(f"Skipped {error_count} samples due to errors")
+            # Try to get additional samples to replace the errors
+            remaining_indices = [i for i in range(len(self.dataset)) if i not in indices]
+            random.shuffle(remaining_indices)
+            additional_needed = min(error_count, len(remaining_indices))
+
+            for i in remaining_indices[:additional_needed]:
+                try:
+                    sample_data = self[i]
+                    sampled_data.append(sample_data)
+                    valid_indices.append(i)
+                except Exception as e:
+                    print(f"Additional sample at index {i} also failed: {str(e)}")
+                    continue
+
+            print(f"Added {len(sampled_data) - (n - error_count)} additional valid samples")
+        
+        self._last_sampled_indices = valid_indices
+        return sampled_data
+
+
