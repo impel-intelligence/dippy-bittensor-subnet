@@ -51,18 +51,6 @@ REPO_TYPES = ["model", "dataset", "space"]
 hf_token = os.environ["HF_ACCESS_TOKEN"]
 
 
-def duplicate(repo_namespace: str, repo_name: str):
-    destination = f"DippyAI/{repo_namespace}-{repo_name}"
-    r = requests.post(
-        f"https://huggingface.co/api/models/{repo_namespace}/{repo_name}/duplicate",
-        headers=build_hf_headers(token=hf_token),
-        json={"repository": destination, "private": True},
-    )
-    hf_raise_for_status(r)
-
-    repo_url = r.json().get("url")
-
-    return (f"{repo_url}",)
 
 
 def push_minerboard(
@@ -223,10 +211,8 @@ class ModelQueue:
                     failed += 1
 
                 if result.status == StatusEnum.QUEUED:
-                    try:
-                        self.logger.info(f"QUEUED: {hotkey}")
-                    except Exception as e:
-                        self.logger.error(f"could not duplicate repo : {e}")
+                    self.logger.info(f"QUEUED: {hotkey}")
+                    
                     queued += 1
 
                 if result.status == StatusEnum.COMPLETED:

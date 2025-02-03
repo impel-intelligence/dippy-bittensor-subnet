@@ -29,7 +29,6 @@ from utilities.repo_details import (
     check_model_repo_details,
     ModelRepo,
 )
-from dippy_validation_api.duplicate import duplicate
 from utilities.event_logger import EventLogger
 from scoring.common import EvaluateModelRequest, chat_template_mappings
 from dotenv import load_dotenv
@@ -98,7 +97,7 @@ def start_staggered_queues(num_queues: int, stagger_seconds: int):
     return processes
 
 
-def _model_evaluation_step(queue_id, duplicate: bool = False):
+def _model_evaluation_step(queue_id):
     time.sleep(random.random())
 
     request = get_next_model_to_eval()

@@ -61,3 +61,33 @@ There are some troubleshooting steps a miner can take to ensure that their submi
 1b. Example of a successful `commit` call to the bittensor network for this subnet can be seen here: https://taostats.io/extrinsic/3997404-0010
 2. Run the sample validator step mentioned in the `miner.md` documentation to check the specific status of your entry as reported by validators
 3. If all else fails, create a detailed github issue with the specific details of the miner entry (hotkey, uid, registration time) and the team will investigate if necessary
+
+## My entry failed. Can I get another chance?
+
+Short answer: No .
+Long answer:
+
+There are (generally) 3 types of failed entries:
+1. Repository check failure: the model repository must always be public for evaluation - if not, the miner can always resubmit a public one (note that sometimes huggingface can cache repos that converted from private to public, so be aware of this when submitting)
+
+2. Miner skill issue: the model submitted is not a model that can actually be run (miner may have uploaded corrupted data, a model not compatible with scoring, etc)
+
+3. Error in scoring worker: the model submitted is valid, but some issue in the scoring worker runtime has resulted in a failure (ie cuda out of memory, etc)
+
+For 1 and 2 these will never be re-evaluated as it is the miner's responsibility to ensure that the model will be public and loaded correctly. Given that it is possible for a miner to run the same scoring code, any deterministic failures in this case will stay failed.
+
+For 3, this is a rare but possible occurence. For these cases, there is a separate queue that runs _only_ after _all other_ models have been evaluated. 
+
+
+## I have a specific question about my miner. Where can I get answers?
+
+Assuming you are encountering a technical issue that cannot be answered from the existing documentation, the fastest way to receive a response is through Github issues for this project. Any other attempts (DMs, ping, etc) will not be prioritized. If the answer to your question is easily found in the existing documentation or code, your question will be ignored or closed.
+
+
+## I heard there's a scoring reset. What do I have to do?
+Scoring resets are a frequent and expected occurrence in this subnet. Some general rules which apply unless explicitly overruled:
+
+1. Miners must re-submit their models after a scoring reset. This is trivial to accomplish
+2. Emissions will shift dramatically following a scoring reset. For the first 24 to 48 hours, extreme volatility is expected.
+3. Given the increased amount of miner activity after a scoring reset, models may take longer to be evaluated. Again, as mentioned, extremem volatility is expected and there is no downside for a miner to wait until later to register if they feel that it is too risky to submit a current entry.
+

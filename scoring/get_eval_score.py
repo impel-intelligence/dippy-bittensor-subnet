@@ -7,6 +7,8 @@ import math
 from transformers import AutoTokenizer, BitsAndBytesConfig, AutoModelForCausalLM
 from accelerate.utils import release_memory
 from datetime import datetime, timezone, timedelta
+from peft import PeftModel    
+from peft import AutoPeftModelForCausalLM
 
 
 from scoring.eval_score import cleanup, warmup_model, eval_score_batch
@@ -20,15 +22,17 @@ from scoring.common import (
     MODEL_CACHE_DIR,
     VOCAB_TRUNCATION,
     MAX_SEQ_LEN,
+    DEFAULT_LORA_BASE,
     EVALUATION_DATASET_SAMPLE_SIZE,
     EvaluateModelRequest,
     chat_template_mappings,
+    
 )
 
 max_entropy = math.log(VOCAB_TRUNCATION)
 
 
-def get_eval_score(request: EvaluateModelRequest):
+def get_eval_score(request: EvaluateModelRequest, use_lora: bool = False):
     repo_id = f"{request.repo_namespace}/{request.repo_name}"
     print(f"CUDA devices: {torch.cuda.device_count()}")
     print(f"Using CUDA device: {torch.cuda.current_device()}")
@@ -48,14 +52,35 @@ def get_eval_score(request: EvaluateModelRequest):
     if not os.path.exists(f"{MODEL_CACHE_DIR}/{cache_path}"):
         os.makedirs(f"{MODEL_CACHE_DIR}/{cache_path}")
 
+
+    if use_lora:
+        repo_id = DEFAULT_LORA_BASE
+        print(f"Loading base model from {repo_id}")
+    
+    model_type = "base"
     try:
-        model = AutoModelForCausalLM.from_pretrained(
+        base_model = AutoModelForCausalLM.from_pretrained(
             repo_id,
             attn_implementation="flash_attention_2",
             torch_dtype=torch.bfloat16,
             cache_dir=MODEL_CACHE_DIR,
+            device_map="auto",
         )
-        print(f"loaded model as {type(model)}")
+        
+        if use_lora:
+            lora_adapter = f"{request.repo_namespace}/{request.repo_name}"
+            print(f"Loading LoRA adapter from {request.repo_namespace}/{request.repo_name}")
+            model = PeftModel.from_pretrained(
+                base_model,
+                lora_adapter,
+                cache_dir=MODEL_CACHE_DIR
+            )
+            model_type = "lora"
+        else:
+            model = base_model
+        model.to("cuda")
+        print(f"loaded model as {type(model)} with type {model_type}")
+    
 
     except Exception as e:
         try:
@@ -138,10 +163,12 @@ def get_eval_score(request: EvaluateModelRequest):
         raise Exception("Error loading model: " + failure_reason)
 
     print("Sampling dataset")
+    eval_period = "None"
     try:
         dataset = StreamedSyntheticDataset(
             max_input_len=MAX_SEQ_LEN - MAX_GENERATION_LENGTH - 200,
         )
+        eval_period = dataset.eval_period
         # set the chat template params
         dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
         sampled_data = dataset.sample_dataset(EVALUATION_DATASET_SAMPLE_SIZE)
@@ -151,7 +178,7 @@ def get_eval_score(request: EvaluateModelRequest):
         raise Exception(f"Error loading dataset: {failure_reason}")
 
     # Part 2: Evaluate the model
-    print("Evaluating model")
+    print(f"Evaluating model with len(sampled_data) {len(sampled_data)} and eval_period {eval_period}")
     try:
         evaluation_results = eval_score_batch(
             model,
@@ -174,4 +201,5 @@ def get_eval_score(request: EvaluateModelRequest):
         "latency_score": latency_score,
         "model_size_score": model_size_score,
         "creativity_score": entropy_score,
+        "eval_period": eval_period, 
     }

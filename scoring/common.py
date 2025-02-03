@@ -1,6 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel
-
+import json
 # Constants
 MAX_GENERATION_LEEWAY = 0.5  # should be between 0 and 1. This is the percentage of tokens that the model can generate more than the last user message
 MAX_GENERATION_LENGTH = 200  # maximum number of tokens that the model can generate
@@ -42,7 +42,7 @@ DATASET_DIR = "evalsets"
 MODEL_CACHE_DIR = "./model_cache_dir"
 
 DIPPA_DATASET_MAX_PARTITIONS = 4
-
+DEFAULT_LORA_BASE = "path/to/lora/model"
 
 class EvaluateModelRequest(BaseModel):
     repo_namespace: str
@@ -62,13 +62,30 @@ class EvaluateModelRequest(BaseModel):
 
 chat_template_mappings = {
     "vicuna": "prompt_templates/vicuna_prompt_template.jinja",
-    "chatml": "prompt_templates/chatml_prompt_template.jinja",
+    "chatml": "./scoring/prompt_templates/chatml_prompt_template.jinja",
     "zephyr": "prompt_templates/zephyr_prompt_template.jinja",
-    "mistral": "prompt_templates/mistral_prompt_template.jinja",
+    "mistral": "./scoring/prompt_templates/mistral_prompt_template.jinja",
     "alpaca": "prompt_templates/alpaca_prompt_template.jinja",
     "llama2": "prompt_templates/llama2_prompt_template.jinja",
     "llama3": "prompt_templates/llama3_prompt_template.jinja",
     "llama3dot1": "prompt_templates/llama3dot1_prompt_template.jinja",
-    "gemma2": "prompt_templates/gemma_it_prompt_template.jinja",
+    "gemma2": "./scoring/prompt_templates/gemma_it_prompt_template.jinja",
     "qwen2dot5": "prompt_templates/qwen2dot5_prompt_template.jinja",
 }
+
+def stringify_convo_from_messages(dict_list):
+    result = []
+    for i, item in enumerate(dict_list):
+        if item["role"] == "system":
+            result.append(f"System Prompt: {item['content']}")
+            continue
+        result.append(f"Role: {item['role']}")
+        result.append(f"Content: {item['content']}")
+        result.append("")  # Add a blank line for spacing
+    return "\n".join(result)
+
+def parse_json_safely(json_str: str) -> dict:
+    try:
+        return json.loads(json_str)
+    except:
+        return {}

@@ -6,6 +6,7 @@ from transformers import AutoTokenizer
 
 # Import necessary modules and functions from the main API file
 from scoring.common import (
+    stringify_convo_from_messages,
     EvaluateModelRequest,
     MAX_SEQ_LEN_COHERENCE_SCORE,
     MAX_GENERATION_LENGTH,
@@ -195,7 +196,7 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
 
     generated_samples = conversations
 
-    evaluation_conversations = [stringify_convo(m) for m in generated_samples]
+    evaluation_conversations = [stringify_convo_from_messages(m) for m in generated_samples]
     scored_convos = []
     penalty = 0
     exceptions = 0

@@ -42,12 +42,12 @@ class StatusEnum(StrEnum):
 class Scores(BaseModel):
     total_score: float = Field(default=0, description="The total score of the evaluation")
     coherence_score: float = Field(default=0, description="The coherence score of the model")
-    vibe_score: float = Field(default=0, description="The vibe score of the model")
     creativity_score: float = Field(default=0, description="The creativity score")
     qualitative_score: float = Field(default=0, description="The qualitative score of the model")
     llm_size_score: float = Field(default=0, description="The llm model size score")
     latency_score: float = Field(default=0, description="The latency score of the model")
     post_eval_score: float = Field(default=1, description="The post evaluation score (multiplier) of the model")
+    judge_score: float = Field(default=1, description="The LLM judge score (multiplier) of the model")
     status: str = Field(default=StatusEnum.QUEUED, description="The current status of the scoring process")
 
     @staticmethod
@@ -79,10 +79,10 @@ class Scores(BaseModel):
         self.llm_size_score = response.get("model_size_score", 0)
         self.creativity_score = response.get("creativity_score", 0)
         self.qualitative_score = response.get("qualitative_score", 0)
-        self.vibe_score = response.get("vibe_score", 0)
         self.coherence_score = response.get("coherence_score", 0)
         self.latency_score = response.get("latency_score", 0)
         self.post_eval_score = response.get("post_eval_score", 1)
+        self.judge_score = response.get("judge_score", 1)
         return self
 
     def calculate_total_score(self, adjust_coherence: bool = False) -> float:
@@ -90,7 +90,10 @@ class Scores(BaseModel):
         total_score = 0
         total_score += QUALITATIVE_SCORE_WEIGHT * q_score
         total_score += LATENCY_SCORE_WEIGHT * self.latency_score
-        total_score += VIBE_SCORE_WEIGHT * self.vibe_score
+        total_score += self.judge_score * 0.50
+        
+        total_score *= (1+self.judge_score)
+
         self.coherence_score = 1 if self.coherence_score >= COHERENCE_MINIMUM else 0
         total_score = total_score * self.coherence_score
         # multiplier = self.model_size_adjuster(self.llm_size_score)
