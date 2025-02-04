@@ -120,6 +120,9 @@ class Evaluator:
             env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:False"
             env["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
             env["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
+            env["VLLM_ATTENTION_BACKEND"] = "FLASH_ATTN"
+            
+        if job_type == "inference_flash":
             env["VLLM_ATTENTION_BACKEND"] = "FLASHINFER"
             env["VLLM_FLASHINFER_FORCE_TENSOR_CORES"] = "1"
 
@@ -182,10 +185,10 @@ class Evaluator:
             if eval_result["completed"] is False:
                 raise Exception("completion internal error")
             score = EvaluationScore(
-                eval_score=eval_result["eval_score"],
-                latency_score=eval_result["latency_score"],
-                eval_model_size_score=eval_result["model_size_score"],
-                creativity_score=eval_result["creativity_score"],
+                eval_score=eval_result.get("eval_score", -1),
+                latency_score=eval_result.get("latency_score", -1),
+                eval_model_size_score=0,
+                creativity_score=eval_result.get("creativity_score", 0),
             )
             return score
         except Exception as e:
@@ -261,7 +264,7 @@ def entry():
         scores_data.qualitative_score = eval_result.eval_score
         scores_data.latency_score = eval_result.latency_score
         scores_data.creativity_score = eval_result.creativity_score
-        scores_data.llm_size_score = eval_result.eval_model_size_score
+        scores_data.llm_size_score = 0
         scores_data.coherence_score = infrence_result.coherence_score
 
         final_eval_score = (

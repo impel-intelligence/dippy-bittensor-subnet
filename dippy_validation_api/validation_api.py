@@ -196,7 +196,7 @@ def _evaluate_model(
 
     eval_score = eval_score_result.eval_score
     latency_score = eval_score_result.latency_score
-    model_size_score = eval_score_result.eval_model_size_score
+    model_size_score = 0
     creativity_score = eval_score_result.creativity_score
 
     if eval_score is None or latency_score is None or model_size_score is None or judge_score is None:

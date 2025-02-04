@@ -108,14 +108,14 @@ class SupabaseState:
             if len(response.data) > 0:
                 result = {
                     "score": {
-                        "model_size_score": response.data[0]["model_size_score"],
-                        "qualitative_score": response.data[0]["qualitative_score"],
-                        "latency_score": response.data[0]["latency_score"],
-                        "total_score": response.data[0]["total_score"],
-                        "coherence_score": response.data[0]["coherence_score"],
-                        "creativity_score": response.data[0]["creativity_score"],
-                        "post_eval_score": response.data[0]["post_eval_score"],
-                        "judge_score": response.data[0].get("post_eval_score", 0),
+                        "model_size_score": response.data[0].get("model_size_score", 0),
+                        "qualitative_score": response.data[0].get("qualitative_score", -1),
+                        "latency_score": response.data[0].get("latency_score", -1),
+                        "total_score": response.data[0].get("total_score", -1),
+                        "coherence_score": response.data[0].get("coherence_score", 0),
+                        "creativity_score": response.data[0].get("creativity_score", 0),
+                        "post_eval_score": response.data[0].get("post_eval_score", 0),
+                        "judge_score": response.data[0].get("judge_score", 0),
                     },
                     "details": {
                         "model_hash": response.data[0]["model_hash"],
