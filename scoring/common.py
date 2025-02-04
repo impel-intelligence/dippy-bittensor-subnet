@@ -11,7 +11,7 @@ CREATIVITY_SCALE_FACTOR = 5
 
 MAX_MODEL_SIZE = 72 * 1024 * 1024 * 1024  # in bytes
 SAMPLE_SIZE = 1024  # number of samples to evaluate the model from the dataset
-EVALUATION_DATASET_SAMPLE_SIZE = 4096  # number of samples to evaluate the model from the dataset
+EVALUATION_DATASET_SAMPLE_SIZE = 3172  # number of samples to evaluate the model from the dataset
 BATCH_SIZE = 4  # batch size for evaluation
 # VOCAB_TRUNCATION = 1000  # truncate the vocab to top n tokens
 VOCAB_TRUNCATION = 10  # truncate the vocab to top n tokens
