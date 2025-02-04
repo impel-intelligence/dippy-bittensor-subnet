@@ -64,6 +64,12 @@ def get_eval_score(request: EvaluateModelRequest, use_lora: bool = False):
             cache_dir=MODEL_CACHE_DIR,
             device_map="auto",
         )
+        num_params = sum(p.numel() for p in base_model.parameters())
+        rounded_params = num_params/1e9
+        print(f"Total number of parameters (from HF model): {rounded_params}B")
+        if rounded_params < 20:
+            raise Exception(f"Model below 20B minimum : {rounded_params}B")
+
 
         if use_lora:
             lora_adapter = f"{request.repo_namespace}/{request.repo_name}"

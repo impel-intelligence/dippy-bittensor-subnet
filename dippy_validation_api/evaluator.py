@@ -21,7 +21,6 @@ DEFAULT_MODEL_CACHE_DIR = os.environ.get("EVALUATOR_MODEL_CACHE_DIR", "/workdir/
 class EvaluationScore(BaseModel):
     eval_score: float
     latency_score: float
-    eval_model_size_score: float
     creativity_score: float
 
 
@@ -187,7 +186,6 @@ class Evaluator:
             score = EvaluationScore(
                 eval_score=eval_result.get("eval_score", -1),
                 latency_score=eval_result.get("latency_score", -1),
-                eval_model_size_score=0,
                 creativity_score=eval_result.get("creativity_score", 0),
             )
             return score
