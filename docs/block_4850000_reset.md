@@ -1,10 +1,15 @@
 # Block Era 4850000 Reset Information for Miners
 
 
-1. What's happening?
+⚠️ **CRITICAL WARNING** ⚠️
+
+As repeatedely mentioned before, volatility in scoring is expected. As a miner, you should ideally only submit when you have verified for yourself the potential score and behavior of your model. 
+
+
+## 1. What's happening?
 The subnet is making drastic changes in order to encourage qualitatively better model submissions.
 
-2. What are the changes?
+## 2. What are the changes?
 
 The changes are the following:
 1. Models must now be at least 49GB (approx. 20b+ parameters)
@@ -14,14 +19,14 @@ The changes are the following:
 3. The vibe score has been removed
 
 
-3. What can I expect?
+## 3. What can I expect?
 This is a critical _experimental_ update that changes the dynamics of the subnet. Communication for this change has been mentioned repeatedly in the past month. 
 
 1. Volatility in scoring is expected. This will stabilize over time
 2. Queue times are expected to be long given the larger size of models. Default immunity period is more than 24 hours which is an order of magnitude longer than most subnets
 3. Additional scoring changes are expected in the near future, and if you as a miner are not willing to risk, then it may be better to wait for a newer competition period
 
-4. What is the judge score?
+## 4. What is the judge score?
 
 The judge score is the first step in creating a more comprehensive scoring method for roleplay LLMs. 
 The difficulty here is that unlike other domains such as math or science, it is difficult to create a baseline objective scoring method for roleplay. In addition, human scoring is obviously extremely limited, hence utilizing larger LLMs as judges provides a way to scale for larger datasets.
@@ -49,6 +54,3 @@ The final judge score is a simple sum of the model's wins against the dataset, r
 As mentioned, there are known pitfalls and potential weaknesses for this specific implementation. Thus, we consider this scoring period to be experimental and expect drastic changes in the future.
 
 
-⚠️ **CRITICAL WARNING** ⚠️
-
-As repeatedely mentioned above, volatility in scoring is expected. As a miner, you should ideally only submit when you have verified for yourself the potential score and behavior of your model. 
