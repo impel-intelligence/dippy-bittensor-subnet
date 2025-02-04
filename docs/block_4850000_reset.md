@@ -1,4 +1,4 @@
-# Block 4850000 Reset Information for Miners [WIP]
+# Block Era 4850000 Reset Information for Miners
 
 
 1. What's happening?
