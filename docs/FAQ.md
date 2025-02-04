@@ -97,3 +97,8 @@ Scoring resets are a frequent and expected occurrence in this subnet. Some gener
 2. Emissions will shift dramatically following a scoring reset. For the first 24 to 48 hours, extreme volatility is expected.
 3. Given the increased amount of miner activity after a scoring reset, models may take longer to be evaluated. Again, as mentioned, extremem volatility is expected and there is no downside for a miner to wait until later to register if they feel that it is too risky to submit a current entry.
 
+## What's up with the leaderboard?
+
+The leaderboard is a secondary view of the miner state. Note that due to its implementation, it is not guaranteed that the leaderboard state will reflect the same state as on the metagraph. For miners, the source of truth should always be the ranking determined from running the validator script (it is possible to run the script without having to be a validator). 
+
+During score resets, it is common for the state of the leaderboard to be in flux until all stale entries are removed.

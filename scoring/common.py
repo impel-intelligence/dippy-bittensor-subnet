@@ -10,7 +10,6 @@ MAX_AVG_LATENCY = 10000  # in milliseconds
 CREATIVITY_SCALE_FACTOR = 5
 
 MAX_MODEL_SIZE = 72 * 1024 * 1024 * 1024  # in bytes
-MIN_REPO_SIZE = 10 * 1024 * 1024  # in bytes
 SAMPLE_SIZE = 1024  # number of samples to evaluate the model from the dataset
 EVALUATION_DATASET_SAMPLE_SIZE = 4096  # number of samples to evaluate the model from the dataset
 BATCH_SIZE = 4  # batch size for evaluation

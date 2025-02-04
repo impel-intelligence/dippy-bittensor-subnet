@@ -33,7 +33,18 @@ DATASET_API_JWT = os.environ.get("DATASET_API_JWT", "dippy")
 DEFAULT_EPOCH_DATE = "20241201"
 
 
-def get_latest_from_set():
+
+"""
+In the case of requiring multiple fetches to the dataset api:
+It would be more efficient to save a single API result to json and load accordingly.
+
+"""
+def get_latest_from_set(use_file=False):
+    
+    if use_file:
+        with open('path/to/cached/file.json', 'r') as f:
+            data = json.load(f)
+            return data
     current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
     url = f"{DATASET_URL}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}"
 
@@ -44,8 +55,6 @@ def get_latest_from_set():
 
 
 def get_latest_from_file(filter: str = "both", filename: str = "/tmp/dataset.json"):
-    import json
-
     try:
         with open(filename, "r") as file:
             data = json.load(file)

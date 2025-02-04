@@ -42,8 +42,8 @@ MAX_GENERATION_LENGTH = 200  # maximum number of tokens that the model can gener
 LENGTH_DIFF_PENALTY_STEEPNESS = 2  # the steepness of the exponential decay of the length difference penalty
 MAX_AVG_LATENCY = 10000  # in milliseconds
 
-MAX_MODEL_SIZE = 32 * 1024 * 1024 * 1024  # in bytes
-MIN_REPO_SIZE = 45 * 1024 * 1024  # in bytes
+MAX_MODEL_SIZE = 72 * 1024 * 1024 * 1024  # in bytes
+MIN_REPO_SIZE = 40 * 1024 * 1024  # in bytes
 MAX_REPO_SIZE = 80 * 1024 * 1024 * 1024  #  in bytes
 SAMPLE_SIZE = 1024  # number of samples to evaluate the model from the dataset
 BATCH_SIZE = 4  # batch size for evaluation

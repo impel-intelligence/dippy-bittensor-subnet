@@ -46,7 +46,7 @@ class Scores(BaseModel):
     llm_size_score: float = Field(default=0, description="The llm model size score")
     latency_score: float = Field(default=0, description="The latency score of the model")
     post_eval_score: float = Field(default=1, description="The post evaluation score (multiplier) of the model")
-    judge_score: float = Field(default=1, description="The LLM judge score (multiplier) of the model")
+    judge_score: float = Field(default=0, description="The LLM judge score (multiplier) of the model")
     status: str = Field(default=StatusEnum.QUEUED, description="The current status of the scoring process")
 
     @staticmethod
