@@ -68,7 +68,7 @@ from bittensor.core.metagraph import Metagraph
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 INVALID_BLOCK_START = 4200000
 INVALID_BLOCK_END = 4200000
-NEW_EPOCH_BLOCK = 4200000
+NEW_EPOCH_BLOCK = 4853456
 # SCORE_RESET_BLOCK = 4720334
 SCORE_RESET_BLOCK = 7720334
 TEMP_SCORE_RESET_PENALTY = 0.5
@@ -569,7 +569,7 @@ class Validator:
 
                 miner_registry[uid].block = model_data.block
                 miner_registry[uid].miner_model_id = model_data.miner_model_id
-                miner_registry[uid].epoch_penalty = (current_block - model_data.block)
+                miner_registry[uid].epoch_penalty = current_block - model_data.block
 
                 signed_payload = sign_request(
                     self.wallet.hotkey,

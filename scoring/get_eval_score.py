@@ -7,7 +7,7 @@ import math
 from transformers import AutoTokenizer, BitsAndBytesConfig, AutoModelForCausalLM
 from accelerate.utils import release_memory
 from datetime import datetime, timezone, timedelta
-from peft import PeftModel    
+from peft import PeftModel
 from peft import AutoPeftModelForCausalLM
 
 
@@ -26,7 +26,6 @@ from scoring.common import (
     EVALUATION_DATASET_SAMPLE_SIZE,
     EvaluateModelRequest,
     chat_template_mappings,
-    
 )
 
 max_entropy = math.log(VOCAB_TRUNCATION)
@@ -52,11 +51,10 @@ def get_eval_score(request: EvaluateModelRequest, use_lora: bool = False):
     if not os.path.exists(f"{MODEL_CACHE_DIR}/{cache_path}"):
         os.makedirs(f"{MODEL_CACHE_DIR}/{cache_path}")
 
-
     if use_lora:
         repo_id = DEFAULT_LORA_BASE
         print(f"Loading base model from {repo_id}")
-    
+
     model_type = "base"
     try:
         base_model = AutoModelForCausalLM.from_pretrained(
@@ -66,35 +64,22 @@ def get_eval_score(request: EvaluateModelRequest, use_lora: bool = False):
             cache_dir=MODEL_CACHE_DIR,
             device_map="auto",
         )
-        
+
         if use_lora:
             lora_adapter = f"{request.repo_namespace}/{request.repo_name}"
             print(f"Loading LoRA adapter from {request.repo_namespace}/{request.repo_name}")
-            model = PeftModel.from_pretrained(
-                base_model,
-                lora_adapter,
-                cache_dir=MODEL_CACHE_DIR
-            )
+            model = PeftModel.from_pretrained(base_model, lora_adapter, cache_dir=MODEL_CACHE_DIR)
             model_type = "lora"
         else:
             model = base_model
         model.to("cuda")
-        print(f"loaded model as {type(model)} with type {model_type}")
-    
 
     except Exception as e:
-        try:
-            print(f"Error loading model with flash attention.: {e}. Trying vanilla load. This might cause OOM.")
-            model = AutoModelForCausalLM.from_pretrained(
-                repo_id,
-                cache_dir=MODEL_CACHE_DIR,
-            )
-        except Exception as e:
-            raise Exception(f"Error loading model: {str(e)}")
+        raise Exception(f"Error loading model: {str(e)}")
 
     model.eval()
+    print(f"loaded model as {type(model)} with type {model_type}")
 
-    print("Downloading tokenizer")
     try:
         input_tokenizer = AutoTokenizer.from_pretrained(
             repo_id,
@@ -114,7 +99,7 @@ def get_eval_score(request: EvaluateModelRequest, use_lora: bool = False):
             output_tokenizer.pad_token = output_tokenizer.eos_token  # add a pad token if not present
             output_tokenizer.pad_token_id = output_tokenizer.eos_token_id
 
-        print("Tokenizer downloaded successfully")
+        print("Tokenizer setup successfully")
     except Exception as e:
         failure_reason = str(e)
         cleanup(model, model_downloaded, request)
@@ -201,5 +186,5 @@ def get_eval_score(request: EvaluateModelRequest, use_lora: bool = False):
         "latency_score": latency_score,
         "model_size_score": model_size_score,
         "creativity_score": entropy_score,
-        "eval_period": eval_period, 
+        "eval_period": eval_period,
     }

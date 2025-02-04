@@ -32,13 +32,12 @@ DATASET_API_JWT = os.environ.get("DATASET_API_JWT", "dippy")
 
 DEFAULT_EPOCH_DATE = "20241201"
 
+
 def get_latest_from_set():
     current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
     url = f"{DATASET_URL}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}"
 
-    response = requests.get(
-        url, headers={"Authorization": f"Bearer {DATASET_API_JWT}"}
-    )
+    response = requests.get(url, headers={"Authorization": f"Bearer {DATASET_API_JWT}"})
     response.raise_for_status()  # Raise an error for bad responses
     data = response.json().get("all_convos", [])
     return data
@@ -199,7 +198,7 @@ class StreamedSyntheticDataset(Dataset):
                     continue
 
             print(f"Added {len(sampled_data) - (n - error_count)} additional valid samples")
-        
+
         self._last_sampled_indices = valid_indices
         return sampled_data
 
@@ -207,14 +206,16 @@ class StreamedSyntheticDataset(Dataset):
         """Returns the original messages for the last sampled dataset."""
         if self._last_sampled_indices is None:
             raise ValueError("No samples have been generated yet. Call sample_dataset() first.")
-            
+
         original_messages = []
         for idx in self._last_sampled_indices:
-            original_messages.append({
-                "messages": self.dataset[idx]["messages"],
-                "last_user_message": self.dataset[idx]["last_user_message"],
-                "character_response": self.dataset[idx]["character_response"]
-            })
+            original_messages.append(
+                {
+                    "messages": self.dataset[idx]["messages"],
+                    "last_user_message": self.dataset[idx]["last_user_message"],
+                    "character_response": self.dataset[idx]["character_response"],
+                }
+            )
         return original_messages
 
 
@@ -585,8 +586,6 @@ class PersonaHubDataset(Dataset):
         return [self[i] for i in indices]
 
 
-
-
 class StreamedSyntheticPartialDataset(Dataset):
     def __init__(self, max_input_len: int, cut_message_chain_early: float = 0.5):
         try:
@@ -670,7 +669,7 @@ class StreamedSyntheticPartialDataset(Dataset):
                     break
             if last_user_index is None:
                 raise ValueError("No user message found in the conversation for early cut.")
-            truncated_messages = full_messages[:last_user_index + 1]
+            truncated_messages = full_messages[: last_user_index + 1]
             messages_to_render = truncated_messages
         else:
             messages_to_render = full_messages
@@ -728,8 +727,6 @@ class StreamedSyntheticPartialDataset(Dataset):
                     continue
 
             print(f"Added {len(sampled_data) - (n - error_count)} additional valid samples")
-        
+
         self._last_sampled_indices = valid_indices
         return sampled_data
-
-
