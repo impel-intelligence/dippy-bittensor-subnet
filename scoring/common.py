@@ -1,6 +1,7 @@
 from typing import Optional
 from pydantic import BaseModel
 import json
+
 # Constants
 MAX_GENERATION_LEEWAY = 0.5  # should be between 0 and 1. This is the percentage of tokens that the model can generate more than the last user message
 MAX_GENERATION_LENGTH = 200  # maximum number of tokens that the model can generate
@@ -21,10 +22,7 @@ MAX_SEQ_LEN = (
     4096  # maximum sequence length that should be allowed because eval gets really slow with longer sequences than this
 )
 
-MAX_SEQ_LEN_VIBE_SCORE = 2048  # maximum sequence length that should be allowed for vibe score calculation because it is slow with longer sequences than this
 MAX_SEQ_LEN_COHERENCE_SCORE = 8192
-BATCH_SIZE_VIBE_SCORE = 4  # batch size for vibe score calculation
-SAMPLE_SIZE_VIBE_SCORE = 128  # number of samples to evaluate the model from the dataset for vibe score calculation
 # number of samples to evaluate the model from the dataset for coherence score calculation
 SAMPLE_SIZE_COHERENCE_SCORE = 128
 
@@ -43,6 +41,7 @@ MODEL_CACHE_DIR = "./model_cache_dir"
 
 DIPPA_DATASET_MAX_PARTITIONS = 4
 DEFAULT_LORA_BASE = "path/to/lora/model"
+
 
 class EvaluateModelRequest(BaseModel):
     repo_namespace: str
@@ -73,6 +72,7 @@ chat_template_mappings = {
     "qwen2dot5": "prompt_templates/qwen2dot5_prompt_template.jinja",
 }
 
+
 def stringify_convo_from_messages(dict_list):
     result = []
     for i, item in enumerate(dict_list):
@@ -83,6 +83,7 @@ def stringify_convo_from_messages(dict_list):
         result.append(f"Content: {item['content']}")
         result.append("")  # Add a blank line for spacing
     return "\n".join(result)
+
 
 def parse_json_safely(json_str: str) -> dict:
     try:

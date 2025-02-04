@@ -1,6 +1,7 @@
 import os
 import random
 import json
+import datetime
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
 from huggingface_hub import snapshot_download
@@ -15,20 +16,24 @@ from scoring.common import (
     MAX_GENERATION_LENGTH,
     chat_template_mappings,
     stringify_convo_from_messages,
-    parse_json_safely
+    parse_json_safely,
 )
 from scoring.dataset import StreamedSyntheticPartialDataset
 
 # Constants
-JUDGE_NUM_EVALS = 5
-JUDGE_MAX_TOKENS = 1000
+JUDGE_NUM_EVALS = 128
+JUDGE_MAX_TOKENS = 2048
 JUDGE_EVAL_MODEL = "anthropic/claude-3.5-sonnet"
 MAX_ERROR_RATE = 0.1
 
 
-
-
-
+default_sample_params = SamplingParams(
+    temperature=random.random() * 0.2,
+    max_tokens=4096,
+)
+chat_params = {
+    "gemma2": SamplingParams(temperature=random.random() * 0.2, max_tokens=4096, stop_token_ids=[107]),
+}
 
 
 remote_client = OpenAI(
@@ -54,10 +59,12 @@ example conversation:
       }
 ]
 """
+
+
 def judge_evaluator(generated_conversation: List, original_conversation: List):
     generated_stringified = stringify_convo_from_messages(generated_conversation)
     original_stringified = stringify_convo_from_messages(original_conversation)
-    system_prompt = original_conversation[0]['content']
+    system_prompt = original_conversation[0]["content"]
     # compare them against each other
     evaluation_system_prompt = f'''
 An assistant follows the provided instructions as mentioned:
@@ -94,16 +101,12 @@ Practice extreme criticality and prejudice in judgement. Only designate the high
 Return data in JSON format with the following schema:
 """
 {{
-    "scores": [
-        {{
-            "verisimilitude_win": (string : "original" or "generated"),
-            "entertainment_win": (string : "original" or "generated"),
-            "coherency_win": (string : "original" or "generated"),
-            "verisimilitude_win_reasoning": (string),
+            "realism_win": (string : "original" or "generated" or "tie"),
+            "entertainment_win": (string : "original" or "generated" or "tie"),
+            "coherency_win": (string : "original" or "generated" or "tie"),
+            "realism_win_reasoning": (string),
             "entertainment_win_reasoning": (string),
             "coherency_win_reasoning": (string)
-        }}
-    ]
 }}
 """
 
@@ -120,7 +123,6 @@ Judge the following conversations to determine which conversation is better acco
 {generated_stringified}
 """
 
-
     try:
         chat_completion = remote_client.chat.completions.create(
             messages=[
@@ -128,38 +130,85 @@ Judge the following conversations to determine which conversation is better acco
                     "role": "system",
                     "content": evaluation_system_prompt,
                 },
-                {
-                    "role": "user",
-                    "content": user_message
-                },
+                {"role": "user", "content": user_message},
             ],
             model=JUDGE_EVAL_MODEL,
             temperature=0,
         )
-        win_score = parse_json_safely(chat_completion.choices[0].message.content)
-
-        return {
-            "win_score": win_score,
-        }
-
-
-
+        judge_score = parse_json_safely(chat_completion.choices[0].message.content)
+        if not judge_score:
+            raise Exception("Judge score returned empty dictionary")
+        if not isinstance(judge_score, dict):
+            raise Exception(f"Judge score returned invalid type: {type(judge_score)}")
+        if not all(key in judge_score for key in ['realism_win', 'entertainment_win', 'coherency_win']):
+            raise Exception(f"Judge score missing required keys. Got keys: {list(judge_score.keys())} {chat_completion.choices[0].message.content}")
+        return judge_score
     except Exception as e:
         print(e)
         return None
+
 
 def process_conversation(messages):
     """
     Convert a string message into a conversation format and ensure it ends with a user message.
     """
     # Convert string to conversation format
-    conversation = [
-        {"role": "user", "content": messages}
-    ]
+    conversation = [{"role": "user", "content": messages}]
     return conversation
 
-def get_judge_score(request: EvaluateModelRequest, model: LLM,use_lora:bool=False, verbose=False):
+def collect_judge_scores(scores: List):
     try:
+        
+        # Initialize tally structure
+        tally = {
+            'realism': {'original': 0, 'generated': 0, 'tie': 0},
+            'entertainment': {'original': 0, 'generated': 0, 'tie': 0},
+            'coherency': {'original': 0, 'generated': 0, 'tie': 0}
+        }
+        
+        valid = 0
+        
+        # Process each score entry
+        for item in scores:
+            # Skip corrupted/incomplete data
+            if not all(key in item for key in ['realism_win', 'entertainment_win', 'coherency_win']):
+                continue
+                
+            valid += 1
+            
+            # Tally wins for each category
+            tally['realism'][item['realism_win']] += 1
+            tally['entertainment'][item['entertainment_win']] += 1
+            tally['coherency'][item['coherency_win']] += 1
+        # Calculate individual totals
+        total_original = sum(cat['original'] for cat in tally.values())
+        total_generated = sum(cat['generated'] for cat in tally.values())
+        total_ties = sum(cat['tie'] for cat in tally.values())
+        
+        # Calculate win rate
+        win_rate = (total_generated) / (valid * 3) if valid > 0 else 0
+        
+        # Combine into totals dict
+        totals = {
+            'total_original': total_original,
+            'total_generated': total_generated, 
+            'total_ties': total_ties,
+            'by_category': tally,
+            'valid': valid,
+            'win_rate': win_rate
+        }
+        
+        return totals
+    except Exception as e:
+        print(f"Error parsing file: {str(e)}")
+        return None
+
+
+def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = False, verbose=False):
+    try:
+        start_time = datetime.datetime.now()
+        print(f"Starting judge score evaluation at {start_time}")
+
         repo_id = f"{request.repo_namespace}/{request.repo_name}"
         input_tokenizer = AutoTokenizer.from_pretrained(repo_id)
 
@@ -167,18 +216,14 @@ def get_judge_score(request: EvaluateModelRequest, model: LLM,use_lora:bool=Fals
         judge_dataset = StreamedSyntheticPartialDataset(
             max_input_len=MAX_SEQ_LEN_COHERENCE_SCORE - MAX_GENERATION_LENGTH - 200,
         )
-        
-        # Set chat template params
-        judge_dataset.set_chat_template_params(
-            chat_template_mappings[request.chat_template_type], 
-            input_tokenizer
-        )
 
+        # Set chat template params
+        judge_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
+        print(f"loaded dataset with chat template {request.chat_template_type}")
         # Sample conversations
-        # conversations = judge_dataset.sample_dataset(JUDGE_NUM_EVALS)
-        # conversations = judge_dataset.sample_dataset(128)
-        conversations = judge_dataset.sample_dataset(1)
-        scores = []
+        conversations = judge_dataset.sample_dataset(JUDGE_NUM_EVALS)
+        
+        all_judge_scores = []
         exceptions = 0
         # Process conversations
         generated_conversations = []
@@ -186,79 +231,75 @@ def get_judge_score(request: EvaluateModelRequest, model: LLM,use_lora:bool=Fals
 
         lora_path = None
         if use_lora:
-            # lora_id = "mindw96/Gemma-2-27b-it-LoRA-dacon-llm2"
-            lora_id = "SultanR/sage-27b-it-lora"
+            lora_id = f"{request.repo_namespace}/{request.repo_name}"
             lora_path = snapshot_download(repo_id=lora_id)
-        
-        model_sampling_params = SamplingParams(
-            temperature=random.random(),
-            max_tokens=4096,
-            stop_token_ids = [107]
-            )
-        
-        for formatted_message,original_messages,last_assistant_response in conversations:
+
+        model_sampling_params: SamplingParams = chat_params.get(request.chat_template_type, default_sample_params)
+
+        for idx, (formatted_message, original_messages, last_assistant_response) in enumerate(conversations):
             try:
+                if idx == len(conversations) // 2:
+                    print(f"Reached halfway mark at {datetime.datetime.now()}")
+                
                 if use_lora:
                     output = model.generate(
-                        formatted_message, 
-                        model_sampling_params, 
+                        formatted_message,
+                        model_sampling_params,
                         use_tqdm=False,
-                        lora_request=LoRARequest("lora_adapter", 1, lora_path)
-                        )
+                        lora_request=LoRARequest("lora_adapter", 1, lora_path),
+                    )
                 else:
                     output = model.generate(formatted_message, model_sampling_params, use_tqdm=False)
                 generated_text = output[0].outputs[0].text
-                
+
                 # Create complete conversation with generated response
                 generated_conversation = original_messages.copy()
-                generated_conversation.append({
-                    "role": "assistant",
-                    "content": generated_text
-                })
+                generated_conversation.append({"role": "assistant", "content": generated_text})
                 generated_conversations.append(generated_conversation)
 
-                original_messages.append({
-                    "role": "assistant",
-                    "content": last_assistant_response
-                })
+                original_messages.append({"role": "assistant", "content": last_assistant_response})
                 original_conversations.append(original_messages)
-                score = judge_evaluator(generated_conversation, original_messages)
-                scores.append(score)
+                judge_score = judge_evaluator(generated_conversation, original_messages)
+                if judge_score is None:
+                    raise Exception(f"could not parse judge score")
+                all_judge_scores.append(judge_score)
+                if verbose:
+                    print(f"completed round of judging with score {judge_score}")
             except Exception as e:
                 if verbose:
                     print(f"Error in judge evaluation: {e}")
                 exceptions += 1
 
         if exceptions / JUDGE_NUM_EVALS > MAX_ERROR_RATE:
-            raise RuntimeError("judge score failed due to API issues")
+            raise RuntimeError(f"judge score failed with {exceptions} exceptions")
+        judge_score = collect_judge_scores(all_judge_scores)
+        if judge_score is None:
+            raise RuntimeError(f"could not calculate judge score")
+        x = {"judge_score": judge_score, "generated_conversations": generated_conversations}
+        if verbose:
+            dump_conversations(x)
 
-
-        # win rate is at least 2/3 over original 
-
-
-        # adjusted_evals = JUDGE_NUM_EVALS - exceptions
-        # final_score = sum(scores) / adjusted_evals if adjusted_evals > 0 else 0
-        # x= {"generated_conversations": generated_conversations, "original_conversations": original_conversations}
-        x= {"generated_conversations": generated_conversations, "scores": scores}
-        store_conversations(x)
-
+        end_time = datetime.datetime.now()
+        print(f"Completed judge score evaluation at {end_time}")
+        print(f"Total time elapsed: {end_time - start_time}")
+        
         return {
-            # "judge_score": final_score,
-            "judge_score": 1,
+            "judge_score": judge_score,
         }
     except Exception as e:
         if verbose:
             print(e)
         raise e
 
-def store_conversations(conversations, c : str = "x"):
+
+def dump_conversations(conversations, suffix: str = "x"):
     """
     Store conversations in a JSON file at /tmp/convos.json
     Args:
         conversations: List of conversation messages
     """
     try:
-        with open(f'/tmp/judge_score_{c}.json', 'w') as f:
+        with open(f"/tmp/judge_score_dump_{suffix}.json", "w") as f:
             json.dump(conversations, f, indent=2)
     except Exception as e:
         print(f"Error storing conversations: {e}")

@@ -13,20 +13,20 @@ Objective requirements are:
 Subjective requirements:
 1. Ability to understand the code in this subnet
 2. Python experience
-3. LLM training experience
+3. LLM training /fine tuning experience
 
 ## How exactly is my miner evaluated?
 There are three general scoring phases:
 1. Evaluation
-   1. The model responses are graded against a streaming dataset. At certain intervals, the previous day data is dumped into https://huggingface.co/datasets/DippyAI/dippy_synthetic_dataset for reference. Note that the dataset if there to provide reference, but the actual evaluation is done on a sample that is generated in realtime. 
+   1. The model responses are graded against a streaming dataset. At certain intervals, the previous day data is dumped into https://huggingface.co/datasets/DippyAI/dippy_synthetic_dataset_v1 for reference. Note that the dataset is there to provide reference, but the actual evaluation is done on a sample that is generated in realtime. 
    2. Creativity is a score that modifies the above evaluation score. The less creative your model is (aka overfit), the less total score is achievable for evaluation.
    3. A small amount of the total score takes into account model size, latency, etc. The details can be seen in the `scoring` folder
-4. Vibe Score  
-   - A small amount of the total score is based on how well your model's output length matches that of the user
+5. Judge Score
+   - This is an experimental score that acts as a multiplier. If the generated model, according to the LLM judge, wins or ties more than a certain threshold (at the time of this writing this is 30% but subject to change in the future), a significant score boost will be added.
 6. Coherence Score  
    - Your model will generate a conversation based on augmented data from https://huggingface.co/datasets/proj-persona/PersonaHub. This output is then compared with gpt-4o to evaluate if your model is coherent enough. This is a binary factor, meaning that if your model is not coherent enough, you will automatically be scored 0
 8. Post Evaluation Score  
-   - As part of efforts to more closely align with industry standard benchmarks, we are introducing a score multiplier that will be run post evaluation. The scoring for this can be considered arbitrary for now, until a more formal score attribute is added
+   - As part of efforts to more closely align with industry standard benchmarks, we are introducing an experimental score multiplier that will be run post evaluation. The scoring for this can be considered arbitrary for now, until a more formal score attribute is added
 Once your model is scored, it is compared against other submitted models to create a win rate. Note that to discourage model copying, there is a time penalty for newer models that can reduce your overall win rate.
 
 ## I submitted my model. When will I get my rewards?
@@ -78,10 +78,16 @@ For 1 and 2 these will never be re-evaluated as it is the miner's responsibility
 
 For 3, this is a rare but possible occurence. For these cases, there is a separate queue that runs _only_ after _all other_ models have been evaluated. 
 
+In the case that there seems to be an issue with a miner submitted model that may be a deeper technical issue, please provide the following:
+1. A github issue with the appropriate title
+2. Steps to reproduce the failure
+
 
 ## I have a specific question about my miner. Where can I get answers?
 
-Assuming you are encountering a technical issue that cannot be answered from the existing documentation, the fastest way to receive a response is through Github issues for this project. Any other attempts (DMs, ping, etc) will not be prioritized. If the answer to your question is easily found in the existing documentation or code, your question will be ignored or closed.
+Assuming you are encountering a technical issue that cannot be answered from the existing documentation, the fastest way to receive a response is through Github issues for this project. Any other attempts (DMs, ping, etc) will _not_ be prioritized. If the answer to your question is easily found in the existing documentation or code, your question will be ignored or closed.
+
+If you are asking questions on the discord channel, you _must_ end your response with the character 🫘 (subject to change over time). This will provide proof that you have taken the time to read the documentation carefully.
 
 
 ## I heard there's a scoring reset. What do I have to do?

@@ -11,10 +11,9 @@ QUALITATIVE_SCORE_THRESHOLD = 0.25
 LLM_MODEL_SIZE_THRESHOLD = 0.75
 LLM_MODEL_SIZE_STEEPNESS = 8
 QUALITATIVE_SCORE_WEIGHT = 0.84  # weight of the qualitative score in the total score
-LATENCY_SCORE_WEIGHT = 0.08  # weight of the latency score in the total score
-VIBE_SCORE_WEIGHT = 0.08  # weight of the vibe score in the total score
+LATENCY_SCORE_WEIGHT = 0.16  # weight of the latency score in the total score
 COHERENCE_MINIMUM = 0.95
-
+JUDGE_SCORE_THRESHOLD = 0.45
 
 class StrEnum(str, Enum):
     def __str__(self):
@@ -82,7 +81,7 @@ class Scores(BaseModel):
         self.coherence_score = response.get("coherence_score", 0)
         self.latency_score = response.get("latency_score", 0)
         self.post_eval_score = response.get("post_eval_score", 1)
-        self.judge_score = response.get("judge_score", 1)
+        self.judge_score = response.get("judge_score", 0)
         return self
 
     def calculate_total_score(self, adjust_coherence: bool = False) -> float:
@@ -90,15 +89,12 @@ class Scores(BaseModel):
         total_score = 0
         total_score += QUALITATIVE_SCORE_WEIGHT * q_score
         total_score += LATENCY_SCORE_WEIGHT * self.latency_score
-        total_score += self.judge_score * 0.50
-        
-        total_score *= (1+self.judge_score)
-
         self.coherence_score = 1 if self.coherence_score >= COHERENCE_MINIMUM else 0
         total_score = total_score * self.coherence_score
-        # multiplier = self.model_size_adjuster(self.llm_size_score)
-        # total_score = total_score * multiplier
-        total_score = total_score * self.post_eval_score
+        # total_score = total_score * self.post_eval_score
+
+        if self.judge_score > JUDGE_SCORE_THRESHOLD:
+            total_score *= 1.5
         return total_score
 
 
@@ -109,7 +105,6 @@ def main():
     scores = Scores(
         qualitative_score=random.uniform(0.25, 0.70),
         creativity_score=random.uniform(0, 1),
-        vibe_score=random.uniform(0, 1),
         coherence_score=1,
         llm_size_score=random.uniform(0, 1),
         latency_score=random.uniform(0, 1),
@@ -120,7 +115,6 @@ def main():
     print("\nInput Scores:")
     print(f"Qualitative Score: {scores.qualitative_score:.3f}")
     print(f"Creativity Score: {scores.creativity_score:.3f}")
-    print(f"Vibe Score: {scores.vibe_score:.3f}")
     print(f"Coherence Score: {scores.coherence_score:.3f}")
     print(f"LLM Size Score: {scores.llm_size_score:.3f}")
     print(f"Latency Score: {scores.latency_score:.3f}")
@@ -138,12 +132,10 @@ def main():
     # Calculate weighted scores
     weighted_q = QUALITATIVE_SCORE_WEIGHT * adjusted_q
     weighted_latency = LATENCY_SCORE_WEIGHT * scores.latency_score
-    weighted_vibe = VIBE_SCORE_WEIGHT * scores.vibe_score
 
     print(f"\nWeighted Scores:")
     print(f"Weighted Qualitative: {weighted_q:.3f}")
     print(f"Weighted Latency: {weighted_latency:.3f}")
-    print(f"Weighted Vibe: {weighted_vibe:.3f}")
 
     # Calculate final score
     total = scores.calculate_total_score()
