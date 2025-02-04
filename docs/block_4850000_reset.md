@@ -13,9 +13,9 @@ The subnet is making drastic changes in order to encourage qualitatively better 
 
 The changes are the following:
 1. Models must now be at least 49GB (approx. 20b+ parameters)
-2. There are now two experimental multipliers: judge score and post eval score
-2a. Judge score uses LLM as a judge to benchmark generated text versus 
-2b. Post eval score runs an internal LLM similarity check
+2. There are now two experimental multipliers: judge score and post eval score  
+2a. Judge score uses LLM as a judge to benchmark generated text versus original text  
+2b. Post eval score runs an internal LLM similarity check  
 3. The vibe score has been removed
 
 
