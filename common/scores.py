@@ -92,7 +92,7 @@ class Scores(BaseModel):
         self.coherence_score = 1 if self.coherence_score >= COHERENCE_MINIMUM else 0
         total_score = total_score * self.coherence_score
         # Temp fix for faulty judge score data
-        if self.judge_score >=1:
+        if self.judge_score == 1:
             self.judge_score = 0
 
         # total_score = total_score * self.post_eval_score
