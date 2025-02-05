@@ -29,6 +29,10 @@ There are three general scoring phases:
    - As part of efforts to more closely align with industry standard benchmarks, we are introducing an experimental score multiplier that will be run post evaluation. The scoring for this can be considered arbitrary for now, until a more formal score attribute is added
 Once your model is scored, it is compared against other submitted models to create a win rate. Note that to discourage model copying, there is a time penalty for newer models that can reduce your overall win rate.
 
+## How does the chat template integrate with my model submission?
+Different classes of LLMs use different systems for tokens, and for instruct models this is much more important. In particular, LLMs can use different stop tokens or asssistant syntax to provide the syntax around a "chat" session. For popular foundational models and other common templates, we have provided them in jinja format in scoring/prompt_templates.
+
+
 ## I submitted my model. When will I get my rewards?
 
 Rewards are based upon a combination of your model being scored and your model win rate. 

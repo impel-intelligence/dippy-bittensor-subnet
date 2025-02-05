@@ -75,7 +75,7 @@ class Scores(BaseModel):
         if response is None or len(response) < 1:
             self.total_score = 0
             return self
-        self.llm_size_score = response.get("model_size_score", 0)
+        self.llm_size_score = 0
         self.creativity_score = response.get("creativity_score", 0)
         self.qualitative_score = response.get("qualitative_score", 0)
         self.coherence_score = response.get("coherence_score", 0)
@@ -106,7 +106,7 @@ def main():
         qualitative_score=random.uniform(0.25, 0.70),
         creativity_score=random.uniform(0, 1),
         coherence_score=1,
-        llm_size_score=random.uniform(0, 1),
+        llm_size_score=0,
         latency_score=random.uniform(0, 1),
         post_eval_score=1.0,
     )
