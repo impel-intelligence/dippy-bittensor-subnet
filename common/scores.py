@@ -99,6 +99,7 @@ class Scores(BaseModel):
 
         if self.judge_score > JUDGE_SCORE_THRESHOLD:
             total_score *= 1.5
+        self.total_score = total_score
         return total_score
 
 
