@@ -86,6 +86,11 @@ In the case that there seems to be an issue with a miner submitted model that ma
 1. A github issue with the appropriate title
 2. Steps to reproduce the failure
 
+## How can I check the detailed status of my model?
+Assuming that you know your model submission parameters, you can use the following curl request for reference:
+```
+curl -X GET "https://dippy-bittensor-subnet.com/model_submission_details?repo_namespace=my-org&repo_name=my-model&chat_template_type=chatml&hash=12345678&competition_id=d1"
+```
 
 ## I have a specific question about my miner. Where can I get answers?
 
