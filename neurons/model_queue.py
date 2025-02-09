@@ -51,20 +51,6 @@ REPO_TYPES = ["model", "dataset", "space"]
 hf_token = os.environ["HF_ACCESS_TOKEN"]
 
 
-def duplicate(repo_namespace: str, repo_name: str):
-    destination = f"DippyAI/{repo_namespace}-{repo_name}"
-    r = requests.post(
-        f"https://huggingface.co/api/models/{repo_namespace}/{repo_name}/duplicate",
-        headers=build_hf_headers(token=hf_token),
-        json={"repository": destination, "private": True},
-    )
-    hf_raise_for_status(r)
-
-    repo_url = r.json().get("url")
-
-    return (f"{repo_url}",)
-
-
 def push_minerboard(
     hash: str,
     uid: int,
@@ -116,6 +102,11 @@ class ModelQueue:
             help="Use a local validation api",
         )
         parser.add_argument(
+            "--immediate",
+            action="store_true",
+            help="Trigger queue immediately",
+        )
+        parser.add_argument(
             "--local-validation-api-port",
             type=int,
             default=8000,
@@ -153,7 +144,8 @@ class ModelQueue:
             next_epoch_minute_mark = next_epoch_minute_mark.replace(second=0, microsecond=0)
             sleep_time = (next_epoch_minute_mark - now).total_seconds()
             self.logger.info(f"sleeping for {sleep_time}")
-            time.sleep(sleep_time)
+            if not self.config.immediate:
+                time.sleep(sleep_time)
 
             try:
                 self.load_latest_metagraph()
@@ -223,10 +215,8 @@ class ModelQueue:
                     failed += 1
 
                 if result.status == StatusEnum.QUEUED:
-                    try:
-                        self.logger.info(f"QUEUED: {hotkey}")
-                    except Exception as e:
-                        self.logger.error(f"could not duplicate repo : {e}")
+                    self.logger.info(f"QUEUED: {hotkey}")
+
                     queued += 1
 
                 if result.status == StatusEnum.COMPLETED:

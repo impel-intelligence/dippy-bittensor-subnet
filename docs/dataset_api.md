@@ -1,4 +1,4 @@
-# Dataset API Access
+# Dataset API Access (WIP)
 
 The evaluation step of miner model scoring involves fetching a dataset from a managed API located at `https://datasets.dippy-bittensor-subnet.com`
 
@@ -8,24 +8,7 @@ Exposure to miners is designed to provide a "pre score check" experience before 
 
 
 ## Fetching a token
-There is a script in this folder `token_check.py` with the following instructions:
-
-```
-To run the script, use the following command:
-
-python token.py --wallet-name <wallet_name> --wallet-hotkey <wallet_hotkey> --signer <signer_type>
-
-Arguments:
---wallet-name: Name of the Bittensor wallet (default: "default")
---wallet-hotkey: Hotkey of the Bittensor wallet (default: "default")
---signer: Type of signer to use, either "coldkey" or "hotkey" (required)
-
-Example:
-python token_check.py --wallet-name my_wallet --wallet-hotkey my_hotkey --signer hotkey
-
-This will run the authentication flow using the specified wallet and signer information.
-```
-As part of the execution of the script, there is an additional step to fetch the dataset API as a check that the token request is functional.
+Currently a token is not required for the beta miner dataset API. Stay tuned for update on this.
 
 ## Questions
 
@@ -61,7 +44,7 @@ This endpoint is used to generate a token to call the dataset API with.
 
 
 ### 4. How often the StreamedSyntheticDataset changes and at what time?
-The dataset API provide a sample of `4096` conversations, 50% which is fetched from historical dates (aka what is available in HuggingFace) and 50% from the past 48 hours. 
+The dataset API provide a sample colelction of conversations, 50% which is fetched from historical dates (aka what is available in HuggingFace) and 50% from the past 48 hours. 
 The purpose of the dataset API is to provide a protected stream of recently generated data, as HuggingFace currently does not support streaming updates at this time.
 
 

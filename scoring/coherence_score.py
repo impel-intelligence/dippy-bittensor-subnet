@@ -1,4 +1,6 @@
 import os
+import random
+import datetime
 from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
 from transformers import AutoTokenizer
@@ -6,6 +8,7 @@ from transformers import AutoTokenizer
 
 # Import necessary modules and functions from the main API file
 from scoring.common import (
+    stringify_convo_from_messages,
     EvaluateModelRequest,
     MAX_SEQ_LEN_COHERENCE_SCORE,
     MAX_GENERATION_LENGTH,
@@ -144,14 +147,15 @@ def stringify_convo(dict_list):
     return "\n".join(result)
 
 
-import random
-
 MIN_CONVERSATIONS = 2
 MAX_CONVERSATIONS = 4
 MAX_ERROR_RATE = 0.1
 
 
 def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=False) -> int:
+    start_time = datetime.datetime.now()
+    print(f"Starting coherence score calculation at {start_time}")
+    
     generated_samples = []
 
     sampling_params = SamplingParams(
@@ -164,7 +168,11 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
     max_messages = [random.randint(MIN_CONVERSATIONS, MAX_CONVERSATIONS) for _ in messages]
 
     # Generate conversations in batches
-    for turn in range(max(max_messages)):
+    total_turns = max(max_messages)
+    for turn in range(total_turns):
+        if turn == total_turns // 2:
+            print(f"Reached halfway mark of conversation generation at {datetime.datetime.now()}")
+            
         # Prepare batch of prompts
         batch_prompts = []
         active_conversations = []
@@ -195,11 +203,16 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
 
     generated_samples = conversations
 
-    evaluation_conversations = [stringify_convo(m) for m in generated_samples]
+    print(f"Starting coherence evaluation at {datetime.datetime.now()}")
+    
+    evaluation_conversations = [stringify_convo_from_messages(m) for m in generated_samples]
     scored_convos = []
     penalty = 0
     exceptions = 0
+    
     for i, convo in enumerate(evaluation_conversations):
+        if i == len(evaluation_conversations) // 2:
+            print(f"Reached halfway mark of coherence evaluation at {datetime.datetime.now()}")
         try:
             coherence_score = coherence_evaluator(convo)
             scored_convos.append(pretty_convo(generated_samples[i], coherence_score))
@@ -221,5 +234,9 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
     ADJUSTED_EVALS = COHERENCE_NUM_EVALS - exceptions
 
     final_coherence_score = (ADJUSTED_EVALS - penalty) / ADJUSTED_EVALS
+
+    end_time = datetime.datetime.now()
+    print(f"Completed coherence score calculation at {end_time}")
+    print(f"Total time elapsed: {end_time - start_time}")
 
     return final_coherence_score

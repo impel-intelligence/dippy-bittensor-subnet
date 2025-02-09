@@ -7,7 +7,7 @@ import torch
 from scoring.common import (
     EvaluateModelRequest,
     MAX_SEQ_LEN_COHERENCE_SCORE,
-    MAX_GENERATION_LENGTH,
+    DEFAULT_LORA_BASE,
     MODEL_CACHE_DIR,
 )
 import os
@@ -15,14 +15,9 @@ import os
 MAX_NUM_SEQS = 16
 
 
-def get_inference_score(request: EvaluateModelRequest):
-    inference_score_result = wrap_inference_score(request)
-    return inference_score_result
-
-
-def wrap_inference_score(request: EvaluateModelRequest):
-    from scoring.vibe_score import get_vibe_match_score
+def get_inference_score(request: EvaluateModelRequest, use_lora: bool = False):
     from scoring.coherence_score import get_coherence_score
+    from scoring.judge_score import get_judge_score
 
     # For simplicity, will always look for main branch
     repo_id = f"{request.repo_namespace}/{request.repo_name}"
@@ -38,19 +33,28 @@ def wrap_inference_score(request: EvaluateModelRequest):
 
     for i in range(torch.cuda.device_count()):
         print(f"debug_cuda_devices_available : {torch.cuda.get_device_properties(i).name}")
+
+    if use_lora:
+        repo_id = DEFAULT_LORA_BASE
+        print(f"Loading lora given base model {repo_id}")
     model = LLM(
         model=repo_id,
         tensor_parallel_size=torch.cuda.device_count(),
         max_num_seqs=MAX_NUM_SEQS,
         max_model_len=MAX_SEQ_LEN_COHERENCE_SCORE,
         download_dir=MODEL_CACHE_DIR,
+        enable_lora=use_lora,
+        max_lora_rank=256,
     )
-
-    vibe_result = get_vibe_match_score(request, model)
+    print(f"loaded model {repo_id} with use_lora {use_lora}")
     coherence_result = {}
-    coherence_result = get_coherence_score(request, model, True)
+    coherence_result = get_coherence_score(request, model, verbose=False)
 
-    inference_result = vibe_result | coherence_result
+    judge_result = {}
+    judge_result = get_judge_score(request, model, verbose=False, use_lora=use_lora)
+    judge_result = {"judge_score": judge_result.get("judge_score",{}).get("win_rate", 0)}
+
+    inference_result = coherence_result | judge_result
 
     print("=============inference_result===================")
     print(inference_result)

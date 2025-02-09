@@ -29,7 +29,6 @@ from utilities.repo_details import (
     check_model_repo_details,
     ModelRepo,
 )
-from dippy_validation_api.duplicate import duplicate
 from utilities.event_logger import EventLogger
 from scoring.common import EvaluateModelRequest, chat_template_mappings
 from dotenv import load_dotenv
@@ -43,8 +42,8 @@ MAX_GENERATION_LENGTH = 200  # maximum number of tokens that the model can gener
 LENGTH_DIFF_PENALTY_STEEPNESS = 2  # the steepness of the exponential decay of the length difference penalty
 MAX_AVG_LATENCY = 10000  # in milliseconds
 
-MAX_MODEL_SIZE = 32 * 1024 * 1024 * 1024  # in bytes
-MIN_REPO_SIZE = 10 * 1024 * 1024  # in bytes
+MAX_MODEL_SIZE = 72 * 1024 * 1024 * 1024  # in bytes
+MIN_REPO_SIZE = 40 * 1024 * 1024  # in bytes
 MAX_REPO_SIZE = 80 * 1024 * 1024 * 1024  #  in bytes
 SAMPLE_SIZE = 1024  # number of samples to evaluate the model from the dataset
 BATCH_SIZE = 4  # batch size for evaluation
@@ -55,9 +54,6 @@ MAX_SEQ_LEN = (
     4096  # maximum sequence length that should be allowed because eval gets really slow with longer sequences than this
 )
 
-MAX_SEQ_LEN_VIBE_SCORE = 2048  # maximum sequence length that should be allowed for vibe score calculation because it is slow with longer sequences than this
-BATCH_SIZE_VIBE_SCORE = 4  # batch size for vibe score calculation
-SAMPLE_SIZE_VIBE_SCORE = 128  # number of samples to evaluate the model from the dataset for vibe score calculation
 
 SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
@@ -98,7 +94,7 @@ def start_staggered_queues(num_queues: int, stagger_seconds: int):
     return processes
 
 
-def _model_evaluation_step(queue_id, duplicate: bool = False):
+def _model_evaluation_step(queue_id):
     time.sleep(random.random())
 
     request = get_next_model_to_eval()
@@ -136,8 +132,6 @@ def get_next_model_to_eval():
     return request
 
 
-
-
 GPU_ID_MAP = {
     0: "0",
     1: "1",
@@ -164,8 +158,8 @@ def _evaluate_model(
         inference_response = evaluator.inference_score(request)
         if isinstance(inference_response, RunError):
             raise Exception(inference_response.error)
-        vibe_score = inference_response.vibe_score
         coherence_score = inference_response.coherence_score
+        judge_score = inference_response.judge_score
 
         if coherence_score < 0.95:
             supabaser.update_leaderboard_status(
@@ -177,13 +171,13 @@ def _evaluate_model(
         upsert_row_supabase(
             {
                 "hash": request.hash,
-                "vibe_score": vibe_score,
+                "judge_score": judge_score,
                 "coherence_score": coherence_score,
-                "notes": "Now computing evaluation score",
+                "notes": f"Inference score complete. Now computing evaluation score",
             }
         )
     except Exception as e:
-        error_string = f"Error calling inference_score job with message: {e}"
+        error_string = f"inference_score_error with message: {e}"
         supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, error_string)
         raise RuntimeError(error_string)
 
@@ -192,7 +186,7 @@ def _evaluate_model(
         if isinstance(eval_score_result, RunError):
             raise Exception(eval_score_result.error)
     except Exception as e:
-        error_string = f"Error calling eval_score job with message: {e}"
+        error_string = f"eval_score_error job with message: {e}"
         supabaser.update_leaderboard_status(
             request.hash,
             StatusEnum.FAILED,
@@ -202,10 +196,10 @@ def _evaluate_model(
 
     eval_score = eval_score_result.eval_score
     latency_score = eval_score_result.latency_score
-    model_size_score = eval_score_result.eval_model_size_score
+    model_size_score = 0
     creativity_score = eval_score_result.creativity_score
 
-    if eval_score is None or latency_score is None or model_size_score is None or vibe_score is None:
+    if eval_score is None or latency_score is None or model_size_score is None or judge_score is None:
         raise HTTPException(
             status_code=500,
             detail="Error calculating scores, one or more scores are None",
@@ -216,7 +210,7 @@ def _evaluate_model(
     full_score_data.llm_size_score = model_size_score
     full_score_data.coherence_score = coherence_score
     full_score_data.creativity_score = creativity_score
-    full_score_data.vibe_score = vibe_score
+    full_score_data.judge_score = judge_score
     full_score_data.latency_score = latency_score
 
     try:
@@ -244,17 +238,21 @@ def _evaluate_model(
 
 
 def repository_exists(repo_id):
-    try:
-        hf_api.repo_info(repo_id)  # 'username/reponame'
-        return True
-    except RepositoryNotFoundError:
-        return False
-    except GatedRepoError:
-        # If we get a GatedRepoError, it means the repo exists but is private
-        return False
-    except Exception as e:
-        app.state.event_logger.error("hf_repo_error", error=e)
-        return False
+    for attempt in range(3):
+        try:
+            hf_api.repo_info(repo_id)  # 'username/reponame'
+            return True
+        except RepositoryNotFoundError:
+            if attempt == 2:  # Last attempt
+                return False
+        except GatedRepoError:
+            # If we get a GatedRepoError, it means the repo exists but is private
+            if attempt == 2:  # Last attempt
+                return False
+        except Exception as e:
+            app.state.event_logger.error("hf_repo_error", error=e)
+            if attempt == 2:  # Last attempt
+                return False
 
 
 @app.post("/telemetry_report")
@@ -535,6 +533,7 @@ def check_or_create_model(
         "creativity_score": 0,
         "latency_score": 0,
         "vibe_score": 0,
+        "judge_score": 0,
         "total_score": 0,
         "timestamp": pd.Timestamp.utcnow(),
         "status": StatusEnum.QUEUED,
@@ -685,7 +684,6 @@ def start():
         logger.info(f"Starting {num_queues} evaluation threads")
         processes = start_staggered_queues(num_queues, stagger_seconds)
         uvicorn.run(app, host="0.0.0.0", port=MAIN_API_PORT)
-        
 
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received, stopping...")

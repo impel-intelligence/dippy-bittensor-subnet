@@ -2,7 +2,8 @@
 
 # Dippy SN11: Creating The World's Best Open-Source Roleplay LLM <!-- omit in toc -->
 
-*Check out the beta version of our [Front-End](https://bittensor.dippy.ai/play)! Also, please check our [Launch Tweet](https://twitter.com/angad_ai/status/1788993280002175415) for our vision of creating the world's best open-source roleplay LLM.*
+
+Please check our [Launch Tweet](https://twitter.com/angad_ai/status/1788993280002175415) for our vision of creating the world's best open-source roleplay LLM.*
 
 [![DIPPY](/assests/banner.png)](https://dippy.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
@@ -47,13 +48,12 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 
 **Phase 2:** 
 - [x] Publicly release front-end powered by top miner submitted model of the week
-- [ ] Segment model submission into different "expert" categories (funny, romantic, therapeutic etc)
-- [ ] Models with the highest score in each personality type are chosen as "expert" models and made publicly available on the front-end
+- [x] Integrate top miner submitted model in Official Dippy App
+- [x] Add support for larger parameter models for up to 34B
 
 **Phase 3:** 
-- [ ] New Mixture of Experts model made as a baseline based on the "expert" models chosen from Phase 2
-- [ ] Robust pipeline to evaluate new MOE model submissions against live evaluation criteria
 - [ ] Expand the state of the art in roleplay LLMs through continuous iteration and data collection
+- [ ] Redefine definition of SOTA for roleplay LLMs through integrating Dippy app data
 
 ## Overview of Miner and Validator Functionality
 
@@ -184,16 +184,13 @@ A faster model will score higher than a slow model.
 ### Output Similarity
 Evaluated against datasets, a model that generates similiar resposne to groundtruth will score higher. There is an additional creativity component that utilizes the 
 
-### Vibe Matching
-A model that can generate outputs with similiar length to its inputs will score higher.
-
 ### Post Evaluation 
 After initial evaluation, a model will be selected for post evaluation after some time. The current process for this is a proprietary solution that is based on judging criteria from SOTA model benchmarking approaches. In the future, the details for this will be available on https://research.dippy.ai
 
 
 ## Acknowledgement
 
-Our codebase is built upon [Nous Research's](https://github.com/NousResearch/finetuning-subnet) and [MyShell's](https://github.com/myshell-ai/MyShell-TTS-Subnet?tab=readme-ov-file) Subnets.
+Our codebase was originally built upon [Nous Research's](https://github.com/NousResearch/finetuning-subnet) and [MyShell's](https://github.com/myshell-ai/MyShell-TTS-Subnet?tab=readme-ov-file) Subnets. At the time of this writing, we have deviated significantly from these subnet architectures, providing more efficiency and capability.
 
 ## License
 
@@ -238,5 +235,5 @@ The Dippy Bittensor subnet is released under the [MIT License](./LICENSE).
 - `min_compute.yml` - Minimum compute requirements specification
 
 ## Docker Configuration
-- `evaluator.Dockerfile` - Docker configuration for evaluator
+- `evaluator.Dockerfile` - Docker configuration for evaluator (scoring worker)
 - `dippy_validation_api/vapi.Dockerfile` - Docker configuration for validation API

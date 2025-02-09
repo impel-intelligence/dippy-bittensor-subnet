@@ -17,7 +17,7 @@ app = typer.Typer()
 def write_to_json(data: dict, filepath: str = "/tmp/output.json"):
     with open(filepath, "w") as f:
         json.dump(data, f, indent=2)
-    typer.echo(f"Results written to {filepath}")
+    typer.echo(f"Results written to {filepath} with content {data}")
 
 
 def _run(
@@ -31,11 +31,11 @@ def _run(
     result = {"completed": False}
     try:
         if run_type == "eval":
-            result = get_eval_score(request)
+            result = get_eval_score(request, use_lora=False)
         if run_type == "inference":
-            result = get_inference_score(request)
+            result = get_inference_score(request, use_lora=False)
         result["completed"] = True
-        typer.echo(f"Evaluated with parameters: {result}")
+        typer.echo(f"Evaluation complete. Result: {result}")
     except Exception as e:
         (
             exc_type,
@@ -81,9 +81,7 @@ def inference_score(
 
 @app.command("stub")
 def stub():
-    print("stub")
-    result = {"g": True}
-    write_to_json(result, "/tmp/output.json")
+    write_to_json({"g": True}, "/tmp/output.json")
 
 
 # example: python entrypoint.py python entrypoint.py eval repo_name repo_namespace chat_template_type hash

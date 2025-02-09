@@ -17,10 +17,10 @@ DEFAULT_IMAGE_NAME = "grader:latest"
 DEFAULT_HOME_DIR = os.environ.get("EVALUATOR_HOME_DIR", "/home/new_prod_user/dippy-bittensor-subnet")
 DEFAULT_MODEL_CACHE_DIR = os.environ.get("EVALUATOR_MODEL_CACHE_DIR", "/workdir/model_cache_dir")
 
+
 class EvaluationScore(BaseModel):
     eval_score: float
     latency_score: float
-    eval_model_size_score: float
     creativity_score: float
 
 
@@ -28,17 +28,14 @@ class RunError(BaseModel):
     error: str
 
 
-class VibeScore(BaseModel):
-    vibe_score: float
-
 
 class CoherenceScore(BaseModel):
     coherence_score: float
 
 
 class InferenceScore(BaseModel):
-    vibe_score: float
     coherence_score: float
+    judge_score: float
 
 
 class Evaluator:
@@ -122,6 +119,9 @@ class Evaluator:
             env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:False"
             env["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
             env["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
+            env["VLLM_ATTENTION_BACKEND"] = "FLASH_ATTN"
+            
+        if job_type == "inference_flash":
             env["VLLM_ATTENTION_BACKEND"] = "FLASHINFER"
             env["VLLM_FLASHINFER_FORCE_TENSOR_CORES"] = "1"
 
@@ -184,10 +184,9 @@ class Evaluator:
             if eval_result["completed"] is False:
                 raise Exception("completion internal error")
             score = EvaluationScore(
-                eval_score=eval_result["eval_score"],
-                latency_score=eval_result["latency_score"],
-                eval_model_size_score=eval_result["model_size_score"],
-                creativity_score=eval_result["creativity_score"],
+                eval_score=eval_result.get("eval_score", -1),
+                latency_score=eval_result.get("latency_score", -1),
+                creativity_score=eval_result.get("creativity_score", 0),
             )
             return score
         except Exception as e:
@@ -204,8 +203,8 @@ class Evaluator:
             if inference_result["completed"] is False:
                 raise Exception("completion internal error")
             score = InferenceScore(
-                vibe_score=inference_result["vibe_score"],
-                coherence_score=inference_result["coherence_score"],
+                coherence_score=inference_result.get("coherence_score",0),
+                judge_score=inference_result.get("judge_score", 0),
             )
             return score
         except Exception as e:
@@ -262,8 +261,7 @@ def entry():
         scores_data.qualitative_score = eval_result.eval_score
         scores_data.latency_score = eval_result.latency_score
         scores_data.creativity_score = eval_result.creativity_score
-        scores_data.llm_size_score = eval_result.eval_model_size_score
-        scores_data.vibe_score = infrence_result.vibe_score
+        scores_data.llm_size_score = 0
         scores_data.coherence_score = infrence_result.coherence_score
 
         final_eval_score = (
@@ -275,12 +273,10 @@ def entry():
         )
         final_model_size_score = scores_data.llm_size_score * 0.06
         final_latency_score = scores_data.latency_score * 0.06
-        final_vibe_score = scores_data.vibe_score * 0.06
 
-        total_score = final_eval_score + final_model_size_score + final_latency_score + final_vibe_score
+        total_score = final_eval_score + final_model_size_score + final_latency_score
         print(f"final_model_size_score {final_model_size_score}")
         print(f"final_latency_score {final_latency_score}")
-        print(f"final_vibe_score {final_vibe_score}")
         print(f"final_eval_score {final_eval_score}")
         print(f"coherence score: {scores_data.coherence_score}")
         print(f"score pre coherence: {total_score}")

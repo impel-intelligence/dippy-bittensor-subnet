@@ -24,7 +24,7 @@ COPY requirements.eval.txt requirements.txt
 
 RUN uv pip install --system -r requirements.txt --no-build-isolation
 # Explicitly install to manage breaking changes
-RUN uv pip install --system flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/
+RUN uv pip install --system flashinfer-python -i https://flashinfer.ai/whl/cu124/torch2.5/
 RUN uv pip install --system flash-attn --no-build-isolation
 
 # Create empty directory and file for pyproject
