@@ -17,6 +17,9 @@ import copy
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+
+
+
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -64,6 +67,33 @@ from scipy import optimize
 from utilities.validation_utils import regenerate_hash
 from bittensor.core.subtensor import Subtensor
 from bittensor.core.metagraph import Metagraph
+from bittensor.core.chain_data import (
+    decode_account_id,
+)
+from typing import cast
+
+def extract_raw_data(data):
+    try:
+        # Navigate to the fields tuple
+        fields = data.get('info', {}).get('fields', ())
+        
+        # The first element should be a tuple containing a dictionary
+        if fields and isinstance(fields[0], tuple) and isinstance(fields[0][0], dict):
+            # Find the 'Raw' key in the dictionary
+            raw_dict = fields[0][0]
+            raw_key = next((k for k in raw_dict.keys() if k.startswith('Raw')), None)
+            
+            if raw_key and raw_dict[raw_key]:
+                # Extract the inner tuple of integers
+                numbers = raw_dict[raw_key][0]
+                # Convert to string
+                result = ''.join(chr(x) for x in numbers)
+                return result
+                
+    except (IndexError, AttributeError):
+        pass
+    
+    return None
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 INVALID_BLOCK_START = 4200000
@@ -458,13 +488,10 @@ class Validator:
             try:
                 # First try using self.subtensor
                 try:
-                    substrate_client = self.subtensor.substrate
-                    raw_commmitments = substrate_client.query_map(
+                    raw_commmitments = self.subtensor.query_map(
                         module="Commitments",
-                        storage_function="CommitmentOf",
-                        params=[self.config.netuid],
-                        block_hash=None,
-                    )
+                        name="CommitmentOf",
+                        params=[self.config.netuid])
                 except Exception as e:
                     bt.logging.warning(f"Failed to fetch metadata with self.subtensor: {e}, trying dedicated subtensor")
                     # Fall back to dedicated subtensor
@@ -473,13 +500,10 @@ class Validator:
                         network = "finney"
                         dedicated_subtensor = Subtensor(network=network)
                         bt.logging.warning(f"Created dedicated subtensor for metadata fetch: {dedicated_subtensor} ")
-                        substrate_client = dedicated_subtensor.substrate
-                        raw_commmitments = substrate_client.query_map(
-                            module="Commitments",
-                            storage_function="CommitmentOf",
-                            params=[self.config.netuid],
-                            block_hash=None,
-                        )
+                        raw_commmitments = dedicated_subtensor.query_map(
+                        module="Commitments",
+                        name="CommitmentOf",
+                        params=[self.config.netuid])
                     finally:
                         # Ensure we close the dedicated subtensor
                         if dedicated_subtensor is not None:
@@ -501,17 +525,11 @@ class Validator:
             raise Exception("Failed to fetch raw commitments from chain")
         commitments = {}
         for key, value in raw_commmitments:
-            hotkey = key.value
-            commitment_info = value.value.get("info", {})
-            fields = commitment_info.get("fields", [])
-            if not fields or not isinstance(fields[0], dict):
-                continue
-            field_value = next(iter(fields[0].values()))
-            if field_value.startswith("0x"):
-                field_value = field_value[2:]
             try:
-                chain_str = bytes.fromhex(field_value).decode("utf-8").strip()
-                commitments[str(hotkey)] = {"block": value["block"].value, "chain_str": chain_str}
+                hotkey = decode_account_id(key[0])
+                body = cast(dict, value.value)
+                chain_str = extract_raw_data(body)
+                commitments[str(hotkey)] = {"block": body["block"], "chain_str": chain_str}
             except Exception as e:
                 bt.logging.error(f"Failed to decode commitment for hotkey {hotkey}: {e}")
                 continue
@@ -624,7 +642,7 @@ class Validator:
         if config is not None:
             subtensor = Subtensor(config=config)
             return subtensor
-        network = random.choice(["finney", "subvortex"])
+        network = random.choice(["finney"])
         subtensor = Subtensor(network=network)
         bt.logging.warning(f"subtensor retry initialized with Subtensor(): {subtensor}")
         return subtensor
@@ -642,7 +660,7 @@ class Validator:
         self._remote_log(logged_payload)
 
     async def try_sync_metagraph(self, ttl: int = 120) -> bool:
-        network = random.choice(["finney", "subvortex"])
+        network = random.choice(["finney"])
         if self.config.local:
             network = "local"
         try:
