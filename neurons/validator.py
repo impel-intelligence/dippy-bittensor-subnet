@@ -22,7 +22,7 @@ import copy
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 import datetime as dt
 import os
 import math
@@ -70,7 +70,6 @@ from bittensor.core.metagraph import Metagraph
 from bittensor.core.chain_data import (
     decode_account_id,
 )
-from typing import cast
 
 def extract_raw_data(data):
     try:
