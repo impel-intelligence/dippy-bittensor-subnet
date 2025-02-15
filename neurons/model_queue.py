@@ -23,7 +23,7 @@ import requests
 
 from common.data import ModelId
 
-import math
+import random
 import torch
 from typing import cast, Any, Dict
 import constants
@@ -195,7 +195,7 @@ class ModelQueue:
                     # Fall back to dedicated subtensor
                     dedicated_subtensor = None
                     try:
-                        network = "finney"
+                        network = random.choice(["finney", "subvortex", "latent-lite"])
                         dedicated_subtensor = Subtensor(network=network)
                         bt.logging.warning(f"Created dedicated subtensor for metadata fetch: {dedicated_subtensor} ")
                         raw_commmitments = dedicated_subtensor.query_map(
@@ -221,7 +221,6 @@ class ModelQueue:
 
         if raw_commmitments is None:
             raise Exception("Failed to fetch raw commitments from chain")
-        
         commitments = {}
         for key, value in raw_commmitments:
             try:

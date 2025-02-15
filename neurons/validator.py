@@ -751,26 +751,6 @@ class Validator:
 
         return hotkey_matches
 
-    @staticmethod
-    def adjusted_temperature_multipler(current_block: int) -> float:
-        # to be updated to this value soon
-        # CHANGE_BLOCK = 4800000
-        CHANGE_BLOCK = 4247000
-        # currently force static 0.15 temperature
-        if current_block > CHANGE_BLOCK:
-            return 15
-        diff = current_block - CHANGE_BLOCK
-        # Map block difference to temperature value between 1-15
-        # Scale linearly up to NEW_EPOCH_BLOCK
-        if diff <= 7200:
-            return 15
-
-        # Linear scaling: (diff / max_diff) * (max_temp - min_temp) + min_temp
-        temp = (diff / CHANGE_BLOCK) * 14 + 1
-
-        # Cap at max temperature of 0.15
-        return min(temp, 15)
-
     async def run_step(self) -> bool:
         """
         Executes a step in the evaluation process of models. This function performs several key tasks:
@@ -850,7 +830,8 @@ class Validator:
         # Compute softmaxed weights based on win rate.
         model_weights = torch.tensor([win_rate[uid] for uid in sorted_uids], dtype=torch.float32)
 
-        temperature = constants.temperature * self.adjusted_temperature_multipler(current_block)
+        # temperature = constants.temperature * self.adjusted_temperature_multipler(current_block)
+        temperature = constants.temperature
 
         step_weights = torch.softmax(model_weights / temperature, dim=0)
 
