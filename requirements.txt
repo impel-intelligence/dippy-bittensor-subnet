@@ -1,4 +1,4 @@
-bittensor==8.5.1
+bittensor==9.0.0
 pydantic
 transformers
 torch >=2.5.1

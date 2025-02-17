@@ -3,14 +3,14 @@
 # Copyright © 2023 const
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+# documentation files (the "Software"), to deal in the Software without restriction, including without limitation
 # the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 # and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 # The above copyright notice and this permission notice shall be included in all copies or substantial portions of
 # the Software.
 
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
 # THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
@@ -23,12 +23,16 @@ import requests
 
 from common.data import ModelId
 
-import math
+import random
 import torch
-import typing
+from typing import cast, Any, Dict
 import constants
 import traceback
 import bittensor as bt
+from bittensor import Subtensor
+from bittensor.core.chain_data import (
+    decode_account_id,
+)
 
 from common.scores import StatusEnum, Scores
 from utilities.local_metadata import LocalMetadata
@@ -49,7 +53,28 @@ ENDPOINT = "https://huggingface.co"
 REPO_TYPES = ["model", "dataset", "space"]
 
 hf_token = os.environ["HF_ACCESS_TOKEN"]
-
+def extract_raw_data(data):
+        try:
+            # Navigate to the fields tuple
+            fields = data.get('info', {}).get('fields', ())
+            
+            # The first element should be a tuple containing a dictionary
+            if fields and isinstance(fields[0], tuple) and isinstance(fields[0][0], dict):
+                # Find the 'Raw' key in the dictionary
+                raw_dict = fields[0][0]
+                raw_key = next((k for k in raw_dict.keys() if k.startswith('Raw')), None)
+                
+                if raw_key and raw_dict[raw_key]:
+                    # Extract the inner tuple of integers
+                    numbers = raw_dict[raw_key][0]
+                    # Convert to string
+                    result = ''.join(chr(x) for x in numbers)
+                    return result
+                
+        except (IndexError, AttributeError):
+            pass
+        
+        return None
 
 def push_minerboard(
     hash: str,
@@ -152,33 +177,70 @@ class ModelQueue:
             except Exception as e:
                 self.logger.error(f"failed to queue {e}")
 
+    def build_commit_data(self) -> Dict[str, Any]:
+        max_retries = 10
+        base_delay = 1.5  # seconds
+        commitments = {}
+        raw_commmitments = None
+        for attempt in range(max_retries):
+            try:
+                # First try using self.subtensor
+                try:
+                    raw_commmitments = self.subtensor.query_map(
+                        module="Commitments",
+                        name="CommitmentOf",
+                        params=[self.config.netuid])
+                except Exception as e:
+                    bt.logging.warning(f"Failed to fetch metadata with self.subtensor: {e}, trying dedicated subtensor")
+                    # Fall back to dedicated subtensor
+                    dedicated_subtensor = None
+                    try:
+                        network = random.choice(["finney", "subvortex", "latent-lite"])
+                        dedicated_subtensor = Subtensor(network=network)
+                        bt.logging.warning(f"Created dedicated subtensor for metadata fetch: {dedicated_subtensor} ")
+                        raw_commmitments = dedicated_subtensor.query_map(
+                        module="Commitments",
+                        name="CommitmentOf",
+                        params=[self.config.netuid])
+                    finally:
+                        # Ensure we close the dedicated subtensor
+                        if dedicated_subtensor is not None:
+                            try:
+                                dedicated_subtensor.close()
+                            except Exception as close_error:
+                                bt.logging.error(f"Error closing dedicated subtensor: {close_error}")
+            except Exception as e:
+                delay = base_delay**attempt
+                if attempt < max_retries - 1:  # Don't log "retrying" on the last attempt
+                    bt.logging.error(f"Attempt {attempt + 1}/{max_retries} failed to fetch data : {e}")
+                    bt.logging.info(f"Retrying in {delay:.1f} seconds...")
+                    time.sleep(delay)
+                else:
+                    bt.logging.error(f"All attempts failed to fetch data : {e}")
+                    raise e
+
+        if raw_commmitments is None:
+            raise Exception("Failed to fetch raw commitments from chain")
+        commitments = {}
+        for key, value in raw_commmitments:
+            try:
+                hotkey = decode_account_id(key[0])
+                body = cast(dict, value.value)
+                chain_str = extract_raw_data(body)
+                commitments[str(hotkey)] = {"block": body["block"], "chain_str": chain_str}
+            except Exception as e:
+                bt.logging.error(f"Failed to decode commitment for hotkey {hotkey}: {e}")
+                continue
+
+        return commitments
+
+    
+
     def load_latest_metagraph(self):
         metagraph = self.subtensor.metagraph(self.netuid)
         all_uids = metagraph.uids.tolist()
 
-        substrate_client = self.subtensor.substrate
-        all_commitments = substrate_client.query_map(
-            module="Commitments",
-            storage_function="CommitmentOf",
-            params=[self.config.netuid],
-            block_hash=None,
-        )
-        commitments = {}
-        for key, value in all_commitments:
-            hotkey = key.value
-            commitment_info = value.value.get("info", {})
-            fields = commitment_info.get("fields", [])
-            if not fields or not isinstance(fields[0], dict):
-                continue
-            field_value = next(iter(fields[0].values()))
-            if field_value.startswith("0x"):
-                field_value = field_value[2:]
-            try:
-                chain_str = bytes.fromhex(field_value).decode("utf-8").strip()
-                commitments[str(hotkey)] = {"block": value["block"].value, "chain_str": chain_str}
-            except Exception as e:
-                self.logger.error(f"Failed to decode commitment for hotkey {hotkey}: {e}")
-                continue
+        commitments = self.build_commit_data()
 
         queued = 0
         failed = 0

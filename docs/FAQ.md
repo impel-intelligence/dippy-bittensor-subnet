@@ -111,3 +111,13 @@ Scoring resets are a frequent and expected occurrence in this subnet. Some gener
 The leaderboard is a secondary view of the miner state. Note that due to its implementation, it is not guaranteed that the leaderboard state will reflect the same state as on the metagraph. For miners, the source of truth should always be the ranking determined from running the validator script (it is possible to run the script without having to be a validator). 
 
 During score resets, it is common for the state of the leaderboard to be in flux until all stale entries are removed.
+
+## I see a 502 error when calling the dataset API. 
+Note that there are two versions of the dataset API at this time:
+1. Dataset API for validators
+2. Dataset API for miners
+
+As of 2025 Feb 16, there is a temporary dataset API for miners available at https://temp-miner-dataset-sn11.dippy-bittensor-subnet.com/dataset .
+Note that this API may experience intermittent downtime as it is a publicly accessible resource 
+
+Regarding the dataset API for validators: note that there may occassionally be network issues that can interfere with scoring. The current system will automatically purge entries related to these errors and requeue accordingly. Note that this is a temporary solution and is subject to change and improvements over time.
