@@ -247,7 +247,8 @@ class Validator:
         self.verify = not self.config.no_verify
 
         network_name = self.config.subtensor.network or "finney"
-        netuid = self.config.netuid or 11
+        # netuid = self.config.netuid or 11
+        self.config.netuid = 11
         # === Bittensor objects ====
         self.wallet = bt.wallet(config=self.config)
 
