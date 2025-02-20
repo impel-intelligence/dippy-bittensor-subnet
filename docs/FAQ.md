@@ -117,7 +117,7 @@ Note that there are two versions of the dataset API at this time:
 1. Dataset API for validators
 2. Dataset API for miners
 
-As of 2025 Feb 16, there is a temporary dataset API for miners available at https://temp-miner-dataset-sn11.dippy-bittensor-subnet.com/dataset .
+As of 2025 Feb 16, there is a temporary dataset API for miners available at https://temp-miner-dataset-sn11.dippy-bittensor-subnet.com/datasets .
 Note that this API may experience intermittent downtime as it is a publicly accessible resource 
 
 Regarding the dataset API for validators: note that there may occassionally be network issues that can interfere with scoring. The current system will automatically purge entries related to these errors and requeue accordingly. Note that this is a temporary solution and is subject to change and improvements over time.
