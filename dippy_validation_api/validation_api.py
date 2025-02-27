@@ -58,7 +58,7 @@ MAX_SEQ_LEN = (
 SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
 
-BLOCK_RATE_LIMIT = 14400  # Every 14400 blocks = 48 hours
+BLOCK_RATE_LIMIT = 43200  # Every 43200 blocks = 144 hours
 app = FastAPI()
 supabaser = SupabaseState()
 
