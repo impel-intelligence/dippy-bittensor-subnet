@@ -80,7 +80,6 @@ export $(grep -v '^#' ../.env | xargs)
 
 # check if ADMIN_KEY is loaded
 echo "ADMIN_KEY: $ADMIN_KEY"
-echo "DIPPY_KEY: $DIPPY_KEY"
 
 # Start the validation_api
 echo "Starting validation_api..."

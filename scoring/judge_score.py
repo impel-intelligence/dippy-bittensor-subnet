@@ -7,8 +7,8 @@ from vllm.lora.request import LoRARequest
 from huggingface_hub import snapshot_download
 
 from transformers import AutoTokenizer
-from openai import OpenAI
-from typing import List
+from openai import OpenAI, AzureOpenAI
+from typing import List, Optional
 from scoring.common import (
     EvaluateModelRequest,
     DEFAULT_LORA_BASE,
@@ -19,23 +19,37 @@ from scoring.common import (
     parse_json_safely,
 )
 from scoring.dataset import StreamedSyntheticPartialDataset
+from pydantic import BaseModel
+from typing import Literal
 
 # Constants
-JUDGE_NUM_EVALS = 128
+JUDGE_NUM_EVALS = 512
 JUDGE_MAX_TOKENS = 2048
-JUDGE_EVAL_MODEL = "anthropic/claude-3.5-sonnet"
+JUDGE_EVAL_MODEL = "openai/gpt-4o-2024-11-20"
 MAX_ERROR_RATE = 0.1
+
+
+class JudgeScore(BaseModel):
+    realism_win: Literal["original", "generated", "tie"]
+    entertainment_win: Literal["original", "generated", "tie"]
+    coherency_win: Literal["original", "generated", "tie"]
+    realism_win_reasoning: str
+    entertainment_win_reasoning: str
+    coherency_win_reasoning: str
 
 
 default_sample_params = SamplingParams(
     temperature=random.random() * 0.2,
-    max_tokens=4096,
+    max_tokens=8192,
 )
 chat_params = {
-    "gemma2": SamplingParams(temperature=random.random() * 0.2, max_tokens=4096, stop_token_ids=[107]),
+    "gemma2": SamplingParams(temperature=random.random() * 0.2, max_tokens=8192, stop_token_ids=[107]),
+    "mistral": SamplingParams(temperature=random.random() * 0.2, max_tokens=8192, stop_token_ids=[2]),
 }
-
-
+AZURE_KEY = os.environ.get("AZURE_KEY", "x")
+AZURE_URL = os.environ.get("AZURE_URL", "x")
+azure_client = AzureOpenAI(api_key=AZURE_KEY, azure_endpoint=AZURE_URL, api_version="2024-08-01-preview")
+azure_model = "gpt-4o"
 remote_client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ.get("OPENROUTER_API_KEY", "x"),
@@ -61,9 +75,53 @@ example conversation:
 """
 
 
-def judge_evaluator(generated_conversation: List, original_conversation: List):
-    generated_stringified = stringify_convo_from_messages(generated_conversation)
-    original_stringified = stringify_convo_from_messages(original_conversation)
+def get_llm_response(
+    messages: List[dict],
+    model_name: str,
+    providers: List[str] = None,
+    verbose: bool = False
+) -> Optional[object]:
+    if providers is None:
+        providers = ["azure", "openrouter"]
+    
+    for provider in providers:
+        try:
+            if provider.lower() == "azure":
+                if verbose:
+                    print("Using Azure OpenAI client for judge scoring.")
+                # Call Azure provider
+                completion = azure_client.beta.chat.completions.parse(
+                    model=azure_model,
+                    messages=messages,
+                    response_format=JudgeScore
+                )
+                if not completion.choices:
+                    raise Exception("No response from Azure client.")
+                return completion.choices[0].message.parsed
+            elif provider.lower() in ("openrouter", "openai"):
+                if verbose:
+                    print("Using OpenRouter client for judge scoring.")
+                # Call OpenRouter provider
+                chat_completion = remote_client.chat.completions.create(
+                    messages=messages,
+                    model=model_name,
+                    temperature=0,
+                )
+                return chat_completion.choices[0].message.content
+            else:
+                raise Exception(f"Unknown provider: {provider}")
+        except Exception as e:
+            if verbose:
+                print(f"Error with provider {provider}: {e}")
+            # Try next provider
+    
+    print("All providers failed for get_llm_response.")
+    return None
+
+
+def judge_evaluator(generated_conversation: List, original_conversation: List, verbose: bool = False, providers: List[str] = None):
+    generated_stringified = stringify_convo_from_messages(generated_conversation, truncate=False)
+    original_stringified = stringify_convo_from_messages(original_conversation, truncate=False)
     system_prompt = original_conversation[0]["content"]
     # compare them against each other
     evaluation_system_prompt = f'''
@@ -72,30 +130,20 @@ An assistant follows the provided instructions as mentioned:
 {system_prompt}
 =====
 
-Scrutinize the participant's rhetorical contributions, given there will be two points for comparison: the original text and the generated text.
+Scrutinize the assistants's contributions, given there will be two points of comparison: the original text and the generated text.
 
-Given the documented discourse and character parameters, evaluate the subsequent criteria:
-- verisimilitude: The participant's utterances demonstrate impeccable concordance with the prescribed persona, exhibiting fidelity to the established characterization without discordant elements.
-- entertainment_score: The participant's locutions evince exceptional magnetism and engrossment, eschewing redundant phraseology.
-- coherency: The participant's command of language exemplifies superlative proficiency, devoid of solecisms. Their articulation manifests consummate fluency, bereft of infelicitous constructions, with impeccable morphological accuracy, grammatical concord, orthographical precision, and punctuation. No lexical items diverge from the prescribed linguistic parameters.
+Based on the given conversation and character guidelines, evaluate these criteria:
+- realism: The responses match the character's personality perfectly, staying true to who they are meant to be without any inconsistencies
+- entertainment: The responses are engaging and interesting to read, without any repetitive or boring language
+- coherency: The responses use clear and correct language throughout, with proper grammar, spelling and punctuation. The writing style stays consistent and appropriate.
 
-Employ the 7 point Likert scale as exemplified below:
-- 1 = Strongly Disagree
-- 2 = Disagree
-- 3 = Partially Disagree
-- 4 = Neutral
-- 5 = Partially Agree
-- 6 = Agree
-- 7 = Strongly Agree
-
-Disregard utterances demarcated as "user".
-Scrutinize all assistant messages, not merely the last message. Evaluate each conversational turn discretely.
-Elucidate scores prior to their assignation.
-Initiate elucidations with verbatim excerpts from participant contributions, employing single quotation marks. 
-Emphasize deficiencies and improprieties.
-Be sure to employ the Likert scoring method in concluding explication. 
-Scores must demonstrate consonance with these elucidations.
-Abstain from evaluating participant decorum or bellicosity.
+Ignore user messages.
+Evaluate all assistant messages separately, not just the last one.
+Explain your reasoning before giving scores.
+Quote specific examples from the conversations using single quotes.
+Focus on problems and mistakes.
+Make sure scores match your explanations.
+Do not judge politeness or aggression.
 Practice extreme criticality and prejudice in judgement. Only designate the higher ranking scores in rare, exceptional cases.
 
 Return data in JSON format with the following schema:
@@ -119,29 +167,53 @@ Judge the following conversations to determine which conversation is better acco
 "original" :
 {original_stringified}
 
+
+( end of original text )
+
 "generated" :
 {generated_stringified}
+
+( end of generated text )
+
+Given the earlier instructions, please return data in JSON format with the following schema:
+
+{{
+            "realism_win": (string : "original" or "generated" or "tie"),
+            "entertainment_win": (string : "original" or "generated" or "tie"),
+            "coherency_win": (string : "original" or "generated" or "tie"),
+            "realism_win_reasoning": (string),
+            "entertainment_win_reasoning": (string),
+            "coherency_win_reasoning": (string)
+}}
+
+
 """
 
+    messages = [
+        {
+            "role": "system",
+            "content": evaluation_system_prompt,
+        },
+        {"role": "user", "content": user_message},
+    ]
+    # Replace direct client calls with the new wrapper function:
+    if providers is None:
+        providers = ["azure", "openrouter"]
+    llm_output = get_llm_response(messages, JUDGE_EVAL_MODEL, providers=providers, verbose=verbose)
     try:
-        chat_completion = remote_client.chat.completions.create(
-            messages=[
-                {
-                    "role": "system",
-                    "content": evaluation_system_prompt,
-                },
-                {"role": "user", "content": user_message},
-            ],
-            model=JUDGE_EVAL_MODEL,
-            temperature=0,
-        )
-        judge_score = parse_json_safely(chat_completion.choices[0].message.content)
+        if isinstance(llm_output, str):
+            judge_score, original_output = parse_json_safely(llm_output)
+        else:
+            judge_score = {
+                "realism_win": llm_output.realism_win,
+                "entertainment_win": llm_output.entertainment_win,
+                "coherency_win": llm_output.coherency_win,
+                "realism_win_reasoning": llm_output.realism_win_reasoning,
+                "entertainment_win_reasoning": llm_output.entertainment_win_reasoning,
+                "coherency_win_reasoning": llm_output.coherency_win_reasoning,
+            }
         if not judge_score:
-            raise Exception("Judge score returned empty dictionary")
-        if not isinstance(judge_score, dict):
-            raise Exception(f"Judge score returned invalid type: {type(judge_score)}")
-        if not all(key in judge_score for key in ['realism_win', 'entertainment_win', 'coherency_win']):
-            raise Exception(f"Judge score missing required keys. Got keys: {list(judge_score.keys())} {chat_completion.choices[0].message.content}")
+            raise Exception(f"Judge score is empty or invalid given {original_output}")
         return judge_score
     except Exception as e:
         print(e)
@@ -156,48 +228,49 @@ def process_conversation(messages):
     conversation = [{"role": "user", "content": messages}]
     return conversation
 
+
 def collect_judge_scores(scores: List):
     try:
-        
+
         # Initialize tally structure
         tally = {
-            'realism': {'original': 0, 'generated': 0, 'tie': 0},
-            'entertainment': {'original': 0, 'generated': 0, 'tie': 0},
-            'coherency': {'original': 0, 'generated': 0, 'tie': 0}
+            "realism": {"original": 0, "generated": 0, "tie": 0},
+            "entertainment": {"original": 0, "generated": 0, "tie": 0},
+            "coherency": {"original": 0, "generated": 0, "tie": 0},
         }
-        
+
         valid = 0
-        
+
         # Process each score entry
         for item in scores:
             # Skip corrupted/incomplete data
-            if not all(key in item for key in ['realism_win', 'entertainment_win', 'coherency_win']):
+            if not all(key in item for key in ["realism_win", "entertainment_win", "coherency_win"]):
                 continue
-                
+
             valid += 1
-            
+
             # Tally wins for each category
-            tally['realism'][item['realism_win']] += 1
-            tally['entertainment'][item['entertainment_win']] += 1
-            tally['coherency'][item['coherency_win']] += 1
+            tally["realism"][item["realism_win"]] += 1
+            tally["entertainment"][item["entertainment_win"]] += 1
+            tally["coherency"][item["coherency_win"]] += 1
         # Calculate individual totals
-        total_original = sum(cat['original'] for cat in tally.values())
-        total_generated = sum(cat['generated'] for cat in tally.values())
-        total_ties = sum(cat['tie'] for cat in tally.values())
-        
+        total_original = sum(cat["original"] for cat in tally.values())
+        total_generated = sum(cat["generated"] for cat in tally.values())
+        total_ties = sum(cat["tie"] for cat in tally.values())
+
         # Calculate win rate
         win_rate = (total_generated) / (valid * 3) if valid > 0 else 0
-        
+
         # Combine into totals dict
         totals = {
-            'total_original': total_original,
-            'total_generated': total_generated, 
-            'total_ties': total_ties,
-            'by_category': tally,
-            'valid': valid,
-            'win_rate': win_rate
+            "total_original": total_original,
+            "total_generated": total_generated,
+            "total_ties": total_ties,
+            "by_category": tally,
+            "valid": valid,
+            "win_rate": win_rate,
         }
-        
+
         return totals
     except Exception as e:
         print(f"Error parsing file: {str(e)}")
@@ -207,62 +280,81 @@ def collect_judge_scores(scores: List):
 def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = False, verbose=False):
     try:
         start_time = datetime.datetime.now()
-        print(f"Starting judge score evaluation at {start_time}")
 
         repo_id = f"{request.repo_namespace}/{request.repo_name}"
         input_tokenizer = AutoTokenizer.from_pretrained(repo_id)
+        print(f"Starting judge score evaluation at {start_time} given repo id {repo_id}")
 
         # Load synthetic dataset
-        judge_dataset = StreamedSyntheticPartialDataset(
-            max_input_len=MAX_SEQ_LEN_COHERENCE_SCORE - MAX_GENERATION_LENGTH - 200,
-        )
-
-        # Set chat template params
+        judge_dataset = StreamedSyntheticPartialDataset(cut_message_chain_early=1)
         judge_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
         print(f"loaded dataset with chat template {request.chat_template_type}")
-        # Sample conversations
-        conversations = judge_dataset.sample_dataset(JUDGE_NUM_EVALS)
-        
-        all_judge_scores = []
-        exceptions = 0
-        # Process conversations
-        generated_conversations = []
-        original_conversations = []  # Store original conversations
 
-        lora_path = None
+        # Sample conversations
+        conversations = judge_dataset.sample_dataset(JUDGE_NUM_EVALS, messages_limit=7)
+        # conversations = judge_dataset.sample_dataset(16)
+
+        # Prepare batch prompts for vLLM
+        formatted_messages = []
+        original_messages_list = []
+        last_assistant_responses = []
+
+        for formatted_msg, orig_msgs, last_asst_resp in conversations:
+            formatted_messages.append(formatted_msg)
+            original_messages_list.append(orig_msgs)
+            last_assistant_responses.append(last_asst_resp)
+
+        # Generate all responses in batch
+        print(f"Starting batch generation at {datetime.datetime.now()}")
+        model_sampling_params = chat_params.get(request.chat_template_type, default_sample_params)
+
+        lora_request = None
         if use_lora:
             lora_id = f"{request.repo_namespace}/{request.repo_name}"
             lora_path = snapshot_download(repo_id=lora_id)
+            lora_request = LoRARequest("lora_adapter", 1, lora_path)
 
-        model_sampling_params: SamplingParams = chat_params.get(request.chat_template_type, default_sample_params)
+        try:
+            outputs = model.generate(
+                formatted_messages, model_sampling_params, use_tqdm=False, lora_request=lora_request
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed batch generation: {e}")
 
-        for idx, (formatted_message, original_messages, last_assistant_response) in enumerate(conversations):
+        # Process generations into complete conversations
+        print(f"Starting conversation processing at {datetime.datetime.now()}")
+        generated_conversations = []
+        original_conversations = []
+
+        for idx, output in enumerate(outputs):
+            generated_text = output.outputs[0].text
+
+            # Create complete conversations
+            generated_conversation = original_messages_list[idx].copy()
+            generated_conversation.append({"role": "assistant", "content": generated_text})
+            generated_conversations.append(generated_conversation)
+
+            original_conversation = original_messages_list[idx].copy()
+            original_conversation.append({"role": "assistant", "content": last_assistant_responses[idx]})
+            original_conversations.append(original_conversation)
+
+        # Evaluate conversations
+        print(f"Completed text generation. Now starting judge evaluation at {datetime.datetime.now()}")
+        all_judge_scores = []
+        exceptions = 0
+
+        for idx in range(len(generated_conversations)):
             try:
-                if idx == len(conversations) // 2:
-                    print(f"Reached halfway mark at {datetime.datetime.now()}")
-                
-                if use_lora:
-                    output = model.generate(
-                        formatted_message,
-                        model_sampling_params,
-                        use_tqdm=False,
-                        lora_request=LoRARequest("lora_adapter", 1, lora_path),
-                    )
-                else:
-                    output = model.generate(formatted_message, model_sampling_params, use_tqdm=False)
-                generated_text = output[0].outputs[0].text
+                if idx == len(generated_conversations) // 2:
+                    print(f"Reached halfway mark of judging at {datetime.datetime.now()}")
 
-                # Create complete conversation with generated response
-                generated_conversation = original_messages.copy()
-                generated_conversation.append({"role": "assistant", "content": generated_text})
-                generated_conversations.append(generated_conversation)
-
-                original_messages.append({"role": "assistant", "content": last_assistant_response})
-                original_conversations.append(original_messages)
-                judge_score = judge_evaluator(generated_conversation, original_messages)
+                judge_score = judge_evaluator(
+                    generated_conversations[idx], original_conversations[idx], verbose=verbose
+                )
                 if judge_score is None:
-                    raise Exception(f"could not parse judge score")
+                    raise Exception("could not parse judge score")
                 all_judge_scores.append(judge_score)
+
                 if verbose:
                     print(f"completed round of judging with score {judge_score}")
             except Exception as e:
@@ -272,17 +364,18 @@ def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = 
 
         if exceptions / JUDGE_NUM_EVALS > MAX_ERROR_RATE:
             raise RuntimeError(f"judge score failed with {exceptions} exceptions")
+
         judge_score = collect_judge_scores(all_judge_scores)
         if judge_score is None:
-            raise RuntimeError(f"could not calculate judge score")
-        x = {"judge_score": judge_score, "generated_conversations": generated_conversations}
+            raise RuntimeError("could not calculate judge score")
+
         if verbose:
-            dump_conversations(x)
+            dump_conversations({"judge_score": judge_score, "generated_conversations": generated_conversations})
 
         end_time = datetime.datetime.now()
         print(f"Completed judge score evaluation at {end_time}")
         print(f"Total time elapsed: {end_time - start_time}")
-        
+
         return {
             "judge_score": judge_score,
         }
@@ -303,3 +396,12 @@ def dump_conversations(conversations, suffix: str = "x"):
             json.dump(conversations, f, indent=2)
     except Exception as e:
         print(f"Error storing conversations: {e}")
+
+
+class JudgeScore(BaseModel):
+    realism_win: Literal["original", "generated", "tie"]
+    entertainment_win: Literal["original", "generated", "tie"]
+    coherency_win: Literal["original", "generated", "tie"]
+    realism_win_reasoning: str
+    entertainment_win_reasoning: str
+    coherency_win_reasoning: str
