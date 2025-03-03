@@ -28,7 +28,6 @@ class RunError(BaseModel):
     error: str
 
 
-
 class CoherenceScore(BaseModel):
     coherence_score: float
 
@@ -43,6 +42,7 @@ class Evaluator:
         self,
         image_name: str = DEFAULT_IMAGE_NAME,
         gpu_ids: str = "0",
+        model_dir: str = "",
         logger: EventLogger = EventLogger(),
         trace: bool = False,
     ):
@@ -82,22 +82,26 @@ class Evaluator:
                 "bind": "/app/model_cache_dir",
                 "mode": "rw",
             }
-            self.volume_configuration[DEFAULT_MODEL_CACHE_DIR] = {
-                "bind": "/app/model_cache_dir",
-                "mode": "rw",
-            }
 
         self.device_requests = [docker.types.DeviceRequest(device_ids=[gpu_ids], capabilities=[["gpu"]])]
 
         self.env = {
             "OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY"),
             "HF_TOKEN": os.environ.get("HF_TOKEN"),
+            "AZURE_URL": os.environ.get("AZURE_URL"),
+            "AZURE_KEY": os.environ.get("AZURE_KEY"),
             "VLLM_WORKER_MULTIPROC_METHOD": "_",
             "PYTORCH_CUDA_ALLOC_CONF": "_",
             "DATASET_API_JWT": os.environ.get("DATASET_API_JWT"),
             "DATASET_API_KEY": os.environ.get("DATASET_API_KEY"),
         }
         self.trace = trace
+        if len(model_dir) > 0:
+            self.volume_configuration[model_dir] = {
+                "bind": "/app/model_dir",
+                "mode": "ro",
+            }
+            self.env["USE_MODEL_DIR"] = 1
 
     def run_docker_container(
         self,
@@ -120,7 +124,7 @@ class Evaluator:
             env["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
             env["VLLM_ALLOW_LONG_MAX_MODEL_LEN"] = "1"
             env["VLLM_ATTENTION_BACKEND"] = "FLASH_ATTN"
-            
+
         if job_type == "inference_flash":
             env["VLLM_ATTENTION_BACKEND"] = "FLASHINFER"
             env["VLLM_FLASHINFER_FORCE_TENSOR_CORES"] = "1"
@@ -138,10 +142,10 @@ class Evaluator:
         filepath = f"/tmp/{job_type}_output.json"
         filename = f"{job_type}_output.json"
 
-        print(f"now waiting for container image {self.image_name} with command {command} to complete")
+        print(f"container_run_started {self.image_name} with command {command} to complete")
         result = container.wait()
         self.logger.debug(f"container_run_complete, {result}")
-        print(f"container_run_complete, {result}")
+        print(f"container_run_complete for container {self.image_name} {command} {result}")
 
         try:
             bits, _ = container.get_archive(filepath)
@@ -203,7 +207,7 @@ class Evaluator:
             if inference_result["completed"] is False:
                 raise Exception("completion internal error")
             score = InferenceScore(
-                coherence_score=inference_result.get("coherence_score",0),
+                coherence_score=inference_result.get("coherence_score", 0),
                 judge_score=inference_result.get("judge_score", 0),
             )
             return score

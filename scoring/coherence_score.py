@@ -1,10 +1,18 @@
+"""
+DEPRECATED
+"""
+
+
 import os
 import random
 import datetime
 from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
 from transformers import AutoTokenizer
+from typing import List
 
+# Import AzureOpenAI for using Azure OpenAI client similar to judge_score
+from openai import OpenAI, AzureOpenAI
 
 # Import necessary modules and functions from the main API file
 from scoring.common import (
@@ -19,19 +27,29 @@ from scoring.common import (
 )
 from scoring.dataset import PersonaHubDataset
 
-coherence_dataset = PersonaHubDataset(
-    max_input_len=MAX_SEQ_LEN_COHERENCE_SCORE - MAX_GENERATION_LENGTH - 200,
-)
+# Define Azure configuration (similar to judge_score)
+AZURE_KEY = os.environ.get("AZURE_KEY", "x")
+AZURE_URL = os.environ.get("AZURE_URL", "x")
+backup_client = AzureOpenAI(api_key=AZURE_KEY, azure_endpoint=AZURE_URL, api_version="2024-08-01-preview")
 
-from openai import OpenAI
-
+# Default client for OpenRouter usage
 remote_client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ.get("OPENROUTER_API_KEY", "x"),
 )
 
+def strip_surrounding_quotes(text: str) -> str:
+    """Remove surrounding single or double quotes from text if present."""
+    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+        return text[1:-1]
+    return text
 
-def coherence_evaluator(generated_text: str):
+
+coherence_dataset = PersonaHubDataset(
+    max_input_len=MAX_SEQ_LEN_COHERENCE_SCORE - MAX_GENERATION_LENGTH - 200,
+)
+
+def coherence_evaluator(generated_text: str, providers: List[str] = None, verbose: bool = False):
     evaluation_text = f'''
     You are a text coherence analyzer.
     Your task is to assess the coherence of the following conversation.
@@ -50,24 +68,22 @@ def coherence_evaluator(generated_text: str):
 
     Coherence assessment (1 or 0):
     '''
-
+    messages = [
+        {
+            "role": "user",
+            "content": evaluation_text,
+        }
+    ]
     try:
-        chat_completion = remote_client.chat.completions.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": evaluation_text,
-                }
-            ],
-            model=COHERENCE_EVAL_MODEL,
-            temperature=0,
-        )
-        score = int(chat_completion.choices[0].message.content)
+        # Use the new helper to get the completion using provider cycling
+        response = get_coherence_completion(messages, COHERENCE_EVAL_MODEL, providers=providers, verbose=verbose)
+        if response is None:
+            return 0
+        score = int(response)
         return score
     except Exception as e:
         print(e)
         return 0
-
 
 def generate_user_response(messages) -> str:
     generate_user_prompt = f'''
@@ -100,8 +116,7 @@ def generate_user_response(messages) -> str:
     except Exception as e:
         return ""
 
-
-def get_coherence_score(request: EvaluateModelRequest, model: LLM, verbose=False):
+def get_coherence_score(request: EvaluateModelRequest, model: LLM, verbose=False) -> dict:
     try:
         repo_id = f"{request.repo_namespace}/{request.repo_name}"
         input_tokenizer = AutoTokenizer.from_pretrained(repo_id)
@@ -120,7 +135,7 @@ def get_coherence_score(request: EvaluateModelRequest, model: LLM, verbose=False
         raise e
 
 
-def pretty_convo(dict_list, score) -> str:
+def pretty_convo(dict_list, score, verbose: bool = False) -> str:
     output = []
     output.append(f"score: {score}")
     output.append(f"convos: {len(dict_list)}")
@@ -131,7 +146,8 @@ def pretty_convo(dict_list, score) -> str:
         output.append("")
 
     result = "\n".join(output)
-    print(result)
+    if verbose:
+        print(result)
     return result
 
 
@@ -151,11 +167,49 @@ MIN_CONVERSATIONS = 2
 MAX_CONVERSATIONS = 4
 MAX_ERROR_RATE = 0.1
 
+# Add a helper function to toggle between Azure and OpenRouter clients
+def get_coherence_completion(messages, model_name, providers: List[str] = None, verbose: bool = False):
+    if providers is None:
+        providers = ["azure", "openrouter"]
+    
+    for provider in providers:
+        try:
+            if provider.lower() == "azure":
+                if verbose:
+                    print(f"Using Azure OpenAI client for coherence evaluation with model {model_name}")
+                # Using the Azure client
+                chat_completion = backup_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=messages,
+                    temperature=0,
+                )
+                content = chat_completion.choices[0].message.content
+                return content
+            elif provider.lower() in ("openrouter", "openai"):
+                if verbose:
+                    print(f"Using OpenRouter client for coherence evaluation with model {model_name}")
+                # Using the OpenRouter client
+                chat_completion = remote_client.chat.completions.create(
+                    messages=messages,
+                    model="openai/gpt-4o-mini-2024-07-18",
+                    temperature=0,
+                )
+                content = chat_completion.choices[0].message.content
+                return content
+            else:
+                raise Exception(f"Unknown provider: {provider}")
+        except Exception as e:
+            if verbose:
+                print(f"Error with provider {provider}: {e}")
+            # Try next provider
+    
+    print("All providers failed for get_coherence_completion.")
+    return None
 
-def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=False) -> int:
+def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=False) -> float:
     start_time = datetime.datetime.now()
     print(f"Starting coherence score calculation at {start_time}")
-    
+
     generated_samples = []
 
     sampling_params = SamplingParams(
@@ -172,7 +226,7 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
     for turn in range(total_turns):
         if turn == total_turns // 2:
             print(f"Reached halfway mark of conversation generation at {datetime.datetime.now()}")
-            
+
         # Prepare batch of prompts
         batch_prompts = []
         active_conversations = []
@@ -197,19 +251,21 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
         # Update conversations with generated responses
         for i, output in zip(active_conversations, outputs):
             generated_text = output.outputs[0].text
+            generated_text = strip_surrounding_quotes(generated_text)
             conversations[i].append({"role": "assistant", "content": generated_text})
             user_response = generate_user_response(conversations[i])
+            user_response = strip_surrounding_quotes(user_response)
             conversations[i].append({"role": "user", "content": user_response})
 
     generated_samples = conversations
 
     print(f"Starting coherence evaluation at {datetime.datetime.now()}")
-    
-    evaluation_conversations = [stringify_convo_from_messages(m) for m in generated_samples]
+
+    evaluation_conversations = [stringify_convo_from_messages(m, truncate=False) for m in generated_samples]
     scored_convos = []
     penalty = 0
     exceptions = 0
-    
+
     for i, convo in enumerate(evaluation_conversations):
         if i == len(evaluation_conversations) // 2:
             print(f"Reached halfway mark of coherence evaluation at {datetime.datetime.now()}")
@@ -222,21 +278,20 @@ def calculate_coherence_score(model: LLM, dataset_formatter, messages, verbose=F
             exceptions += 1
             print(e)
 
-    # Write conversations to file for debugging/analysis
     with open("coherence_evaluation_conversations.txt", "w", encoding="utf-8") as f:
         for convo in scored_convos:
             f.write(convo)
             f.write("\n\n")
 
     if exceptions / COHERENCE_NUM_EVALS > MAX_ERROR_RATE:
-        raise RuntimeError("coherence failed due to api issues")
+        raise RuntimeError(f"coherence failed due to {exceptions} api issues")
 
     ADJUSTED_EVALS = COHERENCE_NUM_EVALS - exceptions
 
     final_coherence_score = (ADJUSTED_EVALS - penalty) / ADJUSTED_EVALS
 
     end_time = datetime.datetime.now()
-    print(f"Completed coherence score calculation at {end_time}")
+    print(f"Completed coherence score calculation at {end_time} with score {final_coherence_score}")
     print(f"Total time elapsed: {end_time - start_time}")
 
     return final_coherence_score

@@ -138,7 +138,7 @@ model_validation_venv/bin/pip install -r requirements.api.txt
 ```
 
 #### Run model validation API service (optional, not recommended)
-(Note: there are currently breaking changes that pose challenges to running a local validation API service. Any tasks that require the env vars `ADMIN_KEY` or `DIPPY_KEY` applies here)
+(Note: there are currently breaking changes that pose challenges to running a local validation API service. Any tasks that require the env vars `ADMIN_KEY` applies here)
 ```bash
 cd dippy_validation_api
 chmod +x start_validation_service.sh

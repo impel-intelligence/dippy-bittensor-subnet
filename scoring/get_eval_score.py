@@ -58,9 +58,12 @@ def get_eval_score(request: EvaluateModelRequest, use_lora: bool = False):
         print(f"Loading base model from {repo_id}")
 
     model_type = "base"
+    model_path = repo_id
+    if os.environ.get("USE_MODEL_DIR", "0") == "1":
+        model_path = "/app/model_dir"
     try:
         base_model = AutoModelForCausalLM.from_pretrained(
-            repo_id,
+            model_path,
             attn_implementation="flash_attention_2",
             torch_dtype=torch.bfloat16,
             cache_dir=MODEL_CACHE_DIR,
@@ -69,11 +72,10 @@ def get_eval_score(request: EvaluateModelRequest, use_lora: bool = False):
         model_download_time = datetime.now(timezone.utc) - model_download_start
         print(f"Time to download model: {model_download_time}")
         num_params = sum(p.numel() for p in base_model.parameters())
-        rounded_params = num_params/1e9
-        print(f"Total number of parameters (from HF model): {rounded_params}B")
+        rounded_params = num_params / 1e9
+        print(f"Total number of parameters (from HF model): {rounded_params}B params")
         if rounded_params < 20:
-            raise Exception(f"Model below 20B minimum : {rounded_params}B")
-
+            raise Exception(f"Model below 20B minimum : {rounded_params}B params")
 
         if use_lora:
             lora_adapter = f"{request.repo_namespace}/{request.repo_name}"

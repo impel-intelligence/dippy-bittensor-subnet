@@ -13,6 +13,8 @@ from scoring.common import (
 import os
 
 MAX_NUM_SEQS = 16
+COHERENCE_THRESHOLD = 0.95
+
 
 
 def get_inference_score(request: EvaluateModelRequest, use_lora: bool = False):
@@ -25,34 +27,41 @@ def get_inference_score(request: EvaluateModelRequest, use_lora: bool = False):
     print(f"Active GPU: {torch.cuda.get_device_name(0)}")
     print(f"Repo ID: {repo_id}")
 
-    # Option 2: Using torch.cuda
-    torch.cuda.set_device(0)  # Only use first GPU
-
-    print(f"Using CUDA device: {torch.cuda.current_device()}")
-    print(f"Active GPU: {torch.cuda.get_device_name(0)}")
-
     for i in range(torch.cuda.device_count()):
         print(f"debug_cuda_devices_available : {torch.cuda.get_device_properties(i).name}")
 
     if use_lora:
         repo_id = DEFAULT_LORA_BASE
         print(f"Loading lora given base model {repo_id}")
-    model = LLM(
-        model=repo_id,
-        tensor_parallel_size=torch.cuda.device_count(),
-        max_num_seqs=MAX_NUM_SEQS,
-        max_model_len=MAX_SEQ_LEN_COHERENCE_SCORE,
-        download_dir=MODEL_CACHE_DIR,
-        enable_lora=use_lora,
-        max_lora_rank=256,
-    )
+
+    model_path = repo_id
+    if os.environ.get("USE_MODEL_DIR", "0") == "1":
+        model_path = "/app/model_dir"
+    if use_lora:
+        model = LLM(
+            model=model_path,
+            tensor_parallel_size=torch.cuda.device_count(),
+            max_num_seqs=MAX_NUM_SEQS,
+            max_model_len=MAX_SEQ_LEN_COHERENCE_SCORE,
+            download_dir=MODEL_CACHE_DIR,
+            enable_lora=use_lora,
+            max_lora_rank=256,
+        )
+    else:
+        model = LLM(
+            model=model_path,
+            tensor_parallel_size=torch.cuda.device_count(),
+            max_num_seqs=MAX_NUM_SEQS,
+            max_model_len=MAX_SEQ_LEN_COHERENCE_SCORE,
+            download_dir=MODEL_CACHE_DIR,
+        )
+
     print(f"loaded model {repo_id} with use_lora {use_lora}")
     coherence_result = {}
-    coherence_result = get_coherence_score(request, model, verbose=False)
-
     judge_result = {}
+    coherence_result = {"coherence_score" : 1}    
     judge_result = get_judge_score(request, model, verbose=False, use_lora=use_lora)
-    judge_result = {"judge_score": judge_result.get("judge_score",{}).get("win_rate", 0)}
+    judge_result = {"judge_score": judge_result.get("judge_score", {}).get("win_rate", 0)}
 
     inference_result = coherence_result | judge_result
 

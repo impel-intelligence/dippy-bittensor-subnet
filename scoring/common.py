@@ -1,6 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel
-import json
+import json, random
 
 # Constants
 MAX_GENERATION_LEEWAY = 0.5  # should be between 0 and 1. This is the percentage of tokens that the model can generate more than the last user message
@@ -32,8 +32,10 @@ SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
 COHERENCE_BATCH_SIZE = 16
 COHERENCE_MAX_TOKENS = 1024
-COHERENCE_NUM_EVALS = 256
-COHERENCE_EVAL_MODEL = "openai/gpt-4o-2024-11-20"
+# COHERENCE_NUM_EVALS = 256
+COHERENCE_NUM_EVALS = 128
+# COHERENCE_EVAL_MODEL = "openai/gpt-4o-2024-11-20"
+COHERENCE_EVAL_MODEL = "openai/gpt-4o-mini-2024-07-18"
 
 DATASET_DIR = "evalsets"
 MODEL_CACHE_DIR = "./model_cache_dir"
@@ -72,8 +74,54 @@ chat_template_mappings = {
 }
 
 
-def stringify_convo_from_messages(dict_list):
+SPECIAL_TOKENS = [
+    "<unk>",
+    "<s>",
+    "</s>",
+    "[INST]",
+    "[/INST]",
+    "[AVAILABLE_TOOLS]",
+    "[/AVAILABLE_TOOLS]",
+    "[TOOL_RESULTS]",
+    "[/TOOL_RESULTS]",
+    "[TOOL_CALLS]",
+    "[IMG]",
+    "<pad>",
+    "[IMG_BREAK]",
+    "[IMG_END]",
+    "[PREFIX]",
+    "[MIDDLE]",
+    "[SUFFIX]",
+    "[SYSTEM_PROMPT]",
+    "[/SYSTEM_PROMPT]",
+    "[TOOL_CONTENT]",
+    "<|im_start|>",
+    "<|im_end|>",
+    "<|object_ref_start|>",
+    "<|object_ref_end|>",
+    "<|box_start|>",
+    "<|box_end|>",
+    "<|quad_start|>",
+    "<|quad_end|>",
+    "<|vision_start|>",
+    "<|vision_end|>",
+    "<|vision_pad|>",
+    "<|image_pad|>",
+    "<|video_pad|>",
+    "<start_of_turn>",
+    "<end_of_turn>",
+]
+
+
+def stringify_convo_from_messages(dict_list, truncate: bool = True):
     result = []
+
+    # If conversation is longer than 12 messages, truncate earlier messages
+    if len(dict_list) > 12 and truncate:
+        skip_count = random.randint(6, 8)
+        result.append(f"[Conversation continued from step {skip_count}...]")
+        dict_list = dict_list[skip_count:]
+
     for i, item in enumerate(dict_list):
         if item["role"] == "system":
             result.append(f"System Prompt: {item['content']}")
@@ -86,6 +134,6 @@ def stringify_convo_from_messages(dict_list):
 
 def parse_json_safely(json_str: str) -> dict:
     try:
-        return json.loads(json_str)
+        return (json.loads(json_str), json_str)
     except:
-        return {}
+        return ({}, json_str)
