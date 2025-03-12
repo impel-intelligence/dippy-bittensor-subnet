@@ -41,7 +41,7 @@ from shlex import split
 
 import constants
 from common.data import ModelMetadata, ModelId
-from common.local_metadata import LocalMetadata
+from utilities.local_metadata import LocalMetadata
 from huggingface_hub import get_safetensors_metadata
 from common.scores import Scores, StatusEnum
 import traceback
