@@ -5,8 +5,8 @@ import os
 from typing import Any, Dict, List
 from transformers import AutoTokenizer
 from torch.utils.data import Dataset
-import tiktoken
 from datetime import datetime, timezone
+from scoring.common import SPECIAL_TOKENS
 
 DATASET_CACHE_DIR = "evalsets"
 hf_token = os.environ.get("HF_TOKEN")
@@ -24,14 +24,22 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
         partial_data.extend(partition_data)
     return partial_data
 
-
 import requests
 
-DATASET_URL = "https://dataset-sn11.dippy-bittensor-subnet.com/dataset"
+# DATASET_URL = "https://dataset-sn11.dippy-bittensor-subnet.com/dataset"
+DATASET_URL = "http://172.179.94.58/dataset"
+BACKUP_URLS = [
+'http://172.179.94.58/dataset',
+'http://172.179.94.58/dataset',
+'http://172.179.94.58/dataset',
+'http://172.179.94.58/dataset',
+'https://dataset-sn11.dippy-bittensor-subnet.com/dataset',
+'http://172.179.94.58/dataset',
+'https://temp-miner-dataset-sn11.dippy-bittensor-subnet.com/dataset'
+]
 DATASET_API_JWT = os.environ.get("DATASET_API_JWT", "dippy")
 
 DEFAULT_EPOCH_DATE = "20241201"
-
 
 
 """
@@ -39,19 +47,45 @@ In the case of requiring multiple fetches to the dataset api:
 It would be more efficient to save a single API result to json and load accordingly.
 
 """
-def get_latest_from_set(use_file=False):
-    
-    if use_file:
-        with open('path/to/cached/file.json', 'r') as f:
+
+
+def get_latest_from_set(filepath: str=""):
+    if len(filepath) > 0:
+        with open(filepath, "r") as f:
             data = json.load(f)
             return data
+            
     current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
-    url = f"{DATASET_URL}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}"
-
-    response = requests.get(url, headers={"Authorization": f"Bearer {DATASET_API_JWT}"})
-    response.raise_for_status()  # Raise an error for bad responses
-    data = response.json().get("all_convos", [])
-    return data
+    
+    # Try main URL first
+    url = f"{DATASET_URL}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}&limit=2048"
+    all_errors = []
+    try:
+        response = requests.get(url, headers={"Authorization": f"Bearer {DATASET_API_JWT}"})
+        response.raise_for_status()
+        data = response.json().get("all_convos", [])
+        return data
+    except Exception as main_error:
+        error_msg = f"Main URL failed: {str(main_error)}"
+        print(error_msg)
+        all_errors.append(error_msg)
+        
+        # Try backup URLs in sequence
+        for backup_url in BACKUP_URLS:
+            try:
+                url = f"{backup_url}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}"
+                response = requests.get(url, headers={"Authorization": f"Bearer {DATASET_API_JWT}"})
+                response.raise_for_status()
+                data = response.json().get("all_convos", [])
+                return data
+            except Exception as backup_error:
+                error_msg = f"Backup URL {backup_url} failed: {str(backup_error)}"
+                print(error_msg)
+                all_errors.append(error_msg)
+                continue
+        
+        # If all URLs fail, raise an exception with all collected errors
+        raise Exception("\n".join(all_errors))
 
 
 def get_latest_from_file(filter: str = "both", filename: str = "/tmp/dataset.json"):
@@ -98,7 +132,6 @@ class StreamedSyntheticDataset(Dataset):
         self._tokenizer = tokenizer
 
     def process_data(self, data, max_input_len):
-        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")  # to get approx token count
         converted_dataset = []
         for data_point in data:
             system_prompt = data_point["system_prompt"]
@@ -107,11 +140,15 @@ class StreamedSyntheticDataset(Dataset):
             input_len_so_far = 0
             limit_reached = False
             for chat_message in data_point["messages"]:
-                input_len_so_far += len(encoding.encode(chat_message["content"]))
                 if input_len_so_far > max_input_len:
                     limit_reached = True
                     break
-
+                # Remove special tokens from message content
+                content = chat_message["content"]
+                for special_token in SPECIAL_TOKENS:
+                    content = content.replace(special_token, "")
+                chat_message["content"] = content
+                input_len_so_far += len(content)
                 entry = {
                     "role": chat_message["role"],
                     "content": chat_message["content"],
@@ -596,60 +633,71 @@ class PersonaHubDataset(Dataset):
 
 
 class StreamedSyntheticPartialDataset(Dataset):
-    def __init__(self, max_input_len: int, cut_message_chain_early: float = 0.5):
+    def __init__(self, cut_message_chain_early: float = 0.5, max_messages: int = 6, max_tokens: int = 8192):
         try:
             data = get_latest_from_set()
         except Exception as e:
             print(f"error loading dataset {e}")
             raise e
-        self.dataset = self.process_data(data, max_input_len)
+        self._cut_message_chain_early = cut_message_chain_early
+        self.max_messages = max_messages
+        self.max_tokens = max_tokens
+        self.dataset = self.process_data(data)
         current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
         self.eval_period = f"{DEFAULT_EPOCH_DATE} to {current_date}"
 
         self._chat_template = None
         self._tokenizer = None
         self._last_sampled_indices = None
-        self._cut_message_chain_early = cut_message_chain_early
 
     def set_chat_template_params(self, template_path: str, tokenizer: AutoTokenizer):
         self._chat_template = jinja2.Template(open(template_path).read())
         self._tokenizer = tokenizer
 
-    def process_data(self, data, max_input_len):
-        encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")  # to get approx token count
+    def process_data(self, data):
         converted_dataset = []
         for data_point in data:
             system_prompt = data_point["system_prompt"]
             messages = [{"role": "system", "content": system_prompt}]
-            # get index of the last message from the chatbot
-            input_len_so_far = 0
-            limit_reached = False
+            # Append all chat messages to the conversation
             for chat_message in data_point["messages"]:
-                input_len_so_far += len(encoding.encode(chat_message["content"]))
-                if input_len_so_far > max_input_len:
-                    limit_reached = True
-                    break
-
+                content = chat_message["content"]
+                for special_token in SPECIAL_TOKENS:
+                    content = content.replace(special_token, "")
+                chat_message["content"] = content
                 entry = {
                     "role": chat_message["role"],
                     "content": chat_message["content"],
                 }
                 messages.append(entry)
-            if limit_reached:
-                continue
-
+            # Pop the last message as the character's response
             character_response = messages.pop()["content"]
-            last_user_message = next((msg["content"] for msg in reversed(messages) if msg["role"] == "user"), None)
+
+            # Determine allowed length (up to max_messages)
+            allowed_len = min(len(messages), self.max_messages)
+            # Apply early cut logic during processing instead of __getitem__
+            if random.random() < self._cut_message_chain_early:
+                # Choose a random cutoff between at least half of allowed_len and allowed_len
+                min_cut = max(1, allowed_len // 2)
+                cutoff = random.randint(min_cut, allowed_len)
+            else:
+                cutoff = allowed_len
+            truncated_messages = messages[:cutoff]
+
+            # Find the last user message in the truncated chain
+            last_user_message = next(
+                (msg["content"] for msg in reversed(truncated_messages) if msg["role"] == "user"),
+                None,
+            )
             if last_user_message is None:
                 continue
             converted_dataset.append(
                 {
-                    "messages": messages,
+                    "messages": truncated_messages,
                     "last_user_message": last_user_message,  # get the last user message
                     "character_response": character_response,
                 }
             )
-
         return converted_dataset
 
     def __len__(self):
@@ -661,27 +709,14 @@ class StreamedSyntheticPartialDataset(Dataset):
         if self._tokenizer is None:
             raise ValueError("Tokenizer is not set. Please set the tokenizer before generating chat.")
 
-        full_messages = self.dataset[idx]["messages"]
-        if len(full_messages) < 1:
+        # Use the pre-processed message chain that was already truncated via process_data()
+        messages_to_render = self.dataset[idx]["messages"]
+
+        if len(messages_to_render) < 1:
             raise ValueError("empty messages")
-        for m in full_messages:
+        for m in messages_to_render:
             if len(m["content"]) < 1:
                 raise ValueError("empty message content")
-
-        # Determine whether to apply early cut on a per-item basis (e.g., 50% chance)
-        if random.random() < self._cut_message_chain_early:
-            # Find the last message with role 'user'
-            last_user_index = None
-            for i in range(len(full_messages) - 1, -1, -1):
-                if full_messages[i].get("role") == "user":
-                    last_user_index = i
-                    break
-            if last_user_index is None:
-                raise ValueError("No user message found in the conversation for early cut.")
-            truncated_messages = full_messages[: last_user_index + 1]
-            messages_to_render = truncated_messages
-        else:
-            messages_to_render = full_messages
 
         rendered = self._chat_template.render(
             bos_token=self._tokenizer.bos_token,
@@ -697,12 +732,10 @@ class StreamedSyntheticPartialDataset(Dataset):
         if self._tokenizer.bos_token is not None and not rendered.startswith(self._tokenizer.bos_token):
             rendered = f"{self._tokenizer.bos_token}{rendered}"
 
-        # The next assistant message is stored as 'character_response'
         next_assistant = f"{self.dataset[idx]['character_response']}{self._tokenizer.eos_token}"
-        # Return both the rendered message history and original message history along with the next assistant message
         return (rendered, messages_to_render, next_assistant)
 
-    def sample_dataset(self, n: int):
+    def sample_dataset(self, n: int, messages_limit: int = 100):
         # get indices of the dataset
         indices = list(range(len(self.dataset)))
         random.shuffle(indices)
@@ -713,6 +746,15 @@ class StreamedSyntheticPartialDataset(Dataset):
         for i in indices:
             try:
                 sample_data = self[i]
+                if len(sample_data[1]) > messages_limit:
+                    raise ValueError(f"Too many messages ({len(sample_data[1])} > {messages_limit})")
+                
+                # Check token count against max_tokens limit
+                if self._tokenizer is not None:
+                    token_count = len(self._tokenizer.encode(sample_data[0]))
+                    if token_count > self.max_tokens:
+                        raise ValueError(f"Too many tokens ({token_count} > {self.max_tokens})")
+
                 sampled_data.append(sample_data)
                 valid_indices.append(i)
             except Exception as e:

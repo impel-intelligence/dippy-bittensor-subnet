@@ -102,6 +102,9 @@ class Scores(BaseModel):
         self.total_score = total_score
         return total_score
 
+    def calculate_new_total_score(self, adjust_coherence: bool = False) -> float:
+        return self.judge_score
+
 
 def main():
     import random

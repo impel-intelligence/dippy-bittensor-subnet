@@ -1,7 +1,7 @@
 setuptools
 torch >= 2.3.1
 tqdm
-vllm==0.6.6
+vllm >= 0.7.3
 pydantic >= 2.0
 accelerate
 bitsandbytes == 0.44.1

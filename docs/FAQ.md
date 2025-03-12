@@ -89,7 +89,7 @@ In the case that there seems to be an issue with a miner submitted model that ma
 ## How can I check the detailed status of my model?
 Assuming that you know your model submission parameters, you can use the following curl request for reference:
 ```
-curl -X GET "https://dippy-bittensor-subnet.com/model_submission_details?repo_namespace=my-org&repo_name=my-model&chat_template_type=chatml&hash=12345678&competition_id=d1"
+curl -X GET "https://dippy-bittensor-subnet.com/model_submission_details?repo_namespace=my-org&repo_name=my-model&chat_template_type=chatml&hash=12345678&competition_id=d1&hotkey=your_hotkey"
 ```
 
 ## I have a specific question about my miner. Where can I get answers?
@@ -121,3 +121,8 @@ As of 2025 Feb 16, there is a temporary dataset API for miners available at http
 Note that this API may experience intermittent downtime as it is a publicly accessible resource 
 
 Regarding the dataset API for validators: note that there may occassionally be network issues that can interfere with scoring. The current system will automatically purge entries related to these errors and requeue accordingly. Note that this is a temporary solution and is subject to change and improvements over time.
+
+## How does this subnet manage duplicate or otherwise copied entries?
+There are multiple protections against this:
+1. Miners must submit a model associated with their hotkey as part of the data committed to the bittensor network
+2. A hash derived from the safetensors files of the submitted model 
