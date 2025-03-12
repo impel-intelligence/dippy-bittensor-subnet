@@ -24,18 +24,17 @@ def prepare_from_hf_dataset(dataset_name: str, partitions: List[str]):
         partial_data.extend(partition_data)
     return partial_data
 
-
 import requests
 
 # DATASET_URL = "https://dataset-sn11.dippy-bittensor-subnet.com/dataset"
-DATASET_URL = "http://34.117.133.43/dataset"
+DATASET_URL = "http://172.179.94.58/dataset"
 BACKUP_URLS = [
-'http://34.117.133.43/dataset',
-'http://34.117.133.43/dataset',
-'http://34.117.133.43/dataset',
-'http://34.117.133.43/dataset',
+'http://172.179.94.58/dataset',
+'http://172.179.94.58/dataset',
+'http://172.179.94.58/dataset',
+'http://172.179.94.58/dataset',
 'https://dataset-sn11.dippy-bittensor-subnet.com/dataset',
-'http://34.117.133.43/dataset',
+'http://172.179.94.58/dataset',
 'https://temp-miner-dataset-sn11.dippy-bittensor-subnet.com/dataset'
 ]
 DATASET_API_JWT = os.environ.get("DATASET_API_JWT", "dippy")
@@ -59,7 +58,7 @@ def get_latest_from_set(filepath: str=""):
     current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
     
     # Try main URL first
-    url = f"{DATASET_URL}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}"
+    url = f"{DATASET_URL}?start_date={DEFAULT_EPOCH_DATE}&end_date={current_date}&limit=2048"
     all_errors = []
     try:
         response = requests.get(url, headers={"Authorization": f"Bearer {DATASET_API_JWT}"})
@@ -634,7 +633,7 @@ class PersonaHubDataset(Dataset):
 
 
 class StreamedSyntheticPartialDataset(Dataset):
-    def __init__(self, cut_message_chain_early: float = 0.5, max_messages: int = 6):
+    def __init__(self, cut_message_chain_early: float = 0.5, max_messages: int = 6, max_tokens: int = 8192):
         try:
             data = get_latest_from_set()
         except Exception as e:
@@ -642,6 +641,7 @@ class StreamedSyntheticPartialDataset(Dataset):
             raise e
         self._cut_message_chain_early = cut_message_chain_early
         self.max_messages = max_messages
+        self.max_tokens = max_tokens
         self.dataset = self.process_data(data)
         current_date = datetime.now(timezone.utc).strftime("%Y%m%d")
         self.eval_period = f"{DEFAULT_EPOCH_DATE} to {current_date}"
@@ -748,6 +748,12 @@ class StreamedSyntheticPartialDataset(Dataset):
                 sample_data = self[i]
                 if len(sample_data[1]) > messages_limit:
                     raise ValueError(f"Too many messages ({len(sample_data[1])} > {messages_limit})")
+                
+                # Check token count against max_tokens limit
+                if self._tokenizer is not None:
+                    token_count = len(self._tokenizer.encode(sample_data[0]))
+                    if token_count > self.max_tokens:
+                        raise ValueError(f"Too many tokens ({token_count} > {self.max_tokens})")
 
                 sampled_data.append(sample_data)
                 valid_indices.append(i)

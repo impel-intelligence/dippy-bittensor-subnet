@@ -185,16 +185,9 @@ def _evaluate_model(
         inference_response = evaluator.inference_score(request)
         if isinstance(inference_response, RunError):
             raise Exception(inference_response.error)
-        coherence_score = inference_response.coherence_score
+        coherence_score = 1
         judge_score = inference_response.judge_score
 
-        if coherence_score < 0.95:
-            supabaser.update_leaderboard_status(
-                request.hash,
-                StatusEnum.COMPLETED,
-                f"Incoherent model submitted given score {coherence_score} which fails to meet threshold 0.95",
-            )
-            return None
         upsert_row_supabase(
             {
                 "hash": request.hash,
@@ -208,23 +201,10 @@ def _evaluate_model(
         supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, error_string)
         raise RuntimeError(error_string)
 
-    try:
-        eval_score_result = evaluator.eval_score(request)
-        if isinstance(eval_score_result, RunError):
-            raise Exception(eval_score_result.error)
-    except Exception as e:
-        error_string = f"eval_score_error job with message: {e}"
-        supabaser.update_leaderboard_status(
-            request.hash,
-            StatusEnum.FAILED,
-            error_string,
-        )
-        raise RuntimeError(error_string)
-
-    eval_score = eval_score_result.eval_score
-    latency_score = eval_score_result.latency_score
+    eval_score = 0
+    latency_score = 0
     model_size_score = 0
-    creativity_score = eval_score_result.creativity_score
+    creativity_score = 0
 
     if eval_score is None or latency_score is None or model_size_score is None or judge_score is None:
         raise HTTPException(
@@ -233,22 +213,13 @@ def _evaluate_model(
         )
 
     full_score_data = Scores()
-    full_score_data.qualitative_score = eval_score
-    full_score_data.llm_size_score = model_size_score
-    full_score_data.coherence_score = coherence_score
-    full_score_data.creativity_score = creativity_score
     full_score_data.judge_score = judge_score
-    full_score_data.latency_score = latency_score
 
     try:
         upsert_row_supabase(
             {
                 "hash": request.hash,
-                "model_size_score": full_score_data.llm_size_score,
-                "qualitative_score": full_score_data.qualitative_score,
-                "creativity_score": full_score_data.creativity_score,
-                "latency_score": full_score_data.latency_score,
-                "total_score": full_score_data.calculate_total_score(),
+                "total_score": full_score_data.judge_score,
                 "status": StatusEnum.COMPLETED,
                 "notes": f"scoring_status_complete",
             }
@@ -307,7 +278,7 @@ def hash_check(request: EvaluateModelRequest) -> bool:
 
 
 """
-curl -X GET "http://URL.com/model_submission_details?repo_namespace=my-org&repo_name=my-model&chat_template_type=chatml&hash=12345678&competition_id=comp-1"
+curl -X GET "http://URL.com/model_submission_details?repo_namespace=my-org&repo_name=my-model&chat_template_type=chatml&hash=12345678&competition_id=comp-1&hotkey=xxxx"
 Used by validators to get the model details
 """
 
@@ -331,7 +302,7 @@ def update_completed(new_entry, failure_notes):
 
 
 INVALID_BLOCK_START = 3840700
-INVALID_BLOCK_END = 3933300
+INVALID_BLOCK_END = 5112345
 
 def upsert_row_supabase(row):
     app.state.supabase_client.table("leaderboard").upsert(row).execute()

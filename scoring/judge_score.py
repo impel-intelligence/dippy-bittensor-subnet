@@ -277,7 +277,7 @@ def collect_judge_scores(scores: List):
         return None
 
 
-def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = False, verbose=False):
+def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = False, verbose=False, batch_size: int=8):
     try:
         start_time = datetime.datetime.now()
 
@@ -291,8 +291,7 @@ def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = 
         print(f"loaded dataset with chat template {request.chat_template_type}")
 
         # Sample conversations
-        conversations = judge_dataset.sample_dataset(JUDGE_NUM_EVALS, messages_limit=7)
-        # conversations = judge_dataset.sample_dataset(16)
+        conversations = judge_dataset.sample_dataset(JUDGE_NUM_EVALS, messages_limit=6)
 
         # Prepare batch prompts for vLLM
         formatted_messages = []
@@ -307,6 +306,8 @@ def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = 
         # Generate all responses in batch
         print(f"Starting batch generation at {datetime.datetime.now()}")
         model_sampling_params = chat_params.get(request.chat_template_type, default_sample_params)
+        print(f"Model sampling Params: {model_sampling_params}")
+        print(f"Formatted messages: {len(formatted_messages)}")
 
         lora_request = None
         if use_lora:
@@ -338,29 +339,42 @@ def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = 
             original_conversation.append({"role": "assistant", "content": last_assistant_responses[idx]})
             original_conversations.append(original_conversation)
 
-        # Evaluate conversations
-        print(f"Completed text generation. Now starting judge evaluation at {datetime.datetime.now()}")
+        # Evaluate conversations in batches
+        print(f"Completed text generation for {len(generated_conversations)} generated_conversations. Now starting judge evaluation at {datetime.datetime.now()}")
         all_judge_scores = []
         exceptions = 0
-
-        for idx in range(len(generated_conversations)):
-            try:
-                if idx == len(generated_conversations) // 2:
-                    print(f"Reached halfway mark of judging at {datetime.datetime.now()}")
-
-                judge_score = judge_evaluator(
-                    generated_conversations[idx], original_conversations[idx], verbose=verbose
-                )
-                if judge_score is None:
-                    raise Exception("could not parse judge score")
-                all_judge_scores.append(judge_score)
-
-                if verbose:
-                    print(f"completed round of judging with score {judge_score}")
-            except Exception as e:
-                if verbose:
-                    print(f"Error in judge evaluation: {e}")
-                exceptions += 1
+        
+        # Process conversations in batches
+        for batch_start in range(0, len(generated_conversations), batch_size):
+            batch_end = min(batch_start + batch_size, len(generated_conversations))
+            print(f"Processing batch {batch_start//batch_size + 1} of {(len(generated_conversations) + batch_size - 1)//batch_size} at {datetime.datetime.now()}")
+            
+            batch_results = []
+            batch_exceptions = 0
+            
+            # Process each conversation in the current batch
+            for idx in range(batch_start, batch_end):
+                try:
+                    judge_score = judge_evaluator(
+                        generated_conversations[idx], original_conversations[idx], verbose=verbose
+                    )
+                    if judge_score is None:
+                        raise Exception("could not parse judge score")
+                    
+                    batch_results.append(judge_score)
+                    if verbose:
+                        print(f"completed evaluation {idx + 1} of {len(generated_conversations)} with score {judge_score}")
+                except Exception as e:
+                    if verbose:
+                        print(f"Error in judge evaluation for conversation {idx}: {e}")
+                    batch_exceptions += 1
+            
+            # Add batch results to overall results
+            all_judge_scores.extend(batch_results)
+            exceptions += batch_exceptions
+            
+            if batch_end == len(generated_conversations) // 2:
+                print(f"Reached halfway mark of judging at {datetime.datetime.now()}")
 
         if exceptions / JUDGE_NUM_EVALS > MAX_ERROR_RATE:
             raise RuntimeError(f"judge score failed with {exceptions} exceptions")
@@ -373,7 +387,7 @@ def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = 
             dump_conversations({"judge_score": judge_score, "generated_conversations": generated_conversations})
 
         end_time = datetime.datetime.now()
-        print(f"Completed judge score evaluation at {end_time}")
+        print(f"Completed judge score evaluation at {end_time} with score {judge_score}")
         print(f"Total time elapsed: {end_time - start_time}")
 
         return {

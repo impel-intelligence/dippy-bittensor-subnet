@@ -5,7 +5,7 @@
 
 Please check our [Launch Tweet](https://twitter.com/angad_ai/status/1788993280002175415) for our vision of creating the world's best open-source roleplay LLM.*
 
-[![DIPPY](/assests/banner.png)](https://dippy.ai)
+[![DIPPY](/assets/banner.png)](https://dippy.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
 ---
@@ -35,7 +35,7 @@ The Dippy Roleplay subnet on Bittensor aims to create the world's best open-sour
 
 Current SOTA LLMs (Claude, OpenAI etc.) are designed for the assistant use case and lack the empathetic qualities necessary for companionship. While some companies (like Character AI and Inflection) have developed closed-source roleplay LLMs, the open-source alternatives lag significantly behind in performance. 
 
-![DIPPY](/assests/comp.png)
+![DIPPY](/assets/comp.png)
 
 ## Roadmap
 
@@ -57,7 +57,7 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 
 ## Overview of Miner and Validator Functionality
 
-![overview](/assests/architecturenew.png)
+![overview](/assets/architecturenew.png)
 
 **Miners** would use existing frameworks, fine tuning techniques, or MergeKit, to train, fine tune, or merge models to create a unique roleplay LLM. These models would be submitted to a shared Hugging Face pool. 
 
@@ -105,61 +105,7 @@ python neurons/validator.py \
 
 Please note that this validator will call the model validation service hosted by the dippy subnet owners. If you wish to run the model validation service locally, please follow the instructions below.
 
-### Running the model evaluation API (Optional, not recommended)
 
-**Note**: Currently (Jan 17 2025) there are some issues with the local evaluation api. We recommend using the remote validation api temporarily.
-
-Starting a validator using your local validator API requires starting validator with `--use-local-validation-api` flag. 
-Additionally, a model queue is required to push models to the validation api.
-
-**Note**: Validator API needs to be installed in a different venv than validator due to `pydantic` version conflict. 
-
-
-### Requirements
-- Python 3.9+
-- Linux
-
-#### Setup
-
-Install Git Lfs if not installed.
-```bash
-curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
-sudo apt-get install git-lfs
-```
-
-To start, clone the repository and `cd` into it:
-```bash
-git clone https://github.com/impel-intelligence/dippy-bittensor-subnet.git
-cd dippy-bittensor-subnet
-python3 -m venv model_validation_venv
-source model_validation_venv/bin/activate
-model_validation_venv/bin/pip install -e . --no-deps
-model_validation_venv/bin/pip install -r requirements.api.txt
-```
-
-#### Run model validation API service (optional, not recommended)
-(Note: there are currently breaking changes that pose challenges to running a local validation API service. Any tasks that require the env vars `ADMIN_KEY` applies here)
-```bash
-cd dippy_validation_api
-chmod +x start_validation_service.sh
-./start_validation_service.sh
-```
-
-#### Stop model validation API service
-```bash
-chmod +x kill_validation_api.sh
-./kill_validation_api.sh
-```
-
-#### Running the validator with your own validation API service running locally (optional, not recommended)
-```bash
-# Make a separate venv for the validator because of pydantic version conflict
-python -m venv validator_venv
-validator_venv/bin/pip install -e .
-validator_venv/bin/python neurons/validator.py --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME --use-local-validation-api
-# Run model queue to push models to validation api to be evaluated
-validator_venv/bin/python neurons/model_queue.py --use-local-validation-api
-```
 
 ## Subnet Incentive Mechanism
 
@@ -187,7 +133,6 @@ Evaluated against datasets, a model that generates similiar resposne to groundtr
 ### Post Evaluation 
 After initial evaluation, a model will be selected for post evaluation after some time. The current process for this is a proprietary solution that is based on judging criteria from SOTA model benchmarking approaches. In the future, the details for this will be available on https://research.dippy.ai
 
-
 ## Acknowledgement
 
 Our codebase was originally built upon [Nous Research's](https://github.com/NousResearch/finetuning-subnet) and [MyShell's](https://github.com/myshell-ai/MyShell-TTS-Subnet?tab=readme-ov-file) Subnets. At the time of this writing, we have deviated significantly from these subnet architectures, providing more efficiency and capability.
@@ -212,8 +157,8 @@ The Dippy Bittensor subnet is released under the [MIT License](./LICENSE).
   - `data.py` - Data structures and model definitions
   - `scores.py` - Scoring system implementation
 
-### 3. Validation API
-- `dippy_validation_api/` - API for model validation. Only validators and subnet operators require usage of this API. Miners do not need to set this up in 99% of cases
+### 3. Worker API (for internal use)
+- `wokrer_api/` - API for model validation. Only validators and subnet operators require usage of this API. Miners do not need to set this up in 99% of cases
 
 ### 4. Utilities
 - `utilities/` - Common utility functions
@@ -229,11 +174,11 @@ The Dippy Bittensor subnet is released under the [MIT License](./LICENSE).
 ## Configuration Files
 - `pyproject.toml` - Project metadata and dependencies
 - `requirements.txt` - Main project dependencies
-- `requirements.api.txt` - Validation API dependencies
+- `requirements.api.txt` - Worker API dependencies
 - `requirements.miner.txt` - Miner-specific dependencies
 - `requirements.eval.txt` - Evaluation-specific dependencies used for docker based evaluation
 - `min_compute.yml` - Minimum compute requirements specification
 
 ## Docker Configuration
 - `evaluator.Dockerfile` - Docker configuration for evaluator (scoring worker)
-- `dippy_validation_api/vapi.Dockerfile` - Docker configuration for validation API
+- `worker_api/vapi.Dockerfile` - Docker configuration for worker API

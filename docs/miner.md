@@ -76,7 +76,7 @@ To do so, ensure that you have installed all the dependencies for a validator an
 python neurons/validator.py --wallet.name <your-wallet> --wallet.hotkey <your-hotkey> --offline --immediate
 ```
 This command will run the validation run step immediately. Note that this will run indefinitely and in rapid succession
-## Datasets Used
+## Datasets Used (deprecated)
 https://huggingface.co/datasets/DippyAI/dippy_synthetic_dataset_v1
 This dataset is an archive of previously generated synthetic data. The current evaluation samples from both this and a more recently generated stream of synthetic data.
 

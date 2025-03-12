@@ -1,18 +1,28 @@
-import json
-import tarfile
-import io
-import os
-import time
+import argparse
 import copy
 import docker
-from pydantic import BaseModel
+import io
+import json
+import math
+import os
+import tarfile
+import time
+from datetime import datetime
+from pathlib import Path
 from typing import Optional, Union, Dict, Any
 
+from pydantic import BaseModel
+
+from common.scores import Scores
 from scoring.common import EvaluateModelRequest
 from utilities.event_logger import EventLogger
-from common.scores import Scores
 
+# Constants
 DEFAULT_IMAGE_NAME = "grader:latest"
+DEFAULT_HOME_DIR = os.environ.get("EVALUATOR_HOME_DIR", "/home/new_prod_user/dippy-bittensor-subnet")
+DEFAULT_MODEL_CACHE_DIR = os.environ.get("EVALUATOR_MODEL_CACHE_DIR", "/workdir/model_cache_dir")
+STEEPNESS = 5
+THRESHOLD = 0.2
 
 DEFAULT_HOME_DIR = os.environ.get("EVALUATOR_HOME_DIR", "/home/new_prod_user/dippy-bittensor-subnet")
 DEFAULT_MODEL_CACHE_DIR = os.environ.get("EVALUATOR_MODEL_CACHE_DIR", "/workdir/model_cache_dir")
@@ -92,6 +102,7 @@ class Evaluator:
             "AZURE_KEY": os.environ.get("AZURE_KEY"),
             "VLLM_WORKER_MULTIPROC_METHOD": "_",
             "PYTORCH_CUDA_ALLOC_CONF": "_",
+            "VLLM_USE_V1": "1",
             "DATASET_API_JWT": os.environ.get("DATASET_API_JWT"),
             "DATASET_API_KEY": os.environ.get("DATASET_API_KEY"),
         }
@@ -215,80 +226,94 @@ class Evaluator:
             return RunError(error=str(e))
 
 
-import math
-
-STEEPNESS = 5
-THRESHOLD = 0.2
-
-
-def calculate_c_score(initial_score, creativity_score, threshold=0.2, steepness=5):
+def calculate_c_score(initial_score, creativity_score, threshold=THRESHOLD, steepness=STEEPNESS):
     final_score = initial_score / (1 + math.exp(-steepness * (creativity_score - threshold)))
     return final_score
 
-
+"""
+python worker_api/evaluator.py --repo_namespace DippyAI --repo_name gemma-27b-reference --model_dir /optional/model/path --chat_template_type gemma2 --hash x
+"""
 # Command to manually run evaluation
-def entry():
-    # add command line arguments for the ports of the two apis
-    import argparse
-
+def cmd():
     parser = argparse.ArgumentParser(description="Run a single evaluation instance")
-    parser.add_argument("--image", type=str, default="grader:latest", help="image to use")
-    parser.add_argument("--repo_namespace", type=str, required=True, help="Repository namespace")
-    parser.add_argument("--repo_name", type=str, required=True, help="Repository name")
+    parser.add_argument("--image", type=str, default=DEFAULT_IMAGE_NAME, help="image to use")
+    parser.add_argument("--model_dir", type=str, help="Local model directory path")
+    parser.add_argument("--repo_namespace", type=str, help="Repository namespace")
+    parser.add_argument("--repo_name", type=str, help="Repository name")
     parser.add_argument("--chat_template_type", type=str, required=True, help="Chat template type")
     parser.add_argument("--hash", type=str, required=True, help="Unique hash value")
+    parser.add_argument("--output_dir", type=str, default="results", help="Directory to save results")
 
     args = parser.parse_args()
     image_name = args.image
+
+    if not args.repo_namespace or not args.repo_name:
+        raise ValueError("Must specify either model_dir or both repo_namespace and repo_name")
     req = EvaluateModelRequest(
         repo_namespace=args.repo_namespace,
-        repo_name=args.repo_name,
+        repo_name=args.repo_name, 
         chat_template_type=args.chat_template_type,
         hash=args.hash,
     )
     print(f"running {image_name} with {req}")
 
     try:
-        # evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="0")
-        evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="1")
+        
+        evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="0")
+        if args.model_dir:
+            evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="0",model_dir=args.model_dir)
 
+        start_time = time.time()
         infrence_result = evaler.inference_score(req)
+        elapsed_time = time.time() - start_time
+        
         if isinstance(infrence_result, RunError):
             raise Exception(infrence_result.error)
         print(f"infrence_result : {infrence_result}")
-
-        eval_result = evaler.eval_score(req)
-        print(f"eval_result : {eval_result}")
-        if isinstance(eval_result, RunError):
-            raise Exception(eval_result.error)
+        print(f"Time elapsed: {elapsed_time:.2f} seconds")
 
         scores_data = Scores()
-        scores_data.qualitative_score = eval_result.eval_score
-        scores_data.latency_score = eval_result.latency_score
-        scores_data.creativity_score = eval_result.creativity_score
+        scores_data.qualitative_score = 0
+        scores_data.latency_score = 0
+        scores_data.creativity_score = 0
         scores_data.llm_size_score = 0
-        scores_data.coherence_score = infrence_result.coherence_score
+        scores_data.coherence_score = 1
+        scores_data.judge_score = infrence_result.judge_score
 
-        final_eval_score = (
-            scores_data.adjusted_q_score(
-                scores_data.qualitative_score,
-                scores_data.creativity_score,
-            )
-            * 0.82
-        )
-        final_model_size_score = scores_data.llm_size_score * 0.06
-        final_latency_score = scores_data.latency_score * 0.06
 
-        total_score = final_eval_score + final_model_size_score + final_latency_score
-        print(f"final_model_size_score {final_model_size_score}")
-        print(f"final_latency_score {final_latency_score}")
-        print(f"final_eval_score {final_eval_score}")
+        total_score = scores_data.judge_score
+        
+        results = {
+            "timestamp": int(time.time()),
+            "datetime": datetime.fromtimestamp(time.time()).isoformat(),
+            "model": {
+                "chat_template_type": req.chat_template_type,
+                "hash": req.hash
+            },
+            "raw_scores": {
+                "judge_score": scores_data.judge_score
+            },
+            "elapsed_time": elapsed_time
+        }
+        
+        print(f"final_judge_score {total_score}")
         print(f"coherence score: {scores_data.coherence_score}")
         print(f"score pre coherence: {total_score}")
         print(f"total score: {scores_data.calculate_total_score()}")
+
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = int(time.time())
+        output_file = output_dir / f"{timestamp}_evaluation_results.json"
+        with open(output_file, 'w') as f:
+            json.dump(results, f, indent=2)
+        
+        print(f"\nResults written to: {output_file}")
+
     except Exception as e:
         print(e)
 
 
 if __name__ == "__main__":
-    entry()
+    cmd()

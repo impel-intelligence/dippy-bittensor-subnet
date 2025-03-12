@@ -60,7 +60,7 @@ def get_inference_score(request: EvaluateModelRequest, use_lora: bool = False):
     coherence_result = {}
     judge_result = {}
     coherence_result = {"coherence_score" : 1}    
-    judge_result = get_judge_score(request, model, verbose=False, use_lora=use_lora)
+    judge_result = get_judge_score(request, model, verbose=True, use_lora=use_lora)
     judge_result = {"judge_score": judge_result.get("judge_score", {}).get("win_rate", 0)}
 
     inference_result = coherence_result | judge_result
@@ -69,10 +69,6 @@ def get_inference_score(request: EvaluateModelRequest, use_lora: bool = False):
     print(inference_result)
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     destroy_model_parallel()
-
-    del model.llm_engine.model_executor.driver_worker
-    del model.llm_engine.model_executor
-
     del model
     gc.collect()
     torch.cuda.empty_cache()
