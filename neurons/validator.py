@@ -4,14 +4,14 @@
 import copy
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+# documentation files (the "Software"), to deal in the Software without restriction, including without limitation
 # the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
 # and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 # The above copyright notice and this permission notice shall be included in all copies or substantial portions of
 # the Software.
 
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
 # THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
@@ -70,7 +70,8 @@ from bittensor.core.metagraph import Metagraph
 from bittensor.core.chain_data import (
     decode_account_id,
 )
-
+SUBNET_REGISTERED_UID = 74
+SUBNET_EMISSION_BURN_RATE= 0.75
 def extract_raw_data(data):
     try:
         # Navigate to the fields tuple
@@ -828,13 +829,31 @@ class Validator:
         wins, win_rate = compute_wins(miner_registry)
         sorted_uids = sorted(miner_registry.keys())
 
-        # Compute softmaxed weights based on win rate.
+        # Compute weights based on win rate
         model_weights = torch.tensor([win_rate[uid] for uid in sorted_uids], dtype=torch.float32)
 
-        # temperature = constants.temperature * self.adjusted_temperature_multipler(current_block)
-        temperature = constants.temperature
+        target_uid = SUBNET_REGISTERED_UID
+        target_weight_ratio = SUBNET_EMISSION_BURN_RATE
+        
+        try:
+            target_idx = sorted_uids.index(target_uid)
+            temperature = constants.temperature
+            
+            initial_weights = torch.softmax(model_weights / temperature, dim=0)
+            
+            # Scale down non-target weights to make room for target weight
+            initial_weights = initial_weights * (1 - target_weight_ratio)
+            
+            initial_weights[target_idx] = target_weight_ratio
+            
+            step_weights = initial_weights
+            
+        except ValueError:
+            # Leave original method in case of rollback
+            temperature = constants.temperature
+            step_weights = torch.softmax(model_weights / temperature, dim=0)
 
-        step_weights = torch.softmax(model_weights / temperature, dim=0)
+        step_weights = step_weights / step_weights.sum()
 
         # Update weights based on moving average.
         torch_metagraph = torch.from_numpy(self.metagraph.S)
