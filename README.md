@@ -33,7 +33,7 @@ Dippy is one of the world's leading AI companion apps with **1M+ users**. The ap
 
 The Dippy Roleplay subnet on Bittensor aims to create the world's best open-source roleplay LLM by leveraging the collective efforts of the open-source community. This subnet addresses the critical issue of loneliness, which affects a significant portion of the population and is linked to various mental and physical health problems. 
 
-Current SOTA LLMs (Claude, OpenAI etc.) are designed for the assistant use case and lack the empathetic qualities necessary for companionship. While some companies (like Character AI and Inflection) have developed closed-source roleplay LLMs, the open-source alternatives lag significantly behind in performance. 
+Current SOTA LLMs (Claude, OpenAI etc.) are designed for the assistant use case and lack the empathetic qualities necessary for companionship. While some companies (like Character AI and Inflection) have developed closed-source roleplay LLMs, the open-source alternatives lag significantly behind in performance. Furthermore, recent developments in the LLM space have prioritized objective reasoning capabilities, which only bring minor improvements to the role play space. Thus, the development of roleplay oriented models becomes even more important in the open source world.
 
 ![DIPPY](/assets/comp.png)
 
@@ -52,7 +52,7 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 - [x] Add support for larger parameter models for up to 34B
 
 **Phase 3:** 
-- [ ] Expand the state of the art in roleplay LLMs through continuous iteration and data collection
+- [x] Expand the state of the art in roleplay LLMs through continuous iteration and data collection
 - [ ] Redefine definition of SOTA for roleplay LLMs through integrating Dippy app data
 
 ## Overview of Miner and Validator Functionality
@@ -61,7 +61,7 @@ Given the complexity of creating a state of the art roleplay LLM, we plan to div
 
 **Miners** would use existing frameworks, fine tuning techniques, or MergeKit, to train, fine tune, or merge models to create a unique roleplay LLM. These models would be submitted to a shared Hugging Face pool. 
 
-**Validators** would evaluate the and assess model performance via our protocol and rank the submissions based on various metrics (empathy, conciseness etc). We will provide a suite of 
+**Validators** would evaluate the and assess model performance via our protocol and rank the submissions based on an [open scoring format](/docs/llm_scoring.md). We will provide a suite of 
 testing and benchmarking protocols with state-of-the-art datasets.
 
 ## Running Miners and Validators
@@ -88,7 +88,7 @@ To run the evaluation, simply use the following command:
 python neurons/validator.py --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME
 ```
 
-To run auto-updating validator with PM2 (recommended):
+To run auto-updating validator with PM2 (highly recommended):
 ```bash
 pm2 start --name sn11-vali-updater --interpreter python scripts/start_validator.py -- --pm2_name sn11-vali --wallet.name WALLET_NAME --wallet.hotkey WALLET_HOT_NAME [other vali flags]
 ```
@@ -103,9 +103,7 @@ python neurons/validator.py \
 --subtensor.network local --subtensor.chain_endpoint ws://chain_endpoint
 ```
 
-Please note that this validator will call the model validation service hosted by the dippy subnet owners. If you wish to run the model validation service locally, please follow the instructions below.
-
-
+Please note that this validator will call the model worker orchestration service hosted by the dippy subnet owners. Current support for local worker orchestration is disabled at this time.
 
 ## Subnet Incentive Mechanism
 
@@ -120,18 +118,10 @@ The general structure of the incentive mechanism is as follows:
 
 
 ### Model Evaluation Criteria
-### Model Size
-A smaller model will score higher than a big model. Model size is the disk space occupied by the model repo from HF. The max model size is limited to 72GB.
+See [scoring](/docs/llm_scoring.md) for details
 
-<!-- $S_{size} = 1 - ModelSize/ MaxModelSize$ -->
-### Latency
-A faster model will score higher than a slow model.
-
-### Output Similarity
-Evaluated against datasets, a model that generates similiar resposne to groundtruth will score higher. There is an additional creativity component that utilizes the 
-
-### Post Evaluation 
-After initial evaluation, a model will be selected for post evaluation after some time. The current process for this is a proprietary solution that is based on judging criteria from SOTA model benchmarking approaches. In the future, the details for this will be available on https://research.dippy.ai
+## Subnet Token Management
+See the [subnet token doc](/docs/subnet_token.md) for details
 
 ## Acknowledgement
 
@@ -148,36 +138,27 @@ The Dippy Bittensor subnet is released under the [MIT License](./LICENSE).
 
 ### 1. Main Application
 - `neurons/` - Core neural network components
-  - `miner.py` - Mining node implementation
+  - `miner.py` - Miner code for submitting a model to the bittensor network
   - `validator.py` - Validation node implementation
-  - `model_queue.py` - Queue management for model processing
+  - `model_queue.py` - Queue management for model processing (for internal use)
 
-### 2. Model Management
-- `model/` - Model-related functionality
-  - `data.py` - Data structures and model definitions
-  - `scores.py` - Scoring system implementation
+### 2. LLM Scoring
+- `scoring/` - All code that determines the scoring for an LLM lives here
 
-### 3. Worker API (for internal use)
-- `wokrer_api/` - API for model validation. Only validators and subnet operators require usage of this API. Miners do not need to set this up in 99% of cases
-
-### 4. Utilities
+### 3. Utilities
 - `utilities/` - Common utility functions
   - `repo_details.py` - Repository management utilities
   - `validation_utils.py` - Validation helper functions
 
-### 5. Documentation
+### 4. Documentation
 - `docs/` - Project documentation
   - `miner.md` - Miner setup and usage guide
   - `validator.md` - Validator setup and usage guide
   - `FAQ.md` - Frequently asked questions
+  - `llm_scoring.md` - LLM Scoring criteria
 
-## Configuration Files
-- `pyproject.toml` - Project metadata and dependencies
-- `requirements.txt` - Main project dependencies
-- `requirements.api.txt` - Worker API dependencies
-- `requirements.miner.txt` - Miner-specific dependencies
-- `requirements.eval.txt` - Evaluation-specific dependencies used for docker based evaluation
-- `min_compute.yml` - Minimum compute requirements specification
+### 5. Worker API (for internal use)
+- `wokrer_api/` - API for model validation. Only validators and subnet operators require usage of this API. Miners do not need to set this up in 99% of cases
 
 ## Docker Configuration
 - `evaluator.Dockerfile` - Docker configuration for evaluator (scoring worker)
