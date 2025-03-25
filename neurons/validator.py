@@ -96,10 +96,8 @@ def extract_raw_data(data):
     return None
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-INVALID_BLOCK_START = 4200000
-INVALID_BLOCK_END = 4200000
-NEW_EPOCH_BLOCK = 4853456
-SCORE_RESET_BLOCK = 4853456
+
+NEW_EPOCH_BLOCK = 5207777
 TEMP_SCORE_RESET_PENALTY = 0.5
 
 
@@ -134,11 +132,6 @@ def compute_wins(
 
             score_i = miner_registry[uid_i].total_score
             score_j = miner_registry[uid_j].total_score
-
-            if block_i < SCORE_RESET_BLOCK:
-                score_i *= TEMP_SCORE_RESET_PENALTY
-            if block_j < SCORE_RESET_BLOCK:
-                score_j *= TEMP_SCORE_RESET_PENALTY
 
             wins[uid_i] += 1 if iswin(score_i, score_j, block_i, block_j) else 0
             total_matches += 1
