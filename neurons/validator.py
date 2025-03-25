@@ -607,7 +607,7 @@ class Validator:
                     bt.logging.warning(f"uid={uid} status_{_score_data.status}")
                     return
                 if _score_data.status == StatusEnum.COMPLETED:
-                    miner_registry[uid].total_score = _score_data.calculate_total_score()
+                    miner_registry[uid].total_score = _score_data.calculate_new_total_score()
                     bt.logging.warning(
                         f"uid={uid} status_complete on block {miner_registry[uid].block} : {miner_registry[uid].miner_model_id} {_score_data}"
                     )
