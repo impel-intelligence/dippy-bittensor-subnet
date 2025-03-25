@@ -42,7 +42,7 @@ from utilities.event_logger import EventLogger
 from utilities.validation_utils import regenerate_hash
 
 l = LocalMetadata(commit="x", btversion="x")
-SKIP_BLOCK = 4200000
+SKIP_BLOCK = 5207777
 
 import requests
 from huggingface_hub.utils import build_hf_headers, hf_raise_for_status
@@ -259,6 +259,7 @@ class ModelQueue:
                 model_id = ModelId.from_compressed_str(commit_data["chain_str"])
                 block = commit_data["block"]
                 if block < SKIP_BLOCK:
+                    self.logger.info(f"SKIP_ENTRY : uid: {uid} hotkey : {hotkey}")
                     continue
 
                 result = self.check_model_score(
