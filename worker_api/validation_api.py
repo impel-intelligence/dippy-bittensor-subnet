@@ -18,8 +18,8 @@ import random
 from pydantic import BaseModel
 from typing import Dict, Any
 
-from dippy_validation_api.evaluator import EvaluationScore, Evaluator, InferenceScore, RunError
-from dippy_validation_api.persistence import SupabaseState
+from worker_api.evaluator import EvaluationScore, Evaluator, InferenceScore, RunError
+from worker_api.persistence import SupabaseState
 from common.scores import StatusEnum, Scores
 from utilities.validation_utils import (
     regenerate_hash,
@@ -61,7 +61,7 @@ MAX_SEQ_LEN = (
 SAVE_LEADERBOARD_EVERY = 60  # save the leaderboard every 60 seconds
 
 
-BLOCK_RATE_LIMIT = 28800  # Every 14400 blocks = 48 hours
+BLOCK_RATE_LIMIT = 57600  # Every 57600 blocks = 192 hours
 app = FastAPI()
 supabaser = SupabaseState()
 
@@ -324,8 +324,8 @@ def update_completed(new_entry, failure_notes):
     return new_entry
 
 
-INVALID_BLOCK_START = 3840700
-INVALID_BLOCK_END = 3933300
+INVALID_BLOCK_START = 1
+INVALID_BLOCK_END = 5207777
 
 
 @app.post("/check_model")

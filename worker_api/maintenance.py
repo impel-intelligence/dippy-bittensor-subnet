@@ -1,4 +1,4 @@
-from dippy_validation_api.persistence import SupabaseState
+from worker_api.persistence import SupabaseState
 from huggingface_hub import HfApi, HfFolder
 from huggingface_hub.hf_api import HfApi, RepositoryNotFoundError
 

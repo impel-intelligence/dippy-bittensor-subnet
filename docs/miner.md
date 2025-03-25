@@ -48,12 +48,12 @@ uv pip install -e .
 export OPENROUTER_API_KEY=x
 # Build the docker image used to score locally
 docker build -f evaluator.Dockerfile -t grader:latest .
-# In the `dippy_validation_api/evaluator.py` script, there is the following line:
+# In the `worker_api/evaluator.py` script, there is the following line:
 evaler = Evaluator(image_name=image_name, trace=True, gpu_ids="0")
 # Edit the gpu_ids as needed to map to your actual GPU ids
 
 # Run evaluator
-python dippy_validation_api/evaluator.py --image grader:latest \
+python worker_api/evaluator.py --image grader:latest \
 --repo_namespace <your-repo-namespace> --repo_name <your-repo-name> \
 --chat_template_type <your-chat-template-type> --hash <your-hash>
 ```
@@ -66,7 +66,7 @@ Given that model training can be computationally expensive, we highly recommend 
 
 ### Using cached dataset
 Sometimes, when running multiple instances of evaluation, it can help to utilize a cached version of the dataset to prevent issues with rate limits.
-To do so, simply save the results of the dataset endpoint. Afterwards, you can modify the dataset URL in the scoring file to use a locally hosted API. Note that this API is _not_ the same as the `dippy_validation_api` in this project.
+To do so, simply save the results of the dataset endpoint. Afterwards, you can modify the dataset URL in the scoring file to use a locally hosted API. Note that this API is _not_ the same as the `worker_api` in this project.
 
 ## Comparing validation results
 

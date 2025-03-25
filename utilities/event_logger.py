@@ -77,7 +77,7 @@ def example():
     try:
         json_logger = EventLogger()
         # Create sample EventData instance
-        from dippy_validation_api.validation_api import EventData
+        from worker_api.validation_api import EventData
 
         event_data = EventData(
             commit="test123",

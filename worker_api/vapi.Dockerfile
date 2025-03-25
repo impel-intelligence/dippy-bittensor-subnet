@@ -20,7 +20,7 @@ COPY requirements.api.txt requirements.txt
 RUN uv pip install -r requirements.txt
 
 COPY scoring ./scoring
-COPY dippy_validation_api ./dippy_validation_api
+COPY worker_api ./worker_api
 COPY utilities ./utilities
 RUN mkdir ./template
 COPY model ./model
@@ -31,6 +31,6 @@ COPY pyproject.toml .
 COPY .git .git
 RUN uv pip install -e .
 
-COPY dippy_validation_api/validation_api.py .
+COPY worker_api/validation_api.py .
 
 CMD ["python", "validation_api.py"]

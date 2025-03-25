@@ -16,7 +16,7 @@ OPENAI_API_KEY=<your_openai_api_key>
 ```
 
 ## Steps
-1. Navigate to `dippy_validation_api` from the root of the repository.
+1. Navigate to `worker_api` from the root of the repository.
 2. Start the validation api via the script `./start_validation_service.sh`
 3. Start the model queue via the command `python neurons/model_queue.py` (modify endpoint data as needed) from repository root
 4. Run validator with commands specified to point to local validation api instance

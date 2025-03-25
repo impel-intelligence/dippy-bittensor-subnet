@@ -28,10 +28,10 @@ RUN uv pip install --system flashinfer-python -i https://flashinfer.ai/whl/cu124
 RUN uv pip install --system flash-attn --no-build-isolation
 
 # Create empty directory and file for pyproject
-RUN mkdir ./dippy_validation_api
+RUN mkdir ./worker_api
 RUN mkdir ./model_cache_dir
 
-RUN touch ./dippy_validation_api/__init__.py
+RUN touch ./worker_api/__init__.py
 COPY scoring ./scoring
 COPY utilities ./utilities
 COPY constants ./constants
