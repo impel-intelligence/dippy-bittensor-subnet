@@ -1,0 +1,42 @@
+name: ModelQ - SN11
+on:
+  workflow_dispatch:  # Allows manual triggering of the workflow
+jobs:
+  build-n-push-image:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository (required for building the Docker image)
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Check authorized user
+      - name: Check Triggering User
+        run: |
+          AUTHORIZED_USERS=("ManavShahWasTaken" "donaldknoller")
+          if [[ ! " ${AUTHORIZED_USERS[@]} " =~ " ${{ github.actor }} " ]]; then
+            echo "::error::Unauthorized user: ${{ github.actor }}"
+            exit 1
+          fi
+      # Get the short SHA for tagging
+      - name: Get Git SHA
+        id: git-sha
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      # Login to GitHub Container Registry
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build and push Docker image
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: modelq.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/modelq:latest
+            ghcr.io/${{ github.repository }}/modelq:${{ steps.git-sha.outputs.sha }}

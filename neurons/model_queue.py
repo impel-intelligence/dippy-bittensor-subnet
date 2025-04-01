@@ -20,7 +20,7 @@ import datetime as dt
 import time
 import argparse
 import requests
-
+import sys
 from common.data import ModelId
 
 import random
@@ -176,6 +176,8 @@ class ModelQueue:
                 self.load_latest_metagraph()
             except Exception as e:
                 self.logger.error(f"failed to queue {e}")
+            if self.config.immediate:
+                sys.exit(0)
 
     def build_commit_data(self) -> Dict[str, Any]:
         max_retries = 10

@@ -34,7 +34,6 @@ from scoring.common import EvaluateModelRequest, chat_template_mappings
 from dotenv import load_dotenv
 from huggingface_hub import HfApi, snapshot_download
 from huggingface_hub.utils import disable_progress_bars
-from maintenance import clean_old_folders
 disable_progress_bars()
 
 load_dotenv()

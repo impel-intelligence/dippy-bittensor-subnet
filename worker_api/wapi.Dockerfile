@@ -22,8 +22,7 @@ RUN uv pip install -r requirements.txt
 COPY scoring ./scoring
 COPY worker_api ./worker_api
 COPY utilities ./utilities
-RUN mkdir ./template
-COPY model ./model
+COPY common ./common
 COPY constants ./constants
 # Required for self installing module
 COPY README.md .
