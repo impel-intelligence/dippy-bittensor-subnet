@@ -658,7 +658,8 @@ class StreamedSyntheticPartialDataset(Dataset):
         converted_dataset = []
         for data_point in data:
             system_prompt = data_point["system_prompt"]
-            messages = [{"role": "system", "content": system_prompt}]
+            all_messages = [{"role": "system", "content": system_prompt}]
+            
             # Append all chat messages to the conversation
             for chat_message in data_point["messages"]:
                 content = chat_message["content"]
@@ -669,35 +670,52 @@ class StreamedSyntheticPartialDataset(Dataset):
                     "role": chat_message["role"],
                     "content": chat_message["content"],
                 }
-                messages.append(entry)
-            # Pop the last message as the character's response
-            character_response = messages.pop()["content"]
-
+                all_messages.append(entry)
+            
+            # Create a copy of all messages for processing
+            messages = all_messages.copy()
+            
             # Determine allowed length (up to max_messages)
             allowed_len = min(len(messages), self.max_messages)
-            # Apply early cut logic during processing instead of __getitem__
+            
+            # Apply early cut logic during processing
             if random.random() < self._cut_message_chain_early:
                 # Choose a random cutoff between at least half of allowed_len and allowed_len
                 min_cut = max(1, allowed_len // 2)
                 cutoff = random.randint(min_cut, allowed_len)
             else:
                 cutoff = allowed_len
+            
+            # Truncate messages at the cutoff point
             truncated_messages = messages[:cutoff]
-
-            # Find the last user message in the truncated chain
-            last_user_message = next(
-                (msg["content"] for msg in reversed(truncated_messages) if msg["role"] == "user"),
-                None,
-            )
-            if last_user_message is None:
+            
+            # Ensure the truncated messages end with a user message
+            while truncated_messages and truncated_messages[-1]["role"] != "user":
+                truncated_messages.pop()
+            
+            if not truncated_messages:
                 continue
-            converted_dataset.append(
-                {
-                    "messages": truncated_messages,
-                    "last_user_message": last_user_message,  # get the last user message
-                    "character_response": character_response,
-                }
-            )
+                
+            # Find the corresponding assistant response that follows the last user message in the original conversation
+            last_user_index = -1
+            for i, msg in enumerate(all_messages):
+                if msg["role"] == "user" and i < len(all_messages) - 1 and msg["content"] == truncated_messages[-1]["content"]:
+                    last_user_index = i
+            
+            # If we found the matching user message and there's an assistant response after it
+            if last_user_index != -1 and last_user_index + 1 < len(all_messages) and all_messages[last_user_index + 1]["role"] == "assistant":
+                character_response = all_messages[last_user_index + 1]["content"]
+                
+                # Find the last user message in the truncated chain
+                last_user_message = truncated_messages[-1]["content"]
+                
+                converted_dataset.append(
+                    {
+                        "messages": truncated_messages,
+                        "last_user_message": last_user_message,
+                        "character_response": character_response,
+                    }
+                )
         return converted_dataset
 
     def __len__(self):
