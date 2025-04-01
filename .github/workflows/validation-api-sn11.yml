@@ -1,0 +1,48 @@
+name: Worker API SN11
+on:
+  workflow_dispatch:  # Allows manual triggering of the workflow
+jobs:
+  push-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # Checkout the repository (required for building the Docker image)
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history to get the correct SHA
+
+      # Check authorized user
+      - name: Check Triggering User
+        run: |
+          AUTHORIZED_USERS=("ManavShahWasTaken" "donaldknoller")
+          if [[ ! " ${AUTHORIZED_USERS[@]} " =~ " ${{ github.actor }} " ]]; then
+            echo "::error::Unauthorized user: ${{ github.actor }}"
+            exit 1
+          fi
+          
+      # Get the short SHA for tagging
+      - name: Get Git SHA
+        id: git-sha
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      # Login to GitHub Container Registry
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build and push Docker image
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: worker_api/wapi.Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/sn11-validation-api:latest
+            ghcr.io/${{ github.repository }}/sn11-validation-api:${{ steps.git-sha.outputs.sha }}
