@@ -97,7 +97,7 @@ def extract_raw_data(data):
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-NEW_EPOCH_BLOCK = 5207777
+NEW_EPOCH_BLOCK = 5623610
 TEMP_SCORE_RESET_PENALTY = 0.5
 
 
