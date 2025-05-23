@@ -42,7 +42,7 @@ from utilities.event_logger import EventLogger
 from utilities.validation_utils import regenerate_hash
 
 l = LocalMetadata(commit="x", btversion="x")
-SKIP_BLOCK = 5207777
+SKIP_BLOCK = 5623610
 
 import requests
 from huggingface_hub.utils import build_hf_headers, hf_raise_for_status
