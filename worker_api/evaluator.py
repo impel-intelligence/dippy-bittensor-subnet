@@ -19,12 +19,11 @@ from utilities.event_logger import EventLogger
 
 # Constants
 DEFAULT_IMAGE_NAME = "grader:latest"
-DEFAULT_HOME_DIR = os.environ.get("EVALUATOR_HOME_DIR", "/home/new_prod_user/dippy-bittensor-subnet")
 DEFAULT_MODEL_CACHE_DIR = os.environ.get("EVALUATOR_MODEL_CACHE_DIR", "/workdir/model_cache_dir")
 STEEPNESS = 5
 THRESHOLD = 0.2
 
-DEFAULT_HOME_DIR = os.environ.get("EVALUATOR_HOME_DIR", "/home/new_prod_user/dippy-bittensor-subnet")
+DEFAULT_HOME_DIR = os.environ.get("EVALUATOR_HOME_DIR", "/tmp/modelcache")
 DEFAULT_MODEL_CACHE_DIR = os.environ.get("EVALUATOR_MODEL_CACHE_DIR", "/workdir/model_cache_dir")
 
 
@@ -187,25 +186,6 @@ class Evaluator:
             if not self.trace:
                 container.remove()
             return {"error": e}
-
-    def eval_score(self, request: EvaluateModelRequest) -> Union[EvaluationScore, RunError]:
-        try:
-            eval_result = self.run_docker_container(
-                job_type="eval",
-                request=request,
-            )
-            if "error" in eval_result:
-                raise Exception(eval_result["error"])
-            if eval_result["completed"] is False:
-                raise Exception("completion internal error")
-            score = EvaluationScore(
-                eval_score=eval_result.get("eval_score", -1),
-                latency_score=eval_result.get("latency_score", -1),
-                creativity_score=eval_result.get("creativity_score", 0),
-            )
-            return score
-        except Exception as e:
-            return RunError(error=str(e))
 
     def inference_score(self, request: EvaluateModelRequest) -> Union[InferenceScore, RunError]:
         try:

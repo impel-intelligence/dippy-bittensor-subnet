@@ -120,9 +120,11 @@ def _model_evaluation_step(queue_id):
         logger.error(f"Error during model evaluation: {e}")
         app.state.event_logger.info("model_eval_queue_error", error=e)
     finally:
-        gc.collect()  # Garbage collect
-        # if torch.cuda.is_available():
-        #     torch.cuda.empty_cache()  # Empty CUDA cache
+        model_dir = f"/tmp/modelcache/{request.hash}"
+        shutil.rmtree(model_dir)
+        print(f"----successfully deleted {model_dir}")
+
+        gc.collect()
 
 
 def get_next_model_to_eval():
@@ -162,17 +164,8 @@ def _evaluate_model(
         "Model evaluation in progress starting with inference score",
     )
 
-    model_dir = f"/mnt/fast/tmp/{request.hash}"
+    model_dir = f"/tmp/modelcache/{request.hash}"
     try:
-        # Check disk space and clean if needed
-        disk_stats = shutil.disk_usage("/mnt/fast/tmp")
-        disk_percent_used = (disk_stats.used / disk_stats.total) * 100
-        if disk_percent_used > 60:
-            from worker_api.maintenance import clean_old_folders
-            try:
-                clean_old_folders()
-            except Exception as e:
-                print(e)
         snapshot_download(repo_id=f"{request.repo_namespace}/{request.repo_name}", local_dir=model_dir, token=HF_TOKEN)
     except Exception as e:
         print(e)
@@ -193,7 +186,7 @@ def _evaluate_model(
                 "hash": request.hash,
                 "judge_score": judge_score,
                 "coherence_score": coherence_score,
-                "notes": f"Inference score complete. Now computing evaluation score",
+                "notes": f"Inference score complete",
             }
         )
     except Exception as e:
@@ -204,7 +197,6 @@ def _evaluate_model(
     eval_score = 0
     latency_score = 0
     model_size_score = 0
-    creativity_score = 0
 
     if eval_score is None or latency_score is None or model_size_score is None or judge_score is None:
         raise HTTPException(
@@ -214,14 +206,13 @@ def _evaluate_model(
 
     full_score_data = Scores()
     full_score_data.judge_score = judge_score
-
     try:
         upsert_row_supabase(
             {
                 "hash": request.hash,
                 "total_score": full_score_data.judge_score,
                 "status": StatusEnum.COMPLETED,
-                "notes": f"scoring_status_complete",
+                "notes": f"scoring_status_complete given worker {queue_id}",
             }
         )
         logger.info(f"update_entry_complete now deleting directory {model_dir}")
@@ -230,10 +221,6 @@ def _evaluate_model(
         logger.error(f"Updating leaderboard to FAILED: {failure_reason}")
         supabaser.update_leaderboard_status(request.hash, StatusEnum.FAILED, failure_reason)
         raise RuntimeError("Error updating leaderboard: " + failure_reason)
-    try:
-        shutil.rmtree(model_dir)
-    except Exception as e:
-        logger.error(f"could not delete {model_dir} because {e}")
     result = {
         "full_score_data": full_score_data,
     }

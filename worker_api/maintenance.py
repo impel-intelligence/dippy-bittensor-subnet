@@ -32,7 +32,7 @@ from datetime import datetime
 import shutil
 from operator import itemgetter
 
-def clean_old_folders(path: str = "/mnt/fast/tmp", keep_n: int = 4):
+def clean_old_folders(path: str = "/tmp/modelcache", keep_n: int = 4):
     # Get all directories and their modification times
     folders = []
     for item in os.listdir(path):

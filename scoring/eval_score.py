@@ -31,11 +31,7 @@ def cleanup(model, model_downloaded, request: EvaluateModelRequest):
             model = torch.Tensor([0])  # create a tensor to free up memory
             del model
             gc.collect()
-            torch.cuda.empty_cache()
-            try:
-                torch.distributed.destroy_process_group()
-            except:
-                print("No process group to destroy")
+
 
 
 def _prepare_dummy_inputs(model):
