@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
+FROM pytorch/pytorch:2.7.1-cuda12.6-cudnn9-devel
 ENV DEBIAN_FRONTEND=noninteractive
 
 
@@ -24,7 +24,6 @@ COPY requirements.eval.txt requirements.txt
 
 RUN uv pip install --system -r requirements.txt --no-build-isolation
 # Explicitly install to manage breaking changes
-RUN uv pip install --system flashinfer-python -i https://flashinfer.ai/whl/cu124/torch2.5/
 RUN uv pip install --system flash-attn --no-build-isolation
 
 # Create empty directory and file for pyproject

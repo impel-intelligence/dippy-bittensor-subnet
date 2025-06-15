@@ -18,7 +18,6 @@ COHERENCE_THRESHOLD = 0.95
 
 
 def get_inference_score(request: EvaluateModelRequest, use_lora: bool = False):
-    from scoring.coherence_score import get_coherence_score
     from scoring.judge_score import get_judge_score
 
     # For simplicity, will always look for main branch
@@ -71,12 +70,6 @@ def get_inference_score(request: EvaluateModelRequest, use_lora: bool = False):
     destroy_model_parallel()
     del model
     gc.collect()
-    torch.cuda.empty_cache()
-    ray.shutdown()
-    try:
-        torch.distributed.destroy_process_group()
-    except:
-        print("No process group to destroy")
     print("cleaned up all cuda resources")
 
     return inference_result

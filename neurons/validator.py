@@ -603,7 +603,9 @@ class Validator:
                     )
 
                 if _score_data.status == StatusEnum.QUEUED or _score_data.status == StatusEnum.RUNNING:
-                    invalid_uids.append(uid)
+                    # invalid_uids.append(uid)
+                    # Mark as scored for dereg testing
+                    miner_registry[uid].total_score = 0.01
                     bt.logging.warning(f"uid={uid} status_{_score_data.status}")
                     return
                 if _score_data.status == StatusEnum.COMPLETED:

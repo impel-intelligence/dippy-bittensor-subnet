@@ -4,8 +4,7 @@ import json
 import datetime
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
-from huggingface_hub import snapshot_download
-
+from huggingface_hub import snapshot_download,hf_hub_download
 from transformers import AutoTokenizer
 from openai import OpenAI, AzureOpenAI
 from typing import List, Optional
@@ -18,7 +17,7 @@ from scoring.common import (
     stringify_convo_from_messages,
     parse_json_safely,
 )
-from scoring.dataset import StreamedSyntheticPartialDataset
+from scoring.dataset import HuggingfaceDataset
 from pydantic import BaseModel
 from typing import Literal
 
@@ -42,9 +41,10 @@ default_sample_params = SamplingParams(
     temperature=random.random() * 0.2,
     max_tokens=8192,
 )
-chat_params = {
-    "gemma2": SamplingParams(temperature=random.random() * 0.2, max_tokens=8192, stop_token_ids=[107]),
-    "mistral": SamplingParams(temperature=random.random() * 0.2, max_tokens=8192, stop_token_ids=[2]),
+
+token_id_mappings = {
+    "gemma2": [107],
+    "mistral": [2],
 }
 AZURE_KEY = os.environ.get("AZURE_KEY", "x")
 AZURE_URL = os.environ.get("AZURE_URL", "x")
@@ -54,7 +54,6 @@ remote_client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ.get("OPENROUTER_API_KEY", "x"),
 )
-
 
 """
 example conversation:
@@ -87,9 +86,6 @@ def get_llm_response(
     for provider in providers:
         try:
             if provider.lower() == "azure":
-                if verbose:
-                    print("Using Azure OpenAI client for judge scoring.")
-                # Call Azure provider
                 completion = azure_client.beta.chat.completions.parse(
                     model=azure_model,
                     messages=messages,
@@ -99,9 +95,6 @@ def get_llm_response(
                     raise Exception("No response from Azure client.")
                 return completion.choices[0].message.parsed
             elif provider.lower() in ("openrouter", "openai"):
-                if verbose:
-                    print("Using OpenRouter client for judge scoring.")
-                # Call OpenRouter provider
                 chat_completion = remote_client.chat.completions.create(
                     messages=messages,
                     model=model_name,
@@ -113,7 +106,6 @@ def get_llm_response(
         except Exception as e:
             if verbose:
                 print(f"Error with provider {provider}: {e}")
-            # Try next provider
     
     print("All providers failed for get_llm_response.")
     return None
@@ -277,118 +269,228 @@ def collect_judge_scores(scores: List):
         return None
 
 
-def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = False, verbose=False, batch_size: int=8):
+def load_model_configuration(repo_id: str):
+    configuration = None
+    chat_template = None
+
     try:
-        start_time = datetime.datetime.now()
+        config_path = hf_hub_download(repo_id=repo_id, filename="config.json")
+        with open(config_path, "r") as f:
+            configuration = json.load(f)
+    except Exception as e:
+        print(f"Could not download or parse config.json for {repo_id}: {e}")
 
-        repo_id = f"{request.repo_namespace}/{request.repo_name}"
-        input_tokenizer = AutoTokenizer.from_pretrained(repo_id)
-        print(f"Starting judge score evaluation at {start_time} given repo id {repo_id}")
+    try:
+        template_path = hf_hub_download(repo_id=repo_id, filename="chat_template.json")
+        with open(template_path, "r") as f:
+            chat_template = json.load(f)
+    except Exception as e:
+        print(f"Could not download or parse chat_template.json for {repo_id}: {e}")
 
-        # Load synthetic dataset
-        judge_dataset = StreamedSyntheticPartialDataset(cut_message_chain_early=1)
-        judge_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
-        print(f"loaded dataset with chat template {request.chat_template_type}")
+    return configuration, chat_template
 
-        # Sample conversations
-        conversations = judge_dataset.sample_dataset(JUDGE_NUM_EVALS, messages_limit=6)
+def generate_model_responses(request: EvaluateModelRequest, model: LLM, use_lora: bool = False, verbose: bool = False):
+    """
+    Generate model responses for a set of conversations using the specified model and configuration.
+    
+    Args:
+        request: The evaluation request containing model configuration
+        model: The LLM instance to use for generation
+        use_lora: Whether to use LoRA adaptation
+        verbose: Whether to print detailed logs
+        
+    Returns:
+        tuple: (generated_conversations, original_conversations)
+    """
+    repo_id = f"{request.repo_namespace}/{request.repo_name}"
+    input_tokenizer = AutoTokenizer.from_pretrained(repo_id)
+    
+    
+    judge_dataset = HuggingfaceDataset(max_messages=6)
+    configuration, custom_chat_template = load_model_configuration(repo_id)
+    chat_template = chat_template_mappings[request.chat_template_type]
 
-        # Prepare batch prompts for vLLM
-        formatted_messages = []
-        original_messages_list = []
-        last_assistant_responses = []
+    judge_dataset.set_chat_template_params(chat_template_mappings[request.chat_template_type], input_tokenizer)
+    if custom_chat_template is not None:
+        judge_dataset.set_chat_template_params_from_str(custom_chat_template["chat_template"], input_tokenizer)
+        chat_template = custom_chat_template["chat_template"]
+    
+    stop_token_ids = token_id_mappings.get(request.chat_template_type, [])
+    if configuration is not None:
+        stop_token_ids = configuration.get("eos_token_id", stop_token_ids)
+        if not isinstance(stop_token_ids, list):
+            stop_token_ids = [stop_token_ids]
+    model_sampling_params = default_sample_params
+    if len(stop_token_ids) > 0:
+        model_sampling_params = SamplingParams(
+            temperature=random.random() * 0.2,
+            max_tokens=8192,
+            stop_token_ids=stop_token_ids,
+        )
 
-        for formatted_msg, orig_msgs, last_asst_resp in conversations:
-            formatted_messages.append(formatted_msg)
-            original_messages_list.append(orig_msgs)
-            last_assistant_responses.append(last_asst_resp)
+    print(f"Starting dataset sampling at {datetime.datetime.now()}")
 
-        # Generate all responses in batch
-        print(f"Starting batch generation at {datetime.datetime.now()}")
-        model_sampling_params = chat_params.get(request.chat_template_type, default_sample_params)
+    judge_dataset = judge_dataset.process()
+    conversations = judge_dataset.sample_dataset(JUDGE_NUM_EVALS, 12)
+
+    print(f"Completed dataset sampling at {datetime.datetime.now()}")
+
+    formatted_messages = []
+    original_messages_lists = []
+    last_assistant_responses = []
+
+    for formatted_msg, orig_msgs, last_asst_resp in conversations:
+        formatted_messages.append(formatted_msg)
+        original_messages_lists.append(orig_msgs)
+        last_assistant_responses.append(last_asst_resp)
+    if verbose:
+        print(f"Starting response generation in batches with repo id {repo_id} and configuration {configuration}")
+        print(f"start_time {datetime.datetime.now()}")
         print(f"Model sampling Params: {model_sampling_params}")
+        print(f"Model chat template: {chat_template}")
         print(f"Formatted messages: {len(formatted_messages)}")
 
-        lora_request = None
-        if use_lora:
-            lora_id = f"{request.repo_namespace}/{request.repo_name}"
-            lora_path = snapshot_download(repo_id=lora_id)
-            lora_request = LoRARequest("lora_adapter", 1, lora_path)
+    lora_request = None
+    if use_lora:
+        lora_id = f"{request.repo_namespace}/{request.repo_name}"
+        lora_path = snapshot_download(repo_id=lora_id)
+        lora_request = LoRARequest("lora_adapter", 1, lora_path)
+    try:
+        outputs = model.generate(
+            formatted_messages, model_sampling_params, use_tqdm=False, lora_request=lora_request
+        )
+    except Exception as e:
+        raise RuntimeError(f"Failed batch generation: {e}")
 
-        try:
-            outputs = model.generate(
-                formatted_messages, model_sampling_params, use_tqdm=False, lora_request=lora_request
-            )
-        except Exception as e:
-            raise RuntimeError(f"Failed batch generation: {e}")
-
-        # Process generations into complete conversations
+    # Process generations into complete conversations
+    if verbose:
         print(f"Starting conversation processing at {datetime.datetime.now()}")
-        generated_conversations = []
-        original_conversations = []
+    print(f"Starting conversation processing at {datetime.datetime.now()}")
+    generated_conversations = []
+    original_conversations = []
 
-        for idx, output in enumerate(outputs):
-            generated_text = output.outputs[0].text
+    for idx, output in enumerate(outputs):
+        generated_text = output.outputs[0].text
 
-            # Create complete conversations
-            generated_conversation = original_messages_list[idx].copy()
-            generated_conversation.append({"role": "assistant", "content": generated_text})
-            generated_conversations.append(generated_conversation)
+        # Create complete conversations
+        generated_conversation = original_messages_lists[idx].copy()
+        generated_conversation.append({"role": "assistant", "content": generated_text})
+        generated_conversations.append(generated_conversation)
 
-            original_conversation = original_messages_list[idx].copy()
-            original_conversation.append({"role": "assistant", "content": last_assistant_responses[idx]})
-            original_conversations.append(original_conversation)
+        original_conversation = original_messages_lists[idx].copy()
+        original_conversation.append({"role": "assistant", "content": last_assistant_responses[idx]})
+        original_conversations.append(original_conversation)
 
-        # Evaluate conversations in batches
-        print(f"Completed text generation for {len(generated_conversations)} generated_conversations. Now starting judge evaluation at {datetime.datetime.now()}")
-        all_judge_scores = []
-        exceptions = 0
+    return generated_conversations, original_conversations
+
+
+def evaluate_conversations(generated_conversations: List, original_conversations: List, verbose: bool = False):
+    """
+    Evaluate pairs of conversations using the judge evaluator.
+    
+    Args:
+        generated_conversations: List of generated conversation sequences
+        original_conversations: List of original conversation sequences
+        verbose: Whether to print detailed logs
         
-        # Process conversations in batches
-        for batch_start in range(0, len(generated_conversations), batch_size):
-            batch_end = min(batch_start + batch_size, len(generated_conversations))
-            print(f"Processing batch {batch_start//batch_size + 1} of {(len(generated_conversations) + batch_size - 1)//batch_size} at {datetime.datetime.now()}")
-            
-            batch_results = []
-            batch_exceptions = 0
-            
-            # Process each conversation in the current batch
-            for idx in range(batch_start, batch_end):
-                try:
-                    judge_score = judge_evaluator(
-                        generated_conversations[idx], original_conversations[idx], verbose=verbose
-                    )
-                    if judge_score is None:
-                        raise Exception("could not parse judge score")
-                    
-                    batch_results.append(judge_score)
-                    if verbose:
-                        print(f"completed evaluation {idx + 1} of {len(generated_conversations)} with score {judge_score}")
-                except Exception as e:
-                    if verbose:
-                        print(f"Error in judge evaluation for conversation {idx}: {e}")
-                    batch_exceptions += 1
-            
-            # Add batch results to overall results
-            all_judge_scores.extend(batch_results)
-            exceptions += batch_exceptions
-            
-            if batch_end == len(generated_conversations) // 2:
-                print(f"Reached halfway mark of judging at {datetime.datetime.now()}")
+    Returns:
+        dict: Aggregated judge scores
+    """
+    if verbose:
+        print(f"Starting judge evaluation at {datetime.datetime.now()}")
+    
+    all_judge_scores = []
+    exceptions = 0
+    
+    # Process conversations in batches
+    judge_evaluator_batch_size = 32
+    for batch_start in range(0, len(generated_conversations), judge_evaluator_batch_size):
+        batch_end = min(batch_start + judge_evaluator_batch_size, len(generated_conversations))
+        if verbose:
+            print(f"Processing batch {batch_start//judge_evaluator_batch_size + 1} of {(len(generated_conversations) + judge_evaluator_batch_size - 1)//judge_evaluator_batch_size}")
+        
+        batch_results = []
+        batch_exceptions = 0
+        
+        # Process each conversation in the current batch
+        for idx in range(batch_start, batch_end):
+            try:
+                judge_score = judge_evaluator(
+                    generated_conversations[idx], original_conversations[idx], verbose=verbose
+                )
+                if judge_score is None:
+                    raise Exception("could not parse judge score")
+                
+                batch_results.append(judge_score)
+                if verbose and random.random() < 1/128:
+                    print(f"completed evaluation {idx + 1} of {len(generated_conversations)} with score {judge_score}")
+            except Exception as e:
+                if verbose:
+                    print(f"Error in judge evaluation for conversation {idx}: {e}")
+                batch_exceptions += 1
+        
+        # Add batch results to overall results
+        all_judge_scores.extend(batch_results)
+        exceptions += batch_exceptions
+        
+        if batch_end == len(generated_conversations) // 2 and verbose:
+            print(f"Reached halfway mark of judging at {datetime.datetime.now()}")
 
-        if exceptions / JUDGE_NUM_EVALS > MAX_ERROR_RATE:
-            raise RuntimeError(f"judge score failed with {exceptions} exceptions")
+    if exceptions / JUDGE_NUM_EVALS > MAX_ERROR_RATE:
+        raise RuntimeError(f"judge score failed with {exceptions} exceptions")
 
-        judge_score = collect_judge_scores(all_judge_scores)
-        if judge_score is None:
-            raise RuntimeError("could not calculate judge score")
+    judge_score = collect_judge_scores(all_judge_scores)
+    if judge_score is None:
+        raise RuntimeError("could not calculate judge score")
+
+    return judge_score
+
+
+def get_judge_score(request: EvaluateModelRequest, model: LLM, use_lora: bool = False, verbose=False, batch_size: int=8):
+    """
+    Get judge scores by generating and evaluating model responses.
+    """
+    try:
+        start_time = datetime.datetime.now()
+        if verbose:
+            print(f"Starting judge score evaluation at {start_time}")
+
+        # Step 1: Generate model responses
+        generated_conversations, original_conversations = generate_model_responses(
+            request=request,
+            model=model,
+            use_lora=use_lora,
+            verbose=verbose
+        )
+
+        # Save conversations immediately after generation for safety
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        conversations_data = {
+            "generated_conversations": generated_conversations,
+            "original_conversations": original_conversations,
+            "metadata": {
+                "timestamp": timestamp,
+                "hash": request.hash
+            }
+        }
+        dump_conversations(conversations_data, f"raw_conversations_{timestamp}")
+        if verbose:
+            print(f"Saved raw conversations to /tmp/judge_score_dump_raw_conversations_{timestamp}.json")
+
+        # Step 2: Evaluate the conversations
+        judge_score = evaluate_conversations(
+            generated_conversations=generated_conversations,
+            original_conversations=original_conversations,
+            verbose=verbose
+        )
 
         if verbose:
             dump_conversations({"judge_score": judge_score, "generated_conversations": generated_conversations})
 
         end_time = datetime.datetime.now()
-        print(f"Completed judge score evaluation at {end_time} with score {judge_score}")
-        print(f"Total time elapsed: {end_time - start_time}")
+        if verbose:
+            print(f"Completed judge score evaluation at {end_time} with score {judge_score}")
+            print(f"Total time elapsed: {end_time - start_time}")
 
         return {
             "judge_score": judge_score,
