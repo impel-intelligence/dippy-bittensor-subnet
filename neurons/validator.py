@@ -71,7 +71,7 @@ from bittensor.core.chain_data import (
     decode_account_id,
 )
 SUBNET_REGISTERED_UID = 74
-SUBNET_EMISSION_BURN_RATE= 0.75
+SUBNET_EMISSION_BURN_RATE= 0.99999999999
 def extract_raw_data(data):
     try:
         # Navigate to the fields tuple
